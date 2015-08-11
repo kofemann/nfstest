@@ -175,18 +175,17 @@ class FormatStr(Formatter):
                     return value[int(num):]
         elif isinstance(value, list):
             # Format: {0[[:listfmt]:itemfmt]}
-            if len(format_spec):
-                fmts = format_spec.split(":", 1)
-                ifmt = "{0:" + fmts[-1] + "}"
-                vlist = [self.format(ifmt, x) for x in value]
-                if len(fmts) == 2:
-                    # Two format specs, use the first one for the list itself
-                    # and the second spec is for each item in the list
-                    return fmts[0].join(vlist)
+            fmts = format_spec.split(":", 1)
+            ifmt = "{0:" + fmts[-1] + "}"
+            vlist = [self.format(ifmt, x) for x in value]
+            if len(fmts) == 2:
+                # Two format specs, use the first one for the list itself
+                # and the second spec is for each item in the list
+                return fmts[0].join(vlist)
 
-                # Only one format spec is given, display list with format spec
-                # applied to each item in the list
-                return "[" + ", ".join(vlist) + "]"
+            # Only one format spec is given, display list with format spec
+            # applied to each item in the list
+            return "[" + ", ".join(vlist) + "]"
         elif isinstance(value, int) or isinstance(value, long) or isinstance(value, float):
             if _max_map.get(fmt):
                 # Format: {0:max32|umax32|max64|umax64}
