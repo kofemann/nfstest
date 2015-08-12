@@ -120,6 +120,15 @@ class BaseObj(object):
            # In the above example the first positional argument is "a"
            # so the str(x) gives "arg1:1"
 
+           # Set attribute shared by all instances
+           # If a global or shared attribute is set on one instance,
+           # all other instances will have access to it:
+           #   y = BaseObj(d=2, e=3)
+           # then the following is true
+           #   x.g == y.g
+           #   x.g is y.g
+           x.set_global("g", 5)
+
            # Set level mask to display all debug messages matching mask
            x.debug_level(0xFF)
 
@@ -169,6 +178,7 @@ class BaseObj(object):
                      # listed part of the attributes of the current object
     _strfmt1  = None # String format for verbose level 1
     _strfmt2  = None # String format for verbose level 2
+    _globals  = {}   # Attributes share by all instances
 
     def __init__(self, *kwts, **kwds):
         """Constructor
@@ -196,6 +206,9 @@ class BaseObj(object):
            dictionary for any attribute references, it checks if this
            is a flat object and returns the appropriate attribute
         """
+        if self._globals.has_key(attr):
+            # Shared attribute
+            return self._globals[attr]
         if self._attrs is not None:
             # Check if attribute is a reference to another attribute
             name = self._attrs.get(attr)
@@ -372,6 +385,10 @@ class BaseObj(object):
         else:
             raise Exception("Invalid string format level [%d]" % level)
 
+    def set_global(self, name, value):
+        """Set global variable."""
+        self._globals[name] = value
+
     @staticmethod
     def debug_repr(level=None):
         """Return or set verbose level of object's string representation.
@@ -539,7 +556,10 @@ class BaseObj(object):
             # named arguments using object's own dictionary
             if self._attrlist is not None:
                 kwts = (getattr(self, attr) for attr in self._attrlist)
-            kwds = self.__dict__
+            kwds = self.__dict__.copy()
+            if self._globals:
+                # Include the shared attributes as named attributes
+                kwds.update(self._globals)
         return fstrobj.format(fmt, *kwts, **kwds)
 
     def dprint(self, level, msg, indent=0):
