@@ -103,6 +103,12 @@ class BaseObj(object):
            #   x.a is x.switch
            x.set_attr("a", 1, switch=True)
 
+           # Make the current object flat by allowing all the attributes
+           # for the new attribute to be accessed directly by the current
+           # object so the following is True:
+           #   x.d == x.c.d
+           x.set_attr("c", BaseObj(d=11, e=22), switch=True)
+
            # Set the comparison attribute so x == x.a is True
            x.set_eqattr("a")
 
@@ -333,6 +339,10 @@ class BaseObj(object):
                 self._attrs = {}
             # Make a reference to name
             self._attrs["switch"] = name
+            if self._fattrs is None:
+                self._fattrs = []
+            # Make it a flat object
+            self._fattrs.append(name)
 
     def set_eqattr(self, attr):
         """Set the comparison attribute
