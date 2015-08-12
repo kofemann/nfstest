@@ -96,6 +96,13 @@ class BaseObj(object):
            setattr(x, "a", 1) or x.a = 1
            x.set_attrlist("a")
 
+           # Set attribute with switch duplicate
+           # The following creates an extra attribute "switch" with
+           # the same value as attribute "a":
+           #   x.a == x.switch
+           #   x.a is x.switch
+           x.set_attr("a", 1, switch=True)
+
            # Set the comparison attribute so x == x.a is True
            x.set_eqattr("a")
 
@@ -298,7 +305,7 @@ class BaseObj(object):
             # Add a single item
             self._attrlist.append(attr)
 
-    def set_attr(self, name, value):
+    def set_attr(self, name, value, switch=False):
         """Add name/value as an object attribute and add the name to the
            list of attributes to display
 
@@ -309,6 +316,11 @@ class BaseObj(object):
         """
         setattr(self, name, value)
         self.set_attrlist(name)
+        if switch:
+            if self._attrs is None:
+                self._attrs = {}
+            # Make a reference to name
+            self._attrs["switch"] = name
 
     def set_eqattr(self, attr):
         """Set the comparison attribute
