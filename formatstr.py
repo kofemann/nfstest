@@ -28,9 +28,9 @@ from binascii import crc32,crc_hqx
 
 # Module constants
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.0.1'
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = '1.0.2'
 
 # Maximum integer map
 _max_map = {
@@ -209,3 +209,15 @@ class FormatStr(Formatter):
                         dfmt = dfmt.replace("%q", usec)
                 return time.strftime(dfmt, time.localtime(value))
         return format(value, format_spec)
+
+    def get_value(self, key, args, kwargs):
+        """Override original method to return "" when the positional argument
+           or named argument does not exist:
+             x.format("0:{0}, 1:{1}, arg1:{arg1}, arg2:{arg2}", a, arg1=11)
+             the {1} will return "" since there is only one positional argument
+             the {arg2} will return "" since arg2 is not a named argument
+        """
+        try:
+            return super(FormatStr, self).get_value(key, args, kwargs)
+        except (IndexError, KeyError):
+            return ""
