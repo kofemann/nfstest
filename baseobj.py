@@ -28,9 +28,9 @@ from formatstr import FormatStr
 
 # Module constants
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.0.4'
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = '1.0.5'
 
 # Module variables
 _dindent = ""
@@ -204,7 +204,10 @@ class BaseObj(object):
         """Return the attribute value for which the lookup has not found
            the attribute in the usual places. It checks the internal
            dictionary for any attribute references, it checks if this
-           is a flat object and returns the appropriate attribute
+           is a flat object and returns the appropriate attribute.
+           And finally, if any of the attributes listed in _attrlist
+           does not exist it returns None as if they exist but not
+           defined
         """
         if self._globals.has_key(attr):
             # Shared attribute
@@ -223,6 +226,10 @@ class BaseObj(object):
                 if obj is not None and hasattr(obj, attr):
                     # Flat object: sub-object attributes as object attribute
                     return getattr(obj, attr)
+        if self._attrlist is not None and attr in self._attrlist:
+            # Make all attributes listed in _attrlist available even if they
+            # haven't been defined
+            return None
         raise AttributeError("'%s' object has no attribute '%s'" % (self.__class__.__name__, attr))
 
     def __eq__(self, other):
