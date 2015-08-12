@@ -150,6 +150,8 @@ class BaseObj(object):
     # Class attributes
     _attrlist = None # List of attributes to display in order
     _eqattr   = None # Comparison attribute
+    _attrs    = None # Dictionary where the key becomes an attribute which is
+                     # a reference to another attribute given by its value
     _strfmt1  = None # String format for verbose level 1
     _strfmt2  = None # String format for verbose level 2
 
@@ -172,6 +174,18 @@ class BaseObj(object):
                     keys = None
         # Process named arguments: x = BaseObj(a=1, b=2)
         self.__dict__.update(kwds)
+
+    def __getattr__(self, attr):
+        """Return the attribute value for which the lookup has not found
+           the attribute in the usual places. It checks the internal
+           dictionary for any attribute references
+        """
+        if self._attrs is not None:
+            # Check if attribute is a reference to another attribute
+            name = self._attrs.get(attr)
+            if name is not None:
+                return getattr(self, name)
+        raise AttributeError("'%s' object has no attribute '%s'" % (self.__class__.__name__, attr))
 
     def __eq__(self, other):
         """Comparison method: this object is treated like the attribute
