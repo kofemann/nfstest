@@ -159,6 +159,8 @@ class BaseObj(object):
     _eqattr   = None # Comparison attribute
     _attrs    = None # Dictionary where the key becomes an attribute which is
                      # a reference to another attribute given by its value
+    _fattrs   = None # Make the object attributes of each of the attributes
+                     # listed part of the attributes of the current object
     _strfmt1  = None # String format for verbose level 1
     _strfmt2  = None # String format for verbose level 2
 
@@ -185,13 +187,23 @@ class BaseObj(object):
     def __getattr__(self, attr):
         """Return the attribute value for which the lookup has not found
            the attribute in the usual places. It checks the internal
-           dictionary for any attribute references
+           dictionary for any attribute references, it checks if this
+           is a flat object and returns the appropriate attribute
         """
         if self._attrs is not None:
             # Check if attribute is a reference to another attribute
             name = self._attrs.get(attr)
             if name is not None:
                 return getattr(self, name)
+        if self._fattrs is not None:
+            # Check if this is defined as a flat object so any attributes
+            # of sub-objects pointed to by _fattrs are treated like
+            # attributes of this object
+            for item in self._fattrs:
+                obj = getattr(self, item, None)
+                if obj is not None and hasattr(obj, attr):
+                    # Flat object: sub-object attributes as object attribute
+                    return getattr(obj, attr)
         raise AttributeError("'%s' object has no attribute '%s'" % (self.__class__.__name__, attr))
 
     def __eq__(self, other):
