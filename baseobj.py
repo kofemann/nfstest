@@ -218,7 +218,7 @@ class BaseObj(object):
                 val = getattr(self, key, None)
                 if val != None:
                     if isrepr:
-                        value = pformat(val)
+                        value = pformat(val, indent=0)
                         out.append("%s%s = %s,\n" % (_sindent, key, value.replace("\n", "\n"+_sindent)))
                     else:
                         out.append("%s=%s" % (key, self._str_value(val)))
