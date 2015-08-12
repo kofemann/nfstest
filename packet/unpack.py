@@ -222,6 +222,9 @@ class Unpack(object):
             # Discard padding bytes
             size += (size+pad-1)/pad*pad - size
         self._offset += size
+        dlen = len(self._data)
+        if self._offset > dlen:
+            self._offset = dlen
         return buf
 
     def unpack(self, size, fmt):
