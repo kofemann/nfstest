@@ -90,6 +90,12 @@ class BaseObj(object):
            # Add list of attribute names to be displayed in that order
            x.set_attrlist(["a", "b"])
 
+           # Set attribute with ordered display rights
+           x.set_attr("a", 1)
+           # This is the same as
+           setattr(x, "a", 1) or x.a = 1
+           x.set_attrlist("a")
+
            # Set the comparison attribute so x == x.a is True
            x.set_eqattr("a")
 
@@ -265,6 +271,18 @@ class BaseObj(object):
         else:
             # Add a single item
             self._attrlist.append(attr)
+
+    def set_attr(self, name, value):
+        """Add name/value as an object attribute and add the name to the
+           list of attributes to display
+
+           name:
+               Attribute name
+           value:
+               Attribute value
+        """
+        setattr(self, name, value)
+        self.set_attrlist(name)
 
     def set_eqattr(self, attr):
         """Set the comparison attribute
