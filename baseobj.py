@@ -102,6 +102,11 @@ class BaseObj(object):
            # Set verbose level of object's string representation
            x.debug_repr(level)
 
+           # Set string format for verbose level 1
+           x.set_strfmt(1, "arg1:{0}")
+           # In the above example the first positional argument is "a"
+           # so the str(x) gives "arg1:1"
+
            # Set level mask to display all debug messages matching mask
            x.debug_level(0xFF)
 
@@ -145,6 +150,8 @@ class BaseObj(object):
     # Class attributes
     _attrlist = None # List of attributes to display in order
     _eqattr   = None # Comparison attribute
+    _strfmt1  = None # String format for verbose level 1
+    _strfmt2  = None # String format for verbose level 2
 
     def __init__(self, *kwts, **kwds):
         """Constructor
@@ -212,6 +219,11 @@ class BaseObj(object):
                 return super(BaseObj, self).__repr__()
             else:
                 return super(BaseObj, self).__str__()
+        elif not isrepr:
+            if _rlevel == 1 and self._strfmt1 is not None:
+                return self.format(self._strfmt1)
+            elif _rlevel == 2 and self._strfmt2 is not None:
+                return self.format(self._strfmt2)
 
         # Representation of object with proper indentation
         out = []
@@ -296,6 +308,21 @@ class BaseObj(object):
                x == 1 will return True, the same as x.a == 1
         """
         self._eqattr = attr
+
+    def set_strfmt(self, level, format):
+        """Save format for given display level
+
+           level:
+               Display level given as a first argument
+           format:
+               String format for given display level, given as a second argument
+        """
+        if level == 1:
+            self._strfmt1 = format
+        elif level == 2:
+            self._strfmt2 = format
+        else:
+            raise Exception("Invalid string format level [%d]" % level)
 
     @staticmethod
     def debug_repr(level=None):
