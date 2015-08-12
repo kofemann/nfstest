@@ -21,9 +21,9 @@ import nfstest_config as c
 
 # Module constants
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '2.1'
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = '2.2'
 
 class Unpack(object):
     """Unpack object
@@ -389,3 +389,16 @@ class Unpack(object):
             # Unpack item if condition is true
             return unpack_item(self, **args)
         return None
+
+    def unpack_bitmap(self):
+        """Unpack an array of unsigned integers and convert array into
+           a single long integer
+        """
+        bitmask = 0
+        nshift = 0
+        # Unpack array of uint32
+        blist = self.unpack_array()
+        for bint in blist:
+            bitmask += bint << nshift
+            nshift += 32
+        return bitmask
