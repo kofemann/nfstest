@@ -753,7 +753,7 @@ class Pktt(BaseObj, Unpack):
 
         return ret
 
-    def match(self, expr, maxindex=None):
+    def match(self, expr, maxindex=None, rewind=True):
         """Return the packet that matches the given expression, also the packet
            index points to the next packet after the matched packet.
            Returns None if packet is not found and the packet index points
@@ -763,6 +763,8 @@ class Pktt(BaseObj, Unpack):
                String of expressions to be evaluated
            maxindex:
                The match fails if packet index hits this limit
+           rewind:
+               Rewind to index where matching started if match fails
 
            Examples:
                # Find the packet with both the ACK and SYN TCP flags set to 1
@@ -824,9 +826,10 @@ class Pktt(BaseObj, Unpack):
             except Exception:
                 pass
 
-        # No packet matched, re-position the file pointer back to where
-        # the search started
-        self.rewind(save_index)
+        if rewind:
+            # No packet matched, re-position the file pointer back to where
+            # the search started
+            self.rewind(save_index)
         self.pkt = None
         self.dprint('PKT1', ">>> match() -> False")
         return None
