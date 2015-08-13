@@ -108,7 +108,7 @@ class Pkt(BaseObj):
             out = "Pkt(\n" if rdebug == 2 else ''
             klist = []
             for key in _PKT_layers:
-                if hasattr(self, key) and (rdebug > 1 or key not in _PKT_nlayers):
+                if getattr(self, key, None) is not None and (rdebug > 1 or key not in _PKT_nlayers):
                     klist.append(key)
             lastkey = klist[-1]
             for key in klist:
