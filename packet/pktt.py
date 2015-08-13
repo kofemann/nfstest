@@ -143,6 +143,8 @@ class Pktt(BaseObj, Unpack):
 
         # RPC xid map: to keep track of packet calls
         self._rpc_xid_map = {}
+        # List of outstanding xids to match
+        self._match_xid_list = []
 
         # Process tfile argument
         if isinstance(tfile, list):
@@ -579,6 +581,10 @@ class Pktt(BaseObj, Unpack):
         """
         return self._match('rpc', args)
 
+    def clear_xid_list(self):
+        """Clear list of outstanding xids"""
+        self._match_xid_list = []
+
     def _match_nfs(self, args):
         """Match NFS values on current packet."""
         array = None
@@ -753,7 +759,7 @@ class Pktt(BaseObj, Unpack):
 
         return ret
 
-    def match(self, expr, maxindex=None, rewind=True):
+    def match(self, expr, maxindex=None, rewind=True, reply=False):
         """Return the packet that matches the given expression, also the packet
            index points to the next packet after the matched packet.
            Returns None if packet is not found and the packet index points
@@ -765,6 +771,8 @@ class Pktt(BaseObj, Unpack):
                The match fails if packet index hits this limit
            rewind:
                Rewind to index where matching started if match fails
+           reply:
+               Match RPC replies of previously matched calls as well
 
            Examples:
                # Find the packet with both the ACK and SYN TCP flags set to 1
@@ -812,6 +820,7 @@ class Pktt(BaseObj, Unpack):
         smap = parser.st2list(st)
         pdata = self._convert_match(smap)
         self.dprint('PKT1', ">>> %d: match(%s)" % (self.index, expr))
+        self.reply_matched = False
 
         # Search one packet at a time
         for pkt in self:
@@ -819,9 +828,17 @@ class Pktt(BaseObj, Unpack):
                 # Hit maxindex limit
                 break
             try:
+                if reply and pkt == "rpc" and pkt.rpc.type == 1 and pkt.rpc.xid in self._match_xid_list:
+                    self.dprint('PKT1', ">>> %d: match() -> True: reply" % pkt.record.index)
+                    self._match_xid_list.remove(pkt.rpc.xid)
+                    self.reply_matched = True
+                    return pkt
                 if eval(pdata):
                     # Return matched packet
                     self.dprint('PKT1', ">>> %d: match() -> True" % pkt.record.index)
+                    if reply and pkt == "rpc" and pkt.rpc.type == 0:
+                        # Save xid of matched call
+                        self._match_xid_list.append(pkt.rpc.xid)
                     return pkt
             except Exception:
                 pass
