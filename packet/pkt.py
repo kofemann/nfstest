@@ -34,14 +34,12 @@ Packet object attributes:
 """
 import nfstest_config as c
 from baseobj import BaseObj
-from packet.nfs.nfs4_type import COMPOUND4args,COMPOUND4res
-from packet.nfs.nfs4_const import nfs_opnum4,nfsstat4
 
 # Module constants
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.0.1'
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = '1.0.2'
 
 # The order in which to display all layers in the packet
 _PKT_layers = ['record', 'ethernet', 'ip', 'tcp', 'udp', 'rpc', 'gssd', 'nfs', 'gssc']
@@ -110,44 +108,24 @@ class Pkt(BaseObj):
             for key in _PKT_layers:
                 if getattr(self, key, None) is not None and (rdebug > 1 or key not in _PKT_nlayers):
                     klist.append(key)
-            lastkey = klist[-1]
+            index = 0
+            lastkey = len(klist) - 1
             for key in klist:
                 value = getattr(self, key, None)
-                if value != None and (rdebug > 1 or key == lastkey or key in _PKT_rlayers):
+                if value is not None and (rdebug > 1 or index == lastkey or key in _PKT_rlayers):
                     if rdebug == 1:
-                        if key == 'nfs':
-                            out += self._nfs_str(value)
+                        if index == lastkey and key in _PKT_mlayers:
+                            # Display level 2 if last layer is in _PKT_mlayers
+                            self.debug_repr(2)
+                            out += str(value)
+                            self.debug_repr(1)
                         else:
-                            if key == lastkey and key in _PKT_mlayers:
-                                self.debug_repr(2)
-                            out += "%s" % str(value)
-                            self.debug_repr(rdebug)
+                            out += str(value)
                     else:
                         sps = " " * (_maxlen - len(key))
                         out += "    %s:%s %s\n" % (key.upper(), sps, str(value))
+                index += 1
             out += ")\n" if rdebug == 2 else ""
         else:
             out = BaseObj.__str__(self)
         return out
-
-    def _nfs_str(self, nfs):
-        """Internal method to return a condensed string representation
-           of the NFS packet.
-        """
-        out = 'NFS v%d ' % self.rpc.version
-        if isinstance(nfs, COMPOUND4args):
-            out += 'COMPOUND4 call  '
-            oplist = []
-            for item in nfs.argarray:
-                oplist.append(nfs_opnum4[item.argop][3:])
-            out += ';'.join(oplist)
-        elif isinstance(nfs, COMPOUND4res):
-            out += 'COMPOUND4 reply '
-            oplist = []
-            for item in nfs.resarray:
-                oplist.append(nfs_opnum4[item.resop][3:])
-            out += ';'.join(oplist)
-            if nfs.status != 0:
-                out += ' -> ' + nfsstat4[nfs.status]
-        return out
-
