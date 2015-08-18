@@ -43,16 +43,16 @@ import parser
 import symbol
 import nfstest_config as c
 from baseobj import BaseObj
-from packet.pkt import Pkt
 from packet.unpack import Unpack
 from packet.record import Record
+from packet.pkt import Pkt, PKT_layers
 from packet.link.ethernet import ETHERNET
 
 # Module constants
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '1.0.5'
+__version__   = '1.0.6'
 
 BaseObj.debug_map(0x100000000, 'pkt1', "PKT1: ")
 BaseObj.debug_map(0x200000000, 'pkt2', "PKT2: ")
@@ -65,13 +65,7 @@ _token_map = dict(token.tok_name.items() + symbol.sym_name.items())
 # Map of items not in the array of the compound
 _nfsopmap = {'status': 1, 'tag': 1}
 # Match function map
-_match_func_map = {
-    'ETHERNET': 'self.match_ethernet',
-    'IP':       'self.match_ip',
-    'TCP':      'self.match_tcp',
-    'RPC':      'self.match_rpc',
-    'NFS':      'self.match_nfs',
-}
+_match_func_map = dict(zip(PKT_layers,["self._match_%s"%x for x in PKT_layers]))
 
 class Header(BaseObj):
     # Class attributes
@@ -546,40 +540,20 @@ class Pktt(BaseObj, Unpack):
 
     def _match(self, layer, args):
         """Default match function."""
-        obj = "self.pkt.%s." % layer.lower()
-        lhs, opr, rhs = self._split_match(args)
-        expr = self._process_match(obj, lhs, opr, rhs)
-        texpr = eval(expr)
+        if not hasattr(self.pkt, layer):
+            return False
+
+        if layer == "nfs":
+            # Use special matching function for NFS
+            texpr = self.match_nfs(args)
+        else:
+            # Use general match
+            obj = "self.pkt.%s." % layer.lower()
+            lhs, opr, rhs = self._split_match(args)
+            expr = self._process_match(obj, lhs, opr, rhs)
+            texpr = eval(expr)
         self.dprint('PKT2', "    %d: match_%s(%s) -> %r" % (self.pkt.record.index, layer, args, texpr))
         return texpr
-
-    def match_ethernet(self, args):
-        """Match ETHERNET values on current packet.
-
-           See ETHERNET() object for more information
-        """
-        return self._match('ethernet', args)
-
-    def match_ip(self, args):
-        """Match IP values on current packet.
-
-           See IPv4() and IPv6() object for more information
-        """
-        return self._match('ip', args)
-
-    def match_tcp(self, args):
-        """Match TCP values on current packet.
-
-           See TCP() object for more information
-        """
-        return self._match('tcp', args)
-
-    def match_rpc(self, args):
-        """Match RPC values on current packet.
-
-           See RPC() object for more information
-        """
-        return self._match('rpc', args)
 
     def clear_xid_list(self):
         """Clear list of outstanding xids"""
@@ -699,14 +673,14 @@ class Pktt(BaseObj, Unpack):
                data =  self._convert_match(ast)
 
                Returns:
-               data = "(self.match_tcp('flags.ACK==1'))and(self.match_nfs('argop==50'))"
+               data = "(self._match('tcp','flags.ACK==1'))and(self._match('nfs','argop==50'))"
         """
         ret = ''
         isin = False
         if not isinstance(ast, list):
-            if ast in _match_func_map:
+            if ast.lower() in _match_func_map:
                 # Replace name by its corresponding function name
-                return _match_func_map[ast]
+                return _match_func_map[ast.lower()]
             return ast
         if len(ast) == 2:
             return self._convert_match(ast[1])
@@ -727,16 +701,23 @@ class Pktt(BaseObj, Unpack):
         if _token_map[ast[0]] == "comparison":
             # Comparison
             if isin:
-                m = re.search(r'(.*)(self\.match_\w+)\.(.*)', ret)
-                func = m.group(2)
-                args = m.group(1) + m.group(3)
+                regex = re.search(r'(.*)(self\._match)_(\w+)\.(.*)', ret)
+                data = regex.groups()
+                func = data[1]
+                layer = data[2]
+                args = data[0] + data[3]
             else:
-                m = re.search(r"^(self\.match_\w+)\.(.*)", ret)
-                func = m.group(1)
-                args = m.group(2)
+                regex = re.search(r"^((\w+)\()?(self\._match)_(\w+)\.(.*)", ret)
+                data = regex.groups()
+                func = data[2]
+                layer = data[3]
+                if data[0] is None:
+                    args = data[4]
+                else:
+                    args = data[0] + data[4]
             # Escape all single quotes since the whole string will be quoted
             args = re.sub(r"'", "\\'", args)
-            ret = "(%s('%s'))" % (func, args)
+            ret = "(%s('%s','%s'))" % (func, layer, args)
 
         return ret
 
