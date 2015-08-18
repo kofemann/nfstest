@@ -50,9 +50,9 @@ from packet.link.ethernet import ETHERNET
 
 # Module constants
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.0.4'
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = '1.0.5'
 
 BaseObj.debug_map(0x100000000, 'pkt1', "PKT1: ")
 BaseObj.debug_map(0x200000000, 'pkt2', "PKT2: ")
@@ -599,29 +599,10 @@ class Pktt(BaseObj, Unpack):
             except Exception:
                 return False
 
-        try:
-            array = self.pkt.nfs.argarray
-        except Exception:
-            try:
-                array  = self.pkt.nfs.resarray
-                isarg = False
-            except Exception:
-                # No NFS or no compound call/reply
-                return False
-
         idx = 0
-        for item in array:
+        obj_prefix = "item."
+        for item in self.pkt.nfs.array:
             try:
-                if isarg:
-                    op  = "item.arg"
-                else:
-                    op  = "item.res"
-
-                if lhs == 'op':
-                    obj_prefix = op
-                else:
-                    obj_prefix = "item."
-
                 # Get expression to eval
                 expr = self._process_match(obj_prefix, lhs, opr, rhs)
                 if eval(expr):
