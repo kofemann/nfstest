@@ -42,14 +42,14 @@ __license__   = "GPL v2"
 __version__   = '1.0.2'
 
 # The order in which to display all layers in the packet
-_PKT_layers = ['record', 'ethernet', 'ip', 'tcp', 'udp', 'rpc', 'gssd', 'nfs', 'gssc']
+PKT_layers = ['record', 'ethernet', 'ip', 'tcp', 'udp', 'rpc', 'gssd', 'nfs', 'gssc']
 # Required layers for debug_repr(1)
 _PKT_rlayers = ['record', 'ip']
 # Do not display these layers for debug_repr(1)
 _PKT_nlayers = ['gssd', 'gssc']
 # Packet layers to display as debug_repr(2) for debug_repr(1) if last layer
 _PKT_mlayers = ['record', 'ethernet', 'ip']
-_maxlen = len(max(_PKT_layers, key=len))
+_maxlen = len(max(PKT_layers, key=len))
 
 class Pkt(BaseObj):
     """Packet object
@@ -63,7 +63,7 @@ class Pkt(BaseObj):
            if x == 'nfs':
                print x.nfs
     """
-    _attrlist = tuple(_PKT_layers)
+    _attrlist = tuple(PKT_layers)
 
     # Do not use BaseObj constructor to have a little bit of
     # performance improvement
@@ -105,7 +105,7 @@ class Pkt(BaseObj):
         if rdebug > 0:
             out = "Pkt(\n" if rdebug == 2 else ''
             klist = []
-            for key in _PKT_layers:
+            for key in PKT_layers:
                 if getattr(self, key, None) is not None and (rdebug > 1 or key not in _PKT_nlayers):
                     klist.append(key)
             index = 0
