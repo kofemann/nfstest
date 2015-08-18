@@ -22,9 +22,9 @@ from packet.application.rpc import RPC
 
 # Module constants
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.0.3'
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = '1.0.3'
 
 _TCP_map = {
     0x001:'FIN',
@@ -274,11 +274,9 @@ class TCP(BaseObj):
                 pktt._rpc_xid_map.pop(rpc.xid, None)
 
             # Decode NFS layer
-            nfs = rpc.decode_nfs()
-            if nfs:
-                pkt.nfs = nfs
+            rpcload = rpc.decode_payload()
             rpcbytes = ldata - unpack.size()
-            if not nfs and rpcbytes != rpcsize:
+            if not rpcload and rpcbytes != rpcsize:
                 pass
             elif unpack.size():
                 # Save the offset of next RPC packet within this TCP packet

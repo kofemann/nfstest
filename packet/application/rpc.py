@@ -22,14 +22,14 @@ from gss import GSS
 from rpc_const import *
 import nfstest_config as c
 from baseobj import BaseObj
+from packet.nfs.nfs import NFS
 from rpc_creds import rpc_credential
-from packet.nfs.nfs4lib import FancyNFS4Unpacker
 
 # Module constants
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.0.6'
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = '1.0.7'
 
 class Header(BaseObj):
     """Header object"""
@@ -61,7 +61,7 @@ class RPC(GSS):
            x = RPC(pktt_obj, proto=6)
 
            # Decode NFS layer
-           nfs = x.decode_nfs()
+           nfs = x.decode_payload()
 
        Object definition:
 
@@ -291,8 +291,8 @@ class RPC(GSS):
             out = BaseObj.__str__(self)
         return out
 
-    def decode_nfs(self):
-        """Decode NFS
+    def decode_payload(self):
+        """Decode RPC load
 
            For RPC calls it is easy to decide if the RPC payload is an NFS packet
            since the RPC program is in the RPC header, which for NFS the
@@ -356,60 +356,23 @@ class RPC(GSS):
         unpack = pktt.unpack
         self.decode_gss_data()
 
-        try:
-            # Set variables for ease of use
-            program   = self.program
-            version   = self.version
-            procedure = self.procedure
-        except:
-            return
-
-        if unpack.size() == 0 or not procedure or not version:
-            # Nothing to process
-            return
-
-        if program == 100003:
-            cb_flag = False
-        elif program >= 0x40000000 and program < 0x60000000:
-            # This is a crude way to figure out if call/reply is a callback
-            # based on the fact that NFS is always program 100003 and anything
-            # in the transient program range is considered a callback
-            cb_flag = True
-        else:
-            # Not an NFS packet
-            return
-
         # Make sure to catch any errors
         try:
-            if procedure == 1 and ((not cb_flag and version == 4) or
-                                   (cb_flag and version == 1)):
-                # Create object to unpack the NFS layer
-                unpacker = FancyNFS4Unpacker(unpack.getbytes())
-                unpacker.check_enum = False
-                if self.type == CALL:
-                    # RPC call
-                    if cb_flag:
-                        # This packet is definitely not program 100003
-                        # so treat it like a NFS callback
-                        ret = unpacker.unpack_CB_COMPOUND4args()
-                    else:
-                        # This packet NFS
-                        ret = unpacker.unpack_COMPOUND4args()
-                else:
-                    # RPC reply
-                    if cb_flag:
-                        # This packet is definitely not program 100003
-                        # so treat it like a NFS callback
-                        ret = unpacker.unpack_CB_COMPOUND4res()
-                    else:
-                        # This packet NFS
-                        ret = unpacker.unpack_COMPOUND4res()
+            if self.program == 100003:
+                # Decode NFS layer
+                ret = NFS(self, False)
+            elif self.program >= 0x40000000 and self.program < 0x60000000:
+                # This is a crude way to figure out if call/reply is a callback
+                # based on the fact that NFS is always program 100003 and anything
+                # in the transient program range is considered a callback
+                ret = NFS(self, True)
 
-                # Position data pointer to include bytes processed by NFS
-                unpack.seek(unpack.tell() + unpacker.get_position())
+            if ret:
+                ret._rpc = self
                 self.decode_gss_checksum()
+                pktt.pkt.nfs = ret
         except Exception:
-            # Could not decode NFS packet
+            # Could not decode RPC load
             self.dprint('PKT3', traceback.format_exc())
             return
         return ret
