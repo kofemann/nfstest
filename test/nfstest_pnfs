@@ -23,9 +23,9 @@ from nfstest.test_util import TestUtil
 
 # Module constants
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.0.2'
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = '1.0.3'
 
 USAGE = """%prog --server <server> [options]
 
@@ -239,7 +239,7 @@ class pNFSTest(TestUtil):
                     self.writeverf = None
 
                 # Get ip address and port for DS
-                addr_list = item.na_r_addr.split('.')
+                addr_list = item.addr.split('.')
                 ipaddr = '.'.join(addr_list[:4])
                 port = (int(addr_list[4])<<8) + int(addr_list[5])
                 self.dprint('DBG2', "DataServer(%d) ipaddr: %s, port: %d" % (ds_index, ipaddr, port))
@@ -336,7 +336,7 @@ class pNFSTest(TestUtil):
                 for ds_list in multipath_ds_list:
                     for item in ds_list:
                         # Get ip address and port for DS
-                        addr_list = item.na_r_addr.split('.')
+                        addr_list = item.addr.split('.')
                         ipaddr = '.'.join(addr_list[:4])
                         port = (int(addr_list[4])<<8) + int(addr_list[5])
 
@@ -451,7 +451,7 @@ class pNFSTest(TestUtil):
         self.dprint('DBG2', "Find OPEN for file %s" % filename)
         (filehandle, open_stateid, deleg_stateid) = self.find_open(filename=filename, claimfh=openfh.get('fh'), anyclaim=True)
         if deleg_stateid:
-            deleg_type = self.pktt.pkt.NFSop.delegation.delegation_type
+            deleg_type = self.pktt.pkt.NFSop.delegation.deleg_type
         else:
             deleg_type = iomode
         if 'filehandle' in openfh:
@@ -475,7 +475,7 @@ class pNFSTest(TestUtil):
                 self.test(pktcall, "LOCK should be sent")
                 if pktcall:
                     if pktreply:
-                        lock_stateid = pktreply.NFSop.lock_stateid.other
+                        lock_stateid = pktreply.NFSop.stateid.other
                     else:
                         self.test(False, "LOCK reply was not found")
             else:
@@ -502,11 +502,11 @@ class pNFSTest(TestUtil):
             openfh['layout'] = self.layout
             # Test layoutget stateid
             if layout_stateid is not None:
-                self.test(layoutget.loga_stateid.other == layout_stateid, "LAYOUTGET stateid should be the previous LAYOUTGET stateid")
-            elif deleg_stateid is not None and layoutget.loga_stateid.other == deleg_stateid:
+                self.test(layoutget.stateid == layout_stateid, "LAYOUTGET stateid should be the previous LAYOUTGET stateid")
+            elif deleg_stateid is not None and layoutget.stateid == deleg_stateid:
                 self.test(True, "LAYOUTGET stateid should be the DELEG stateid")
             else:
-                self.test(layoutget.loga_stateid.other == open_stateid, "LAYOUTGET stateid should be the OPEN stateid")
+                self.test(layoutget.stateid == open_stateid, "LAYOUTGET stateid should be the OPEN stateid")
         else:
             self.test(False, "LAYOUTGET should be sent", terminate=False)
             return (multipath_ds_list, openfh)
@@ -540,24 +540,24 @@ class pNFSTest(TestUtil):
                     pktreply = devinfo['reply']
             if pktcall:
                 xid = pktcall.rpc.xid
-                self.test(pktcall.NFSop.gdia_layout_type == LAYOUT4_NFSV4_1_FILES, "GETDEVICEINFO layout type should be LAYOUT4_NFSV4_1_FILES")
+                self.test(pktcall.NFSop.type == LAYOUT4_NFSV4_1_FILES, "GETDEVICEINFO layout type should be LAYOUT4_NFSV4_1_FILES")
                 if getattr(self, 'ca_maxrespsz', None) is not None:
-                    self.test(pktcall.NFSop.gdia_maxcount <= self.ca_maxrespsz, "GETDEVICEINFO gdia_maxcount should be less than or equal to max_response_size in CREATE_SESSION reply")
+                    self.test(pktcall.NFSop.maxcount <= self.ca_maxrespsz, "GETDEVICEINFO maxcount should be less than or equal to max_response_size in CREATE_SESSION reply")
 
                 # Find GETDEVICEINFO reply
                 if pktreply:
                     if pktreply.nfs.status:
                         self.test(False, "GETDEVICEINFO returned %s(%d)" % (nfsstat4[pktreply.nfs.status], pktreply.nfs.status))
                     else:
-                        gdir_device = pktreply.NFSop.gdir_device_addr
+                        gdir_device = pktreply.NFSop.device_addr
 
                         # Test GETDEVICEINFO reply for correct layout type
-                        self.test(gdir_device.da_layout_type == LAYOUT4_NFSV4_1_FILES, "GETDEVICEINFO reply layout type should be LAYOUT4_NFSV4_1_FILES")
+                        self.test(gdir_device.type == LAYOUT4_NFSV4_1_FILES, "GETDEVICEINFO reply layout type should be LAYOUT4_NFSV4_1_FILES")
 
-                        da_addr_body = gdir_device.da_addr_body
-                        self.stripe_indices = da_addr_body.nflda_stripe_indices
+                        da_addr_body = gdir_device.body
+                        self.stripe_indices = da_addr_body.stripe_indices
                         nindices = len(self.stripe_indices)
-                        mp_ds_list = da_addr_body.nflda_multipath_ds_list
+                        mp_ds_list = da_addr_body.multipath_ds_list
                         ds_index = 0
                         if multipath_ds_list:
                             # Make sure only connect to dataservers which have
@@ -572,7 +572,7 @@ class pNFSTest(TestUtil):
                                         nocreate_list.append(nocreate)
                                     for dslist in multipath_ds_list:
                                         for ds_entry in dslist:
-                                            if dsentry.na_r_netid == ds_entry.na_r_netid and dsentry.na_r_addr == ds_entry.na_r_addr:
+                                            if dsentry.netid == ds_entry.netid and dsentry.addr == ds_entry.addr:
                                                 dsfound = True
                                     if not dsfound:
                                         nocreate_list[ds_index] = False
@@ -600,20 +600,20 @@ class pNFSTest(TestUtil):
             filehandle    = openfh['filehandle']
             open_stateid  = openfh['open_stateid']
             deleg_stateid = openfh['deleg_stateid']
-            fhandlestr = "NFS.object == '%s'" % self.pktt.escape(filehandle)
+            fhandlestr = "NFS.fh == '%s'" % self.pktt.escape(filehandle)
 
             if delegreturn:
                 # Find DELEGRETURN request
                 (pktcall, pktreply) = self.find_nfs_op(OP_DELEGRETURN, self.server_ipaddr, self.port, match=fhandlestr)
                 if pktcall:
-                    self.test(pktcall.NFSop.deleg_stateid.other == deleg_stateid, "DELEGRETURN should use the delegation stateid")
+                    self.test(pktcall.NFSop.stateid == deleg_stateid, "DELEGRETURN should use the delegation stateid")
                 else:
                     self.test(False, "DELEGRETURN should be sent")
             elif not noclose:
                 # Find CLOSE request
                 (pktcall, pktreply) = self.find_nfs_op(OP_CLOSE, self.server_ipaddr, self.port, match=fhandlestr)
                 if pktcall:
-                    self.test(pktcall.NFSop.open_stateid.other == open_stateid, "CLOSE should use the open stateid")
+                    self.test(pktcall.NFSop.stateid == open_stateid, "CLOSE should use the open stateid")
                 else:
                     self.test(False, "CLOSE should be sent")
 
@@ -622,7 +622,7 @@ class pNFSTest(TestUtil):
                 (pktcall, pktreply) = self.find_nfs_op(OP_DELEGRETURN, self.server_ipaddr, self.port, match=fhandlestr)
                 if pktcall:
                     # Delegation has been returned
-                    self.test(pktcall.NFSop.deleg_stateid.other == deleg_stateid, "DELEGRETURN should use the delegation stateid")
+                    self.test(pktcall.NFSop.stateid == deleg_stateid, "DELEGRETURN should use the delegation stateid")
 
             # Rewind trace file to saved packet index
             self.pktt.rewind(save_index)
@@ -639,7 +639,7 @@ class pNFSTest(TestUtil):
             pkt = self.pktt.match("NFS.argop == %d" % OP_DESTROY_SESSION)
             if not pkt:
                 break
-            sessionid = pkt.NFSop.dsa_sessionid
+            sessionid = pkt.NFSop.sessionid
             if sessionid in self.session_ids:
                 self.session_ids.remove(sessionid)
                 xids.append(pkt.rpc.xid)
@@ -963,14 +963,14 @@ class pNFSTest(TestUtil):
         self.pktt.rewind()
         (multipath_ds_list, openfh) = self.verify_file(filename, iomode=LAYOUTIOMODE4_RW, nolayoutget=True, lock=haslock, verify_close=False)
 
-        fhandle_str = "NFS.object == '%s'" % self.pktt.escape(openfh['filehandle'])
+        fhandle_str = "NFS.fh == '%s'" % self.pktt.escape(openfh['filehandle'])
         (pktcall, pktreply) = self.find_nfs_op(OP_SETATTR, self.server_ipaddr, self.port, status=None, match=fhandle_str)
         self.test(pktcall, "SETATTR should be sent to MDS")
         if pktcall:
             sent_stateid = pktcall.NFSop.stateid.other
             (stateid, stid_str, stid_failmsg) = self.verify_stateid(openfh, sent_stateid)
             self.test(sent_stateid == stateid, "SETATTR stateid should be the %s stateid" % stid_str, failmsg=stid_failmsg)
-            set_size = pktcall.NFSop.obj_attributes[4]
+            set_size = pktcall.NFSop.attributes[4]
             self.test(set_size == size, "SETATTR should be sent with correct size", failmsg=", expecting %d and got %d" % (size, set_size))
         self.test(pktreply.NFSop.status == 0, "SETATTR should succeed", failmsg=", expecting status = %d and got %d" % (0, pktreply.NFSop.status))
         if fstat:
