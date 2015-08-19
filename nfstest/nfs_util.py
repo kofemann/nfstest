@@ -33,9 +33,9 @@ from packet.nfs.nfs4_const import *
 
 # Module constants
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.0.6'
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = '2.0'
 
 class NFSUtil(Host):
     """NFSUtil object
@@ -414,14 +414,14 @@ class NFSUtil(Host):
         claimfh_str = ""
         str_list = []
         if filename is not None:
-            file_str = "NFS.claim.file == '%s'" % filename
+            file_str = "NFS.claim.name == '%s'" % filename
             str_list.append(file_str)
         if claimfh is not None:
-            claimfh_str = "(NFS.object == '%s' and NFS.claim.claim == %d)" % (self.pktt.escape(claimfh), CLAIM_FH)
+            claimfh_str = "(NFS.fh == '%s' and NFS.claim.claim == %d)" % (self.pktt.escape(claimfh), CLAIM_FH)
             str_list.append(claimfh_str)
         if deleg_stateid is not None:
-            deleg_str = "(NFS.claim.delegate_cur_info.file == '%s'" % filename
-            deleg_str += " and NFS.claim.delegate_cur_info.delegate_stateid.other == '%s')" % self.pktt.escape(deleg_stateid)
+            deleg_str = "(NFS.claim.deleg_info.name == '%s'" % filename
+            deleg_str += " and NFS.claim.deleg_info.stateid == '%s')" % self.pktt.escape(deleg_stateid)
             str_list.append(deleg_str)
 
         if anyclaim:
@@ -440,7 +440,7 @@ class NFSUtil(Host):
             xid = pktcall.rpc.xid
             open_str = "RPC.xid == %d and NFS.status == 0 and NFS.resop == %d" % (xid, OP_OPEN)
             if deleg_type is not None:
-                open_str += " and NFS.delegation.delegation_type == %d" % deleg_type
+                open_str += " and NFS.delegation.deleg_type == %d" % deleg_type
 
             # Find OPEN reply to get filehandle of file
             pktreply = self.pktt.match(open_str, maxindex=maxindex)
@@ -451,19 +451,19 @@ class NFSUtil(Host):
                 # GETFH should be the operation following the OPEN,
                 # but look for it just in case it is not
                 idx = pktreply.NFSidx + 1
-                resarray = pktreply.nfs.resarray
+                resarray = pktreply.nfs.array
                 while (idx < len(resarray) and resarray[idx].resop != OP_GETFH):
                     idx += 1
                 if idx >= len(resarray):
                     # Could not find GETFH
                     return (None, None, None)
-                filehandle = pktreply.nfs.resarray[idx].object
+                filehandle = pktreply.nfs.array[idx].fh
             else:
                 # No need to find GETFH, the filehandle is already known
                 filehandle = claimfh
 
             open_stateid = pktreply.NFSop.stateid.other
-            if pktreply.NFSop.delegation.delegation_type in [OPEN_DELEGATE_READ, OPEN_DELEGATE_WRITE]:
+            if pktreply.NFSop.delegation.deleg_type in [OPEN_DELEGATE_READ, OPEN_DELEGATE_WRITE]:
                 deleg_stateid = pktreply.NFSop.delegation.stateid.other
             else:
                 deleg_stateid = None
@@ -480,48 +480,45 @@ class NFSUtil(Host):
         dst = self.pktt.ip_tcp_dst_expr(self.server_ipaddr, self.port)
 
         # Find LAYOUTGET request
-        pkt = self.pktt.match(dst + " and NFS.argop == %d and NFS.object == '%s'" % (OP_LAYOUTGET, self.pktt.escape(filehandle)))
+        pkt = self.pktt.match(dst + " and NFS.fh == '%s' and NFS.argop == %d" % (self.pktt.escape(filehandle), OP_LAYOUTGET))
         if not pkt:
             return (None, None, None)
         xid = pkt.rpc.xid
-        idx = pkt.NFSidx
-        # The matched operation index (NFSidx) gives the PUTFH prior to the LAYOUTGET
-        # since NFS.object is the last match
-        layoutget = pkt.nfs.argarray[idx+1]
+        layoutget = pkt.NFSop
 
         # Find LAYOUTGET reply
         pkt = self.pktt.match("RPC.xid == %d and NFS.resop == %d" % (xid, OP_LAYOUTGET))
         if pkt is None:
             return (layoutget, None, None)
         layoutget_res = pkt.NFSop
-        if layoutget_res.logr_status:
+        if layoutget_res.status:
             return (layoutget, layoutget_res, None)
         # XXX Using first layout segment only
-        layout = layoutget_res.logr_layout[0]
+        layout = layoutget_res.layout[0]
 
         # Get layout content
-        loc_body = layout.lo_content.loc_body
-        if layoutget.loga_layout_type == LAYOUT4_NFSV4_1_FILES:
+        loc_body = layout.content.body
+        if layoutget.type == LAYOUT4_NFSV4_1_FILES:
             nfl_util = loc_body.nfl_util
 
             # Decode loc_body
             loc_body = {
-                'type':               layoutget.loga_layout_type,
+                'type':               layoutget.type,
                 'dense':              (nfl_util & NFL4_UFLG_DENSE > 0),
                 'commit_mds':         (nfl_util & NFL4_UFLG_COMMIT_THRU_MDS > 0),
                 'stripe_size':        nfl_util & NFL4_UFLG_STRIPE_UNIT_SIZE_MASK,
-                'first_stripe_index': loc_body.nfl_first_stripe_index,
-                'offset':             loc_body.nfl_pattern_offset,
-                'filehandles':        loc_body.nfl_fh_list,
-                'deviceid':           loc_body.nfl_deviceid,
-                'stateid':            layoutget_res.logr_stateid.other,
-                'iomode':             layout.lo_iomode,
+                'first_stripe_index': loc_body.first_stripe_index,
+                'offset':             loc_body.pattern_offset,
+                'filehandles':        loc_body.fh_list,
+                'deviceid':           loc_body.deviceid,
+                'stateid':            layoutget_res.stateid.other,
+                'iomode':             layout.iomode,
             }
         else:
             loc_body = {
-                'type':               layoutget.loga_layout_type,
-                'stateid':            layoutget_res.logr_stateid.other,
-                'iomode':             layout.lo_iomode,
+                'type':               layoutget.type,
+                'stateid':            layoutget_res.stateid.other,
+                'iomode':             layout.iomode,
             }
 
         return (layoutget, layoutget_res, loc_body)
@@ -538,24 +535,24 @@ class NFSUtil(Host):
         """
         dslist = []
         # Find GETDEVICEINFO request and reply
-        match = "NFS.gdia_device_id == '%s'" % self.pktt.escape(deviceid) if deviceid is not None else ''
+        match = "NFS.deviceid == '%s'" % self.pktt.escape(deviceid) if deviceid is not None else ''
         (pktcall, pktreply) = self.find_nfs_op(OP_GETDEVICEINFO, self.server_ipaddr, self.port, match=match, status=None)
         if pktreply and pktreply.nfs.status == 0:
-            self.gdir_device = pktreply.NFSop.gdir_device_addr
-            if self.gdir_device.da_layout_type == LAYOUT4_NFSV4_1_FILES:
-                da_addr_body = self.gdir_device.da_addr_body
-                self.stripe_indices = da_addr_body.nflda_stripe_indices
-                multipath_ds_list = da_addr_body.nflda_multipath_ds_list
+            self.gdir_device = pktreply.NFSop.device_addr
+            if self.gdir_device.type == LAYOUT4_NFSV4_1_FILES:
+                da_addr_body = self.gdir_device.body
+                self.stripe_indices = da_addr_body.stripe_indices
+                multipath_ds_list = da_addr_body.multipath_ds_list
 
                 for ds_list in multipath_ds_list:
                     for item in ds_list:
                         # Get ip address and port for DS
-                        addr_list = item.na_r_addr.split('.')
+                        addr_list = item.addr.split('.')
                         ipaddr = '.'.join(addr_list[:4])
                         port = (int(addr_list[4])<<8) + int(addr_list[5])
                         dslist.append({'ipaddr': ipaddr, 'port': port})
             # Save device info for future reference
-            self.device_info[pktcall.NFSop.gdia_device_id] = {
+            self.device_info[pktcall.NFSop.deviceid] = {
                 'call':  pktcall,
                 'reply': pktreply,
             }
@@ -583,16 +580,12 @@ class NFSUtil(Host):
         self.src_ipaddr = pktcall.ip.src
         self.src_port   = pktcall.tcp.src_port
         self.cb_dst     = self.pktt.ip_tcp_dst_expr(self.src_ipaddr, self.src_port)
-        try:
-            if len(pktcall.NFSop.eia_client_impl_id) > 0:
-                self.nii_name = pktcall.NFSop.eia_client_impl_id[0].nii_name
-        except:
-            pass
-        try:
-            if len(pktreply.NFSop.eir_server_impl_id) > 0:
-                self.nii_server = pktreply.NFSop.eir_server_impl_id[0].nii_name
-        except:
-            pass
+
+        if pktcall is not None and pktcall.NFSop.client_impl_id is not None:
+            self.nii_name = pktcall.NFSop.client_impl_id.name
+        if pktreply is not None and pktreply.NFSop.server_impl_id is not None:
+            self.nii_server = pktreply.NFSop.server_impl_id.name
+
         return (pktcall, pktreply)
 
     def find_layoutrecall(self, status=0):
@@ -604,7 +597,7 @@ class NFSUtil(Host):
         if pktcall:
             # Find reply
             xid = pktcall.rpc.xid
-            pktreply = self.pktt.match("RPC.xid == %d and NFS.resop == %d and NFS.clorr_status == %d" % (xid, OP_CB_LAYOUTRECALL, status))
+            pktreply = self.pktt.match("RPC.xid == %d and NFS.resop == %d and NFS.status == %d" % (xid, OP_CB_LAYOUTRECALL, status))
         else:
             self.test(False, "CB_LAYOUTRECALL was not found")
             return
@@ -675,7 +668,7 @@ class NFSUtil(Host):
         """Verify initial connection to the metadata server(MDS)/data server(DS).
            Verify if EXCHANGE_ID, CREATE_SESSION, RECLAIM_COMPLETE,
            GETATTR asking for FATTR4_LEASE_TIME, and GETATTR asking for
-           FATTR4_FS_LAYOUT_TYPE are all sent or not to the server.
+           FATTR4_FS_LAYOUT_TYPES are all sent or not to the server.
 
            ipaddr:
                Destination IP address of MDS or DS
@@ -721,12 +714,12 @@ class NFSUtil(Host):
             self.test(pktcall, "EXCHANGE_ID should be sent to %s" % server_type)
             if pktreply:
                 if exchid_status:
-                    self.test(pktreply.NFSop.eir_status == exchid_status, "EXCHANGE_ID reply should return %s(%d)" % (nfsstat4[exchid_status], exchid_status))
+                    self.test(pktreply.NFSop.status == exchid_status, "EXCHANGE_ID reply should return %s(%d)" % (nfsstat4[exchid_status], exchid_status))
                     return
                 else:
-                    eir_flags = pktreply.NFSop.eir_flags
-                    if len(pktreply.NFSop.eir_server_impl_id) > 0:
-                        self.nii_name = pktreply.NFSop.eir_server_impl_id[0].nii_name
+                    eir_flags = pktreply.NFSop.flags
+                    if pktreply.NFSop.server_impl_id is not None:
+                        self.nii_name = pktreply.NFSop.server_impl_id.name
                     self.test(eir_flags & pnfs_use_flag != 0, "EXCHGID4_FLAG_USE_PNFS_%s should be set" % server_type, terminate=True)
                     if not ds:
                         # Check for invalid combination of eir flags
@@ -742,27 +735,27 @@ class NFSUtil(Host):
             self.test(pktcall, "CREATE_SESSION should be sent to %s" % server_type)
             if pktreply:
                 if cs_status:
-                    self.test(pktreply.NFSop.csr_status == cs_status, "CREATE_SESSION reply should return %s(%d)" % (nfsstat4[cs_status], cs_status))
+                    self.test(pktreply.NFSop.status == cs_status, "CREATE_SESSION reply should return %s(%d)" % (nfsstat4[cs_status], cs_status))
                     return
                 else:
                     # Save the session id
-                    self.sessionid = pktreply.NFSop.csr_sessionid
+                    self.sessionid = pktreply.NFSop.sessionid
                     # Save the max response size
-                    self.ca_maxrespsz = pktreply.NFSop.csr_fore_chan_attrs.ca_maxresponsesize
+                    self.ca_maxrespsz = pktreply.NFSop.fore_chan_attrs.maxresponsesize
 
                     slotid = 0
                     fmsg = None
                     test_seq = True
                     save_index = self.pktt.index
                     while True:
-                        # Find first SEQUENCE requests per slot id
-                        (pktcall, pktreply) = self.find_nfs_op(OP_SEQUENCE, ipaddr, port, call_only=True, match="NFS.sa_slotid == %d" % slotid)
+                        # Find first SEQUENCE request per slot id
+                        (pktcall, pktreply) = self.find_nfs_op(OP_SEQUENCE, ipaddr, port, call_only=True, match="NFS.slotid == %d" % slotid)
                         if pktcall is None:
                             break
                         self.pktt.rewind(save_index)
                         slotid += 1
-                        if pktcall.NFSop.sa_sequenceid != 1:
-                            fmsg = ", slot id %d starts with sequence id %d" % (slotid-1, pktcall.NFSop.sa_sequenceid)
+                        if pktcall.NFSop.sequenceid != 1:
+                            fmsg = ", slot id %d starts with sequence id %d" % (slotid-1, pktcall.NFSop.sequenceid)
                             test_seq = False
                             break
                     if slotid > 0:
@@ -786,33 +779,33 @@ class NFSUtil(Host):
 
         if not ds:
             # Find packet having a GETATTR asking for FATTR4_LEASE_TIME(bit 10)
-            attrmatch = "NFS.attr_request & %s != 0" % hex(1 << FATTR4_LEASE_TIME)
+            attrmatch = "NFS.request & %s != 0" % hex(1 << FATTR4_LEASE_TIME)
             (pktcall, pktreply) = self.find_nfs_op(OP_GETATTR, self.server_ipaddr, self.port, match=attrmatch)
             self.test(pktcall, "GETATTR should be sent to %s asking for FATTR4_LEASE_TIME" % server_type)
             if pktreply:
-                lease_time = pktreply.NFSop.obj_attributes[FATTR4_LEASE_TIME]
+                lease_time = pktreply.NFSop.attributes[FATTR4_LEASE_TIME]
                 self.test(lease_time > 0, "NFS server should return lease time(%d) > 0" % lease_time)
             elif pktcall:
                 self.test(False, "GETATTR reply was not found")
 
             # Find packet having a GETATTR asking for FATTR4_SUPPORTED_ATTRS(bit 0)
-            attrmatch = "NFS.attr_request & %s != 0" % hex(1 << FATTR4_SUPPORTED_ATTRS)
+            attrmatch = "NFS.request & %s != 0" % hex(1 << FATTR4_SUPPORTED_ATTRS)
             (pktcall, pktreply) = self.find_nfs_op(OP_GETATTR, self.server_ipaddr, self.port, match=attrmatch)
             self.test(pktcall, "GETATTR should be sent to %s asking for FATTR4_SUPPORTED_ATTRS" % server_type)
             if pktreply:
-                supported_attrs = pktreply.NFSop.obj_attributes[FATTR4_SUPPORTED_ATTRS]
-                fslt_supported = supported_attrs & (1<<FATTR4_FS_LAYOUT_TYPE) != 0
+                supported_attrs = pktreply.NFSop.attributes[FATTR4_SUPPORTED_ATTRS]
+                fslt_supported = supported_attrs & (1<<FATTR4_FS_LAYOUT_TYPES) != 0
                 self.test(fslt_supported, "NFS server should support file type layouts (LAYOUT4_NFSV4_1_FILES)")
             elif pktcall:
                 self.test(False, "GETATTR reply was not found")
 
-            # Find packet having a GETATTR asking for FATTR4_FS_LAYOUT_TYPE(bit 62)
-            attrmatch = "NFS.attr_request & %s != 0" % hex(1 << FATTR4_FS_LAYOUT_TYPE)
+            # Find packet having a GETATTR asking for FATTR4_FS_LAYOUT_TYPES(bit 62)
+            attrmatch = "NFS.request & %s != 0" % hex(1 << FATTR4_FS_LAYOUT_TYPES)
             (pktcall, pktreply) = self.find_nfs_op(OP_GETATTR, self.server_ipaddr, self.port, match=attrmatch)
-            self.test(pktcall, "GETATTR should be sent to %s asking for FATTR4_FS_LAYOUT_TYPE" % server_type)
+            self.test(pktcall, "GETATTR should be sent to %s asking for FATTR4_FS_LAYOUT_TYPES" % server_type)
             if pktreply:
                 # Get list of fs layout types supported by the server
-                fs_layout_types = pktreply.NFSop.obj_attributes[FATTR4_FS_LAYOUT_TYPE]
+                fs_layout_types = pktreply.NFSop.attributes[FATTR4_FS_LAYOUT_TYPES]
                 self.test(LAYOUT4_NFSV4_1_FILES in fs_layout_types, "NFS server should return LAYOUT4_NFSV4_1_FILES in fs_layout_types")
             elif pktcall:
                 self.test(False, "GETATTR reply was not found")
@@ -852,53 +845,53 @@ class NFSUtil(Host):
             return (None, None, None)
 
         # Test layout type
-        self.test(layoutget.loga_layout_type == LAYOUT4_NFSV4_1_FILES, "LAYOUTGET layout type should be LAYOUT4_NFSV4_1_FILES")
+        self.test(layoutget.type == LAYOUT4_NFSV4_1_FILES, "LAYOUTGET layout type should be LAYOUT4_NFSV4_1_FILES")
 
         # Test iomode
-        self.test(layoutget.loga_iomode == iomode, "LAYOUTGET iomode should be %s" % self.iomode_str(iomode))
+        self.test(layoutget.iomode == iomode, "LAYOUTGET iomode should be %s" % self.iomode_str(iomode))
 
         # Test for full file layout
-        self.test(layoutget.loga_offset == 0 and layoutget.loga_length == NFS4_UINT64_MAX, "LAYOUTGET should ask for full file layout")
+        self.test(layoutget.offset == 0 and layoutget.length == NFS4_UINT64_MAX, "LAYOUTGET should ask for full file layout")
 
         if layoutget_res is None:
             self.test(False, "LAYOUTGET reply should be returned")
             return (layoutget, None, None)
 
         if status:
-            self.test(layoutget_res.logr_status == status, "LAYOUTGET reply should return error %s(%d)" % (nfsstat4[status], status))
+            self.test(layoutget_res.status == status, "LAYOUTGET reply should return error %s(%d)" % (nfsstat4[status], status))
             return (layoutget, layoutget_res, None)
-        elif layoutget_res.logr_status:
-            self.test(False, "LAYOUTGET reply returned %s(%d)" % (nfsstat4[layoutget_res.logr_status], layoutget_res.logr_status))
+        elif layoutget_res.status:
+            self.test(False, "LAYOUTGET reply returned %s(%d)" % (nfsstat4[layoutget_res.status], layoutget_res.status))
             return (layoutget, layoutget_res, None)
 
         # Get layout from reply
-        layout = layoutget_res.logr_layout[0]
+        layout = layoutget_res.layout[0]
 
         # Test LAYOUTGET reply for correct layout type
-        self.test(layout.lo_content.loc_type == LAYOUT4_NFSV4_1_FILES, "LAYOUTGET reply layout type should be LAYOUT4_NFSV4_1_FILES")
+        self.test(layout.content.type == LAYOUT4_NFSV4_1_FILES, "LAYOUTGET reply layout type should be LAYOUT4_NFSV4_1_FILES")
 
         # Test LAYOUTGET reply for correct iomode
         if riomode is not None:
-            self.test(layout.lo_iomode == riomode, "LAYOUTGET reply iomode is %s when asking for a %s layout" % (self.iomode_str(riomode), self.iomode_str(iomode)))
-        elif iomode == 1 and layoutget.loga_iomode in [LAYOUTIOMODE4_READ, LAYOUTIOMODE4_RW]:
-            self.test(True, "LAYOUTGET reply iomode is %s when asking for a IOMODE_READ layout" % self.iomode_str(layoutget.loga_iomode))
+            self.test(layout.iomode == riomode, "LAYOUTGET reply iomode is %s when asking for a %s layout" % (self.iomode_str(riomode), self.iomode_str(iomode)))
+        elif iomode == 1 and layoutget.iomode in [LAYOUTIOMODE4_READ, LAYOUTIOMODE4_RW]:
+            self.test(True, "LAYOUTGET reply iomode is %s when asking for a IOMODE_READ layout" % self.iomode_str(layoutget.iomode))
         else:
-            self.test(layout.lo_iomode == iomode, "LAYOUTGET reply iomode should be %s" % self.iomode_str(iomode))
+            self.test(layout.iomode == iomode, "LAYOUTGET reply iomode should be %s" % self.iomode_str(iomode))
 
         if offset is None and length is None:
             # Test LAYOUTGET reply for full file layout
-            self.test(layout.lo_offset == 0 and layout.lo_length == NFS4_UINT64_MAX, "LAYOUTGET reply should be full file layout")
+            self.test(layout.offset == 0 and layout.length == NFS4_UINT64_MAX, "LAYOUTGET reply should be full file layout")
         else:
             # Test LAYOUTGET reply for correct layout range
             if offset is None:
                 offset = 0
             if length is None:
                 length = NFS4_UINT64_MAX
-            self.test(layout.lo_offset == offset and layout.lo_length == length, "LAYOUTGET reply should be: (offset=%d, length=%d)" % (offset, length))
+            self.test(layout.offset == offset and layout.length == length, "LAYOUTGET reply should be: (offset=%d, length=%d)" % (offset, length))
 
         # Return layout
         self.layout = loc_body
-        self.layout['return_on_close'] = layoutget_res.logr_return_on_close
+        self.layout['return_on_close'] = layoutget_res.return_on_close
         return (layoutget, layoutget_res, loc_body)
 
     def verify_io(self, iomode, stateid, ipaddr=None, port=None, src_ipaddr=None, filehandle=None, ds_index=None, init=False, maxindex=None, pattern=None):
@@ -942,7 +935,7 @@ class NFSUtil(Host):
             dst = "IP.dst == '%s' and " % ipaddr
             if port != None:
                 dst += "TCP.dst_port == %d and " % port
-        fh = "NFS.object == '%s'" % self.pktt.escape(filehandle)
+        fh = "NFS.fh == '%s'" % self.pktt.escape(filehandle)
         save_index = self.pktt.index
         xids = []
         offsets = {}
@@ -980,7 +973,7 @@ class NFSUtil(Host):
 
             if nfsop.stateid.seqid != 0:
                 self.test_seqid = False
-            if nfsop.stateid.other != stateid:
+            if nfsop.stateid != stateid:
                 self.test_stateid = False
             self.stateid = nfsop.stateid.other
 
@@ -1049,8 +1042,8 @@ class NFSUtil(Host):
                             # Need commit if reply is UNSTABLE4
                             self.need_commit = True
                         if self.writeverf is None:
-                            self.writeverf = nfsop.writeverf
-                        if self.writeverf != nfsop.writeverf:
+                            self.writeverf = nfsop.verifier
+                        if self.writeverf != nfsop.verifier:
                             self.test_verf = False
                     else:
                         # Server returned error for this I/O operation
@@ -1097,7 +1090,7 @@ class NFSUtil(Host):
            Return the number of commits sent to the server.
         """
         dst = self.pktt.ip_tcp_dst_expr(ipaddr, port)
-        fh = "NFS.object == '%s'" % self.pktt.escape(filehandle)
+        fh = "NFS.fh == '%s'" % self.pktt.escape(filehandle)
         save_index = self.pktt.index
         xids = []
         if init:
@@ -1130,7 +1123,7 @@ class NFSUtil(Host):
                 break
             if pkt.rpc.xid in xids:
                 nfscommit = pkt.NFSop
-                if self.writeverf != nfscommit.writeverf:
+                if self.writeverf != nfscommit.verifier:
                     self.test_commit_verf = False
 
         return ncommits
@@ -1148,7 +1141,7 @@ class NFSUtil(Host):
                Expected size of file
         """
         dst = self.pktt.ip_tcp_dst_expr(self.server_ipaddr, self.port)
-        fh = "NFS.object == '%s'" % self.pktt.escape(filehandle)
+        fh = "NFS.fh == '%s'" % self.pktt.escape(filehandle)
 
         # Find LAYOUTCOMMIT request
         pkt = self.pktt.match(dst + " and " + fh + " and NFS.argop == %d" % OP_LAYOUTCOMMIT)
@@ -1167,26 +1160,26 @@ class NFSUtil(Host):
 
             xid = pkt.rpc.xid
             layoutcommit = pkt.NFSop
-            range_expr = layoutcommit.loca_offset == 0 and layoutcommit.loca_length in (filesize, NFS4_UINT64_MAX)
+            range_expr = layoutcommit.offset == 0 and layoutcommit.length in (filesize, NFS4_UINT64_MAX)
             self.test(range_expr, "LAYOUTCOMMIT should be sent to MDS with correct file range")
-            self.test(layoutcommit.loca_stateid.other == self.layout['stateid'], "LAYOUTCOMMIT should use the layout stateid")
-            self.test(layoutcommit.loca_last_write_offset.no_newoffset, "LAYOUTCOMMIT new offset should be set")
-            self.test(layoutcommit.loca_last_write_offset.no_offset == (filesize - 1),
-                      "LAYOUTCOMMIT last write offset (%d) should be one less than the file size (%d)" % (layoutcommit.loca_last_write_offset.no_offset, filesize))
-            self.test(layoutcommit.loca_layoutupdate.lou_type == LAYOUT4_NFSV4_1_FILES, "LAYOUTCOMMIT layout type should be LAYOUT4_NFSV4_1_FILES")
-            self.test(len(layoutcommit.loca_layoutupdate.lou_body) == 0, "LAYOUTCOMMIT layout update field should be empty for LAYOUT4_NFSV4_1_FILES")
+            self.test(layoutcommit.stateid == self.layout['stateid'], "LAYOUTCOMMIT should use the layout stateid")
+            self.test(layoutcommit.last_write_offset.newoffset, "LAYOUTCOMMIT new offset should be set")
+            self.test(layoutcommit.last_write_offset.offset == (filesize - 1),
+                      "LAYOUTCOMMIT last write offset (%d) should be one less than the file size (%d)" % (layoutcommit.last_write_offset.offset, filesize))
+            self.test(layoutcommit.layoutupdate.type == LAYOUT4_NFSV4_1_FILES, "LAYOUTCOMMIT layout type should be LAYOUT4_NFSV4_1_FILES")
+            self.test(len(layoutcommit.layoutupdate.body) == 0, "LAYOUTCOMMIT layout update field should be empty for LAYOUT4_NFSV4_1_FILES")
 
             # Verify a GETATTR asking for file size is sent with LAYOUTCOMMIT
             idx = pkt.NFSidx
-            getattr_arg = pkt.nfs.argarray[idx+1]
-            self.test(getattr_arg.attr_request & (1 << FATTR4_SIZE), "GETATTR asking for file size is sent within LAYOUTCOMMIT compound")
+            getattr_arg = pkt.nfs.array[idx+1]
+            self.test(getattr_arg.request & (1 << FATTR4_SIZE), "GETATTR asking for file size is sent within LAYOUTCOMMIT compound")
 
             # Find LAYOUTCOMMIT reply
             pkt = self.pktt.match("RPC.xid == %d and NFS.resop == %d" % (xid, OP_LAYOUTCOMMIT))
             layoutcommit = pkt.NFSop
-            if layoutcommit.locr_newsize.ns_sizechanged:
+            if layoutcommit.newsize.sizechanged:
                 self.test(True, "LAYOUTCOMMIT reply file size changed should be set")
-                ns_size = layoutcommit.locr_newsize.ns_size
+                ns_size = layoutcommit.newsize.size
                 if ns_size == filesize:
                     self.test(True, "LAYOUTCOMMIT reply file size should be correct (%d)" % ns_size)
                 else:
@@ -1196,8 +1189,8 @@ class NFSUtil(Host):
 
             # Verify GETATTR returns correct file size
             idx = pkt.NFSidx
-            getattr_res = pkt.nfs.resarray[idx+1]
-            self.test(getattr_res.obj_attributes[FATTR4_SIZE] == filesize, "GETATTR should return correct file size within LAYOUTCOMMIT compound")
+            getattr_res = pkt.nfs.array[idx+1]
+            self.test(getattr_res.attributes[FATTR4_SIZE] == filesize, "GETATTR should return correct file size within LAYOUTCOMMIT compound")
         return
 
     @staticmethod
