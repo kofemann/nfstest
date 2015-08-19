@@ -22,9 +22,9 @@ from nfstest.test_util import TestUtil
 
 # Module constants
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.0.2'
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = '1.0.3'
 
 USAGE = """%prog --server <server> [--client <client>] [options]
 
@@ -141,7 +141,7 @@ class DelegTest(TestUtil):
            fd:
                Opened file descriptor of file
            lock_type:
-               Lock type 
+               Lock type
         """
         lock_type = fcntl.F_RDLCK if lock_type == OPEN_DELEGATE_READ else fcntl.F_WRLCK
         try:
@@ -322,7 +322,7 @@ class DelegTest(TestUtil):
                 # Find the LOOKUP for the file under test
                 while True:
                     (lookupcall, lookupreply) = self.find_nfs_op(OP_LOOKUP, self.server_ipaddr, self.port, src_ipaddr=self.client_ipaddr)
-                    if lookupcall is None or lookupcall.NFSop.objname == self.filename:
+                    if lookupcall is None or lookupcall.NFSop.name == self.filename:
                         # Found LOOKUP for the filename or the end of the
                         # trace file has been reached
                         break
@@ -331,14 +331,14 @@ class DelegTest(TestUtil):
                     # GETFH should be the operation following the LOOKUP,
                     # but look for it just in case it is not
                     idx = lookupreply.NFSidx + 1
-                    resarray = lookupreply.nfs.resarray
+                    resarray = lookupreply.nfs.array
                     while (idx < len(resarray) and resarray[idx].resop != OP_GETFH):
                         idx += 1
                     if idx >= len(resarray):
                         # Could not find GETFH
                         self.test(False, "Could not find GETFH operation in the LOOKUP compound")
                     # Get the file handle for the file under test
-                    filehandle = lookupreply.nfs.resarray[idx].object
+                    filehandle = lookupreply.nfs.array[idx].fh
 
             (fh, op_stid, deleg_stid) = self.find_open(filename=self.filename, claimfh=filehandle, deleg_type=deleg_type, anyclaim=True)
             self.test(deleg_stid != None, "%s delegation should be granted" % mode_str)
@@ -544,7 +544,7 @@ class DelegTest(TestUtil):
                 self.test(lockcall != None, "LOCK is sent to the server right before returning the %s delegation" % mode_str)
 
             self.test(delegreturncall != None, "DELEGRETURN should be sent from client right after re-opening the file")
-            self.test(delegreturncall.NFSop.deleg_stateid.other == deleg_stid, "DELEGRETURN should return the %s delegation being recalled" % mode_str)
+            self.test(delegreturncall.NFSop.stateid.other == deleg_stid, "DELEGRETURN should return the %s delegation being recalled" % mode_str)
 
             # Make OPEN reply from the second client has not been sent with NFS4ERR_DELAY
             xid = opencall.rpc.xid
@@ -566,7 +566,7 @@ class DelegTest(TestUtil):
             if openreply is None:
                 return
             if conflict_op == OP_OPEN:
-                self.test(openreply.NFSop.delegation.delegation_type == OPEN_DELEGATE_NONE, "Delegation should not be granted for the second client")
+                self.test(openreply.NFSop.delegation.deleg_type == OPEN_DELEGATE_NONE, "Delegation should not be granted for the second client")
         except Exception:
             self.test(False, traceback.format_exc())
 
