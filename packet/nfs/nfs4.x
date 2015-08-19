@@ -1,31 +1,43 @@
 /*
- * Copyright (C) The Internet Society (2003).  All Rights Reserved.
+ * Copyright (c) 2010 IETF Trust and the persons identified
+ * as the document authors.  All rights reserved.
  *
- * This document and translations of it may be copied and furnished to
- * others, and derivative works that comment on or otherwise explain it
- * or assist in its implementation may be prepared, copied, published
- * and distributed, in whole or in part, without restriction of any
- * kind, provided that the above copyright notice and this paragraph are
- * included on all such copies and derivative works.  However, this
- * document itself may not be modified in any way, such as by removing
- * the copyright notice or references to the Internet Society or other
- * Internet organizations, except as needed for the purpose of
- * developing Internet standards in which case the procedures for
- * copyrights defined in the Internet Standards process must be
- * followed, or as required to translate it into languages other than
- * English.
+ * The document authors are identified in RFC 3530 and
+ * RFC 5661.
  *
- * The limited permissions granted above are perpetual and will not be
- * revoked by the Internet Society or its successors or assigns.
+ * Redistribution and use in source and binary forms, with
+ * or without modification, are permitted provided that the
+ * following conditions are met:
  *
- * This document and the information contained herein is provided on an
- * "AS IS" basis and THE INTERNET SOCIETY AND THE INTERNET ENGINEERING
- * TASK FORCE DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING
- * BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION
- * HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF
- * MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+ * - Redistributions of source code must retain the above
+ *   copyright notice, this list of conditions and the
+ *   following disclaimer.
  *
- * Network File System (NFS) version 4 Protocol (RFC 3530)
+ * - Redistributions in binary form must reproduce the above
+ *   copyright notice, this list of conditions and the
+ *   following disclaimer in the documentation and/or other
+ *   materials provided with the distribution.
+ *
+ * - Neither the name of Internet Society, IETF or IETF
+ *   Trust, nor the names of specific contributors, may be
+ *   used to endorse or promote products derived from this
+ *   software without specific prior written permission.
+ *
+ *   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS
+ *   AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+ *   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ *   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *   FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO
+ *   EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ *   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ *   EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ *   NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ *   SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+ *   LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+ *   IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ *   ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *=====================================================================
  * This Document was changed to add directives for converting
@@ -52,6 +64,14 @@ const NFS4_FHSIZE               = 128;
 const NFS4_VERIFIER_SIZE        = 8;
 const NFS4_OPAQUE_LIMIT         = 1024;
 const NFS4_OTHER_SIZE           = 12;
+
+/* Sizes new to NFSv4.1 */
+const NFS4_SESSIONID_SIZE       = 16;
+const NFS4_DEVICEID4_SIZE       = 16;
+const NFS4_INT64_MAX            = 0x7fffffffffffffff;
+const NFS4_UINT64_MAX           = 0xffffffffffffffff;
+const NFS4_INT32_MAX            = 0x7fffffff;
+const NFS4_UINT32_MAX           = 0xffffffff;
 
 /*
  * File types
@@ -108,7 +128,10 @@ enum nfsstat4 {
     NFS4ERR_SHARE_DENIED               = 10015,/* share reserve denied    */
     NFS4ERR_WRONGSEC                   = 10016,/* wrong security flavor   */
     NFS4ERR_CLID_INUSE                 = 10017,/* clientid in use         */
+
+    /* NFS4ERR_RESOURCE is not a valid error in NFSv4.1 */
     NFS4ERR_RESOURCE                   = 10018,/* resource exhaustion     */
+
     NFS4ERR_MOVED                      = 10019,/* filesystem relocated    */
     NFS4ERR_NOFILEHANDLE               = 10020,/* current FH is not set   */
     NFS4ERR_MINOR_VERS_MISMATCH        = 10021,/* minor vers not supp     */
@@ -139,6 +162,49 @@ enum nfsstat4 {
     NFS4ERR_FILE_OPEN                  = 10046,/* open file blocks op.    */
     NFS4ERR_ADMIN_REVOKED              = 10047,/* lockowner state revoked */
     NFS4ERR_CB_PATH_DOWN               = 10048,/* callback path down      */
+
+    /*
+     * NFSv4.1 errors start here
+     */
+    NFS4ERR_BADIOMODE                  = 10049,
+    NFS4ERR_BADLAYOUT                  = 10050,
+    NFS4ERR_BAD_SESSION_DIGEST         = 10051,
+    NFS4ERR_BADSESSION                 = 10052,
+    NFS4ERR_BADSLOT                    = 10053,
+    NFS4ERR_COMPLETE_ALREADY           = 10054,
+    NFS4ERR_CONN_NOT_BOUND_TO_SESSION  = 10055,
+    NFS4ERR_DELEG_ALREADY_WANTED       = 10056,
+    NFS4ERR_BACK_CHAN_BUSY             = 10057,/*backchan reqs outstanding*/
+    NFS4ERR_LAYOUTTRYLATER             = 10058,
+    NFS4ERR_LAYOUTUNAVAILABLE          = 10059,
+    NFS4ERR_NOMATCHING_LAYOUT          = 10060,
+    NFS4ERR_RECALLCONFLICT             = 10061,
+    NFS4ERR_UNKNOWN_LAYOUTTYPE         = 10062,
+    NFS4ERR_SEQ_MISORDERED             = 10063,/* unexpected seq.id in req*/
+    NFS4ERR_SEQUENCE_POS               = 10064,/* [CB_]SEQ. op not 1st op */
+    NFS4ERR_REQ_TOO_BIG                = 10065,/* request too big         */
+    NFS4ERR_REP_TOO_BIG                = 10066,/* reply too big           */
+    NFS4ERR_REP_TOO_BIG_TO_CACHE       = 10067,/* rep. not all cached     */
+    NFS4ERR_RETRY_UNCACHED_REP         = 10068,/* retry & rep. uncached   */
+    NFS4ERR_UNSAFE_COMPOUND            = 10069,/* retry/recovery too hard */
+    NFS4ERR_TOO_MANY_OPS               = 10070,/*too many ops in [CB_]COMP*/
+    NFS4ERR_OP_NOT_IN_SESSION          = 10071,/* op needs [CB_]SEQ. op   */
+    NFS4ERR_HASH_ALG_UNSUPP            = 10072, /* hash alg. not supp.    */
+    /* Unused/reserved                   10073 */
+    NFS4ERR_CLIENTID_BUSY              = 10074,/* clientid has state      */
+    NFS4ERR_PNFS_IO_HOLE               = 10075,/* IO to _SPARSE file hole */
+    NFS4ERR_SEQ_FALSE_RETRY            = 10076,/* Retry != original req.  */
+    NFS4ERR_BAD_HIGH_SLOT              = 10077,/* req has bad highest_slot*/
+    NFS4ERR_DEADSESSION                = 10078,/*new req sent to dead sess*/
+    NFS4ERR_ENCR_ALG_UNSUPP            = 10079,/* encr alg. not supp.     */
+    NFS4ERR_PNFS_NO_LAYOUT             = 10080,/* I/O without a layout    */
+    NFS4ERR_NOT_ONLY_OP                = 10081,/* addl ops not allowed    */
+    NFS4ERR_WRONG_CRED                 = 10082,/* op done by wrong cred   */
+    NFS4ERR_WRONG_TYPE                 = 10083,/* op on wrong type object */
+    NFS4ERR_DIRDELEG_UNAVAIL           = 10084,/* delegation not avail.   */
+    NFS4ERR_REJECT_DELEG               = 10085,/* cb rejected delegation  */
+    NFS4ERR_RETURNCONFLICT             = 10086,/* layout get before return*/
+    NFS4ERR_DELEG_REVOKED              = 10087,/* no return-state revoked */
 };
 
 /*
@@ -180,6 +246,18 @@ typedef uint32_t                acetype4; /* STRHEX:1 */
 typedef uint32_t                aceflag4; /* STRHEX:1 */
 typedef uint32_t                acemask4; /* STRHEX:1 */
 typedef uint32_t                access4;
+
+/*
+ * New to NFSv4.1
+ */
+typedef uint32_t                sequenceid4;
+typedef opaque                  sessionid4[NFS4_SESSIONID_SIZE]; /* STRHEX:1 */
+typedef uint32_t                slotid4;
+typedef uint32_t                aclflag4; /* STRHEX:1 */
+typedef opaque                  deviceid4[NFS4_DEVICEID4_SIZE]; /* STRHEX:1 */
+typedef uint32_t                fs_charset_cap4;
+typedef uint32_t                nfl_util4; /* STRHEX:1 */
+typedef opaque                  gsshandle4_t<>; /* STRHEX:1 */
 
 /*
  * Timeval
@@ -261,6 +339,7 @@ const ACE4_INHERIT_ONLY_ACE             = 0x00000008;
 const ACE4_SUCCESSFUL_ACCESS_ACE_FLAG   = 0x00000010;
 const ACE4_FAILED_ACCESS_ACE_FLAG       = 0x00000020;
 const ACE4_IDENTIFIER_GROUP             = 0x00000040;
+const ACE4_INHERITED_ACE                = 0x00000080; /* New to NFSv4.1 */
 
 /*
  * ACE mask values
@@ -277,6 +356,8 @@ const ACE4_EXECUTE              = 0x00000020;
 const ACE4_DELETE_CHILD         = 0x00000040;
 const ACE4_READ_ATTRIBUTES      = 0x00000080;
 const ACE4_WRITE_ATTRIBUTES     = 0x00000100;
+const ACE4_WRITE_RETENTION      = 0x00000200; /* New to NFSv4.1 */
+const ACE4_WRITE_RETENTION_HOLD = 0x00000400; /* New to NFSv4.1 */
 
 const ACE4_DELETE               = 0x00010000;
 const ACE4_READ_ACL             = 0x00020000;
@@ -324,7 +405,23 @@ struct nfsace4 {
 };
 
 /*
+ * ACL flag values new to NFSv4.1
+ */
+const ACL4_AUTO_INHERIT         = 0x00000001;
+const ACL4_PROTECTED            = 0x00000002;
+const ACL4_DEFAULTED            = 0x00000004;
+
+/*
+ * Access Control List definition new to NFSv4.1
+ */
+struct nfsacl41 {
+    aclflag4  flag;
+    nfsace4   aces<>;
+};
+
+/*
  * Field definitions for the fattr4_mode attribute
+ * and fattr4_mode_set_masked attributes.
  */
 const MODE4_SUID = 0x800;  /* set user id on execution */
 const MODE4_SGID = 0x400;  /* set group id on execution */
@@ -382,6 +479,294 @@ const FH4_NOEXPIRE_WITH_OPEN  = 0x00000001;
 const FH4_VOLATILE_ANY        = 0x00000002;
 const FH4_VOL_MIGRATION       = 0x00000004;
 const FH4_VOL_RENAME          = 0x00000008;
+
+/*
+ * Data structures new to NFSv4.1
+ */
+
+/*
+ * Filesystem locations attribute
+ * for relocation/migration and
+ * related attributes.
+ */
+struct change_policy4 {
+    uint64_t  major;
+    uint64_t  minor;
+};
+
+/*
+ * Masked mode for the mode_set_masked attribute.
+ */
+struct mode_masked4 {
+    mode4  values;   /* Values of bits to set or reset in mode. */
+    mode4  mask;     /* Mask of bits to set or reset in mode. */
+};
+
+enum layouttype4 {
+    LAYOUT4_NFSV4_1_FILES   = 0x1,
+    LAYOUT4_OSD2_OBJECTS    = 0x2,
+    LAYOUT4_BLOCK_VOLUME    = 0x3
+};
+
+const NFL4_UFLG_MASK                  = 0x0000003F;
+const NFL4_UFLG_DENSE                 = 0x00000001;
+const NFL4_UFLG_COMMIT_THRU_MDS       = 0x00000002;
+const NFL42_UFLG_IO_ADVISE_THRU_MDS   = 0x00000004;
+const NFL4_UFLG_STRIPE_UNIT_SIZE_MASK = 0xFFFFFFC0;
+
+enum filelayout_hint_care4 {
+    NFLH4_CARE_DENSE              = NFL4_UFLG_DENSE,
+    NFLH4_CARE_COMMIT_THRU_MDS    = NFL4_UFLG_COMMIT_THRU_MDS,
+    NFL42_CARE_IO_ADVISE_THRU_MDS = NFL42_UFLG_IO_ADVISE_THRU_MDS,
+    NFLH4_CARE_STRIPE_UNIT_SIZE   = 0x00000040,
+    NFLH4_CARE_STRIPE_COUNT       = 0x00000080
+};
+
+/* Encoded in the body field of type layouthint4: */
+struct nfsv4_1_file_layouthint4 {
+    uint32_t        size;  /* opaque size from layouthint4 */
+    uint32_t        care;
+    nfl_util4       nfl_util;
+    count4          stripe_count;
+};
+
+typedef netaddr4 multipath_list4<>;
+
+/* Encoded in the addr_body field of type device_addr4: */
+/* STRFMT1: {2} */
+struct nfsv4_1_file_layout_ds_addr4 {
+    uint32_t        size;  /* opaque size from device_addr4 */
+    uint32_t        stripe_indices<>;
+    multipath_list4 multipath_ds_list<>;
+};
+
+/* Encoded in the body field of type layout_content4: */
+/* STRFMT1: {5:crc32} */
+struct nfsv4_1_file_layout4 {
+    uint32_t       size;  /* opaque size from layout_content4 */
+    deviceid4      deviceid;
+    nfl_util4      nfl_util;
+    uint32_t       first_stripe_index;
+    offset4        pattern_offset;
+    nfs_fh4        fh_list<>;
+};
+
+/*
+ * Original definition
+ * struct layout_content4 {
+ *     layouttype4  type;
+ *     opaque       body<>;
+ * };
+*/
+/* STRFMT1: {1} */
+union layout_content4 switch (layouttype4 type) {
+    case LAYOUT4_NFSV4_1_FILES:
+        nfsv4_1_file_layout4 body;
+    default:
+        /* All other types are not supported yet */
+        /* STRFMT1: "" */
+        opaque body<>;
+};
+
+/*
+ * Original definition
+ * struct layouthint4 {
+ *     layouttype4  type;
+ *     opaque       body<>;
+ * };
+ */
+union layouthint4 switch (layouttype4 type) {
+    case LAYOUT4_NFSV4_1_FILES:
+        nfsv4_1_file_layouthint4 body;
+    default:
+        /* All other types are not supported yet */
+        opaque body<>;
+};
+
+enum layoutiomode4 {
+    LAYOUTIOMODE4_READ      = 1,
+    LAYOUTIOMODE4_RW        = 2,
+    LAYOUTIOMODE4_ANY       = 3
+};
+
+/* STRFMT1: {2:@14} off:{0:umax64} len:{1:umax64} {3} */
+struct layout4 {
+    offset4          offset;
+    length4          length;
+    layoutiomode4    iomode;
+    layout_content4  content;
+};
+
+/*
+ * Original definition
+ * struct device_addr4 {
+ *     layouttype4 type;
+ *     opaque      addr_body<>;
+ * };
+ */
+/* STRFMT1: {1} */
+union device_addr4 switch (layouttype4 type) {
+    case LAYOUT4_NFSV4_1_FILES:
+        nfsv4_1_file_layout_ds_addr4 body;
+    default:
+        /* All other types are not supported yet */
+        /* STRFMT1: "" */
+        opaque body<>;
+};
+
+/*
+ * For LAYOUT4_NFSV4_1_FILES, the body field MUST have a zero length
+ */
+struct layoutupdate4 {
+    layouttype4  type;
+    opaque       body<>;
+};
+
+/* Constants used for LAYOUTRETURN and CB_LAYOUTRECALL */
+const LAYOUT4_RET_REC_FILE      = 1;
+const LAYOUT4_RET_REC_FSID      = 2;
+const LAYOUT4_RET_REC_ALL       = 3;
+
+enum layoutreturn_type4 {
+    LAYOUTRETURN4_FILE = LAYOUT4_RET_REC_FILE,
+    LAYOUTRETURN4_FSID = LAYOUT4_RET_REC_FSID,
+    LAYOUTRETURN4_ALL  = LAYOUT4_RET_REC_ALL
+};
+
+/* STRFMT1: off:{0:umax64} len:{1:umax64} stid:{2} */
+struct layoutreturn_file4 {
+    offset4   offset;
+    length4   length;
+    stateid4  stateid;
+    /* layouttype4 specific data */
+    opaque    body<>;
+};
+
+/* STRFMT1: {1} */
+union layoutreturn4 switch(layoutreturn_type4 returntype) {
+    case LAYOUTRETURN4_FILE:
+        layoutreturn_file4  layout;
+    default:
+        void;
+};
+
+enum fs4_status_type {
+    STATUS4_FIXED = 1,
+    STATUS4_UPDATED = 2,
+    STATUS4_VERSIONED = 3,
+    STATUS4_WRITABLE = 4,
+    STATUS4_REFERRAL = 5
+};
+
+struct fs4_status {
+    bool             absent;
+    fs4_status_type  type;   /* STRHEX:1 */
+    utf8str_cs       source;
+    utf8str_cs       current;
+    int32_t          age;
+    nfstime4         version;
+};
+
+const TH4_READ_SIZE     = 0;
+const TH4_WRITE_SIZE    = 1;
+const TH4_READ_IOSIZE   = 2;
+const TH4_WRITE_IOSIZE  = 3;
+
+struct threshold_item4 {
+    layouttype4  type;
+    bitmap4      mask;
+    opaque       values<>;
+};
+
+struct mdsthreshold4 {
+    threshold_item4  hints<>;
+};
+
+const RET4_DURATION_INFINITE    = 0xffffffffffffffff;
+
+struct retention_get4 {
+    uint64_t  duration;
+    nfstime4  begin_time<1>;
+};
+
+struct retention_set4 {
+    bool      enable;
+    uint64_t  duration<1>;
+};
+
+/*
+ * Byte indices of items within
+ * fls_info: flag fields, class numbers,
+ * bytes indicating ranks and orders.
+ */
+const FSLI4BX_GFLAGS            = 0;
+const FSLI4BX_TFLAGS            = 1;
+
+const FSLI4BX_CLSIMUL           = 2;
+const FSLI4BX_CLHANDLE          = 3;
+const FSLI4BX_CLFILEID          = 4;
+const FSLI4BX_CLWRITEVER        = 5;
+const FSLI4BX_CLCHANGE          = 6;
+const FSLI4BX_CLREADDIR         = 7;
+
+const FSLI4BX_READRANK          = 8;
+const FSLI4BX_WRITERANK         = 9;
+const FSLI4BX_READORDER         = 10;
+const FSLI4BX_WRITEORDER        = 11;
+
+/*
+ * Bits defined within the general flag byte.
+ */
+const FSLI4GF_WRITABLE          = 0x01;
+const FSLI4GF_CUR_REQ           = 0x02;
+const FSLI4GF_ABSENT            = 0x04;
+const FSLI4GF_GOING             = 0x08;
+const FSLI4GF_SPLIT             = 0x10;
+
+/*
+ * Bits defined within the transport flag byte.
+ */
+const FSLI4TF_RDMA              = 0x01;
+
+/*
+ * Flag bits in fli_flags.
+ */
+const FSLI4IF_VAR_SUB           = 0x00000001;
+
+/*
+ * Defines an individual server replica
+ */
+struct fs_locations_server4 {
+    int32_t         currency;
+    opaque          info<>;
+    utf8str_cis     server;
+};
+
+/*
+ * Defines a set of replicas sharing
+ * a common value of the root path
+ * with in the corresponding
+ * single-server namespaces.
+ */
+struct fs_locations_item4 {
+    fs_locations_server4    entries<>;
+    pathname4               root;
+};
+
+/*
+ * Defines the overall structure of
+ * the fs_locations_info attribute.
+ */
+struct fs_locations_info4 {
+    uint32_t                flags;
+    int32_t                 valid_for;
+    pathname4               root;
+    fs_locations_item4      items<>;
+};
+
+/* Constants for fs_charset_cap4 */
+const FSCHARSET_CAP4_CONTAINS_NON_UTF8  = 0x1;
+const FSCHARSET_CAP4_ALLOWS_ONLY_UTF8   = 0x2;
 
 /*
  * Attributes
@@ -442,6 +827,30 @@ typedef nfstime4                fattr4_time_delta;
 typedef nfstime4                fattr4_time_metadata;
 typedef nfstime4                fattr4_time_modify;
 typedef settime4                fattr4_time_modify_set;
+/*
+ * Attributes new to NFSv4.1
+ */
+typedef mode_masked4            fattr4_mode_set_masked;
+typedef bitmap4                 fattr4_suppattr_exclcreat;
+typedef nfstime4                fattr4_dir_notif_delay;
+typedef nfstime4                fattr4_dirent_notif_delay;
+typedef layouttype4             fattr4_fs_layout_types<>;
+typedef fs4_status              fattr4_fs_status;
+typedef fs_charset_cap4         fattr4_fs_charset_cap;
+typedef uint32_t                fattr4_layout_alignment;
+typedef uint32_t                fattr4_layout_blksize;
+typedef layouthint4             fattr4_layout_hint;
+typedef layouttype4             fattr4_layout_types<>;
+typedef mdsthreshold4           fattr4_mdsthreshold;
+typedef retention_get4          fattr4_retention_get;
+typedef retention_set4          fattr4_retention_set;
+typedef retention_get4          fattr4_retentevt_get;
+typedef retention_set4          fattr4_retentevt_set;
+typedef uint64_t                fattr4_retention_hold;
+typedef nfsacl41                fattr4_dacl;
+typedef nfsacl41                fattr4_sacl;
+typedef change_policy4          fattr4_change_policy;
+typedef fs_locations_info4      fattr4_fs_locations_info;
 
 /* FMAP:1 */
 enum nfs_fattr4 {
@@ -461,6 +870,7 @@ enum nfs_fattr4 {
     FATTR4_LEASE_TIME         = 10,
     FATTR4_RDATTR_ERROR       = 11,
     FATTR4_FILEHANDLE         = 19,
+    FATTR4_SUPPATTR_EXCLCREAT = 75, /* New to NFSv4.1 */
 
     /*
      * Recommended Attributes
@@ -508,6 +918,30 @@ enum nfs_fattr4 {
     FATTR4_TIME_MODIFY        = 53,
     FATTR4_TIME_MODIFY_SET    = 54,
     FATTR4_MOUNTED_ON_FILEID  = 55,
+
+    /*
+     * New to NFSv4.1
+     */
+    FATTR4_DIR_NOTIF_DELAY    = 56,
+    FATTR4_DIRENT_NOTIF_DELAY = 57,
+    FATTR4_DACL               = 58,
+    FATTR4_SACL               = 59,
+    FATTR4_CHANGE_POLICY      = 60,
+    FATTR4_FS_STATUS          = 61,
+    FATTR4_FS_LAYOUT_TYPES    = 62,
+    FATTR4_LAYOUT_HINT        = 63,
+    FATTR4_LAYOUT_TYPES       = 64,
+    FATTR4_LAYOUT_BLKSIZE     = 65,
+    FATTR4_LAYOUT_ALIGNMENT   = 66,
+    FATTR4_FS_LOCATIONS_INFO  = 67,
+    FATTR4_MDSTHRESHOLD       = 68,
+    FATTR4_RETENTION_GET      = 69,
+    FATTR4_RETENTION_SET      = 70,
+    FATTR4_RETENTEVT_GET      = 71,
+    FATTR4_RETENTEVT_SET      = 72,
+    FATTR4_RETENTION_HOLD     = 73,
+    FATTR4_MODE_SET_MASKED    = 74,
+    FATTR4_FS_CHARSET_CAP     = 76,
 };
 
 /*
@@ -536,6 +970,42 @@ struct state_owner4 {
 typedef state_owner4 open_owner4;
 typedef state_owner4 lock_owner4;
 
+/* Input for computing subkeys */
+enum ssv_subkey4 {
+    SSV4_SUBKEY_MIC_I2T     = 1,
+    SSV4_SUBKEY_MIC_T2I     = 2,
+    SSV4_SUBKEY_SEAL_I2T    = 3,
+    SSV4_SUBKEY_SEAL_T2I    = 4
+};
+
+/* Input for computing smt_hmac */
+struct ssv_mic_plain_tkn4 {
+    uint32_t  ssv_seq;
+    opaque    orig_plain<>;
+};
+
+/* SSV GSS PerMsgToken token */
+struct ssv_mic_tkn4 {
+    uint32_t        ssv_seq;
+    opaque          hmac<>;
+};
+
+/* Input for computing ssct_encr_data and ssct_hmac */
+struct ssv_seal_plain_tkn4 {
+    opaque          confounder<>;
+    uint32_t        ssv_seq;
+    opaque          orig_plain<>;
+    opaque          pad<>;
+};
+
+/* SSV GSS SealedMessage token */
+struct ssv_seal_cipher_tkn4 {
+    uint32_t      ssv_seq;
+    opaque        iv<>;
+    opaque        encr_data<>;
+    opaque        hmac<>;
+};
+
 /*
  * ======================================================================
  * NFSv4 Operation Definitions
@@ -563,7 +1033,7 @@ enum nfs_opnum4 {
     OP_NVERIFY             = 17,
     OP_OPEN                = 18,
     OP_OPENATTR            = 19,
-    OP_OPEN_CONFIRM        = 20,
+    OP_OPEN_CONFIRM        = 20, /* Mandatory not-to-implement in NFSv4.1 */
     OP_OPEN_DOWNGRADE      = 21,
     OP_PUTFH               = 22,
     OP_PUTPUBFH            = 23,
@@ -573,16 +1043,36 @@ enum nfs_opnum4 {
     OP_READLINK            = 27,
     OP_REMOVE              = 28,
     OP_RENAME              = 29,
-    OP_RENEW               = 30,
+    OP_RENEW               = 30, /* Mandatory not-to-implement in NFSv4.1 */
     OP_RESTOREFH           = 31,
     OP_SAVEFH              = 32,
     OP_SECINFO             = 33,
     OP_SETATTR             = 34,
-    OP_SETCLIENTID         = 35,
-    OP_SETCLIENTID_CONFIRM = 36,
+    OP_SETCLIENTID         = 35, /* Mandatory not-to-implement in NFSv4.1 */
+    OP_SETCLIENTID_CONFIRM = 36, /* Mandatory not-to-implement in NFSv4.1 */
     OP_VERIFY              = 37,
     OP_WRITE               = 38,
-    OP_RELEASE_LOCKOWNER   = 39,
+    OP_RELEASE_LOCKOWNER   = 39, /* Mandatory not-to-implement in NFSv4.1 */
+    /* New operations for NFSv4.1 */
+    OP_BACKCHANNEL_CTL     = 40,
+    OP_BIND_CONN_TO_SESSION= 41,
+    OP_EXCHANGE_ID         = 42,
+    OP_CREATE_SESSION      = 43,
+    OP_DESTROY_SESSION     = 44,
+    OP_FREE_STATEID        = 45,
+    OP_GET_DIR_DELEGATION  = 46,
+    OP_GETDEVICEINFO       = 47,
+    OP_GETDEVICELIST       = 48,
+    OP_LAYOUTCOMMIT        = 49,
+    OP_LAYOUTGET           = 50,
+    OP_LAYOUTRETURN        = 51,
+    OP_SECINFO_NO_NAME     = 52,
+    OP_SEQUENCE            = 53,
+    OP_SET_SSV             = 54,
+    OP_TEST_STATEID        = 55,
+    OP_WANT_DELEGATION     = 56,
+    OP_DESTROY_CLIENTID    = 57,
+    OP_RECLAIM_COMPLETE    = 58,
     /* Illegal operation */
     OP_ILLEGAL             = 10044
 };
@@ -974,7 +1464,14 @@ struct NVERIFY4res {
 enum createmode4 {
     UNCHECKED4      = 0,
     GUARDED4        = 1,
+    /* Deprecated in NFSv4.1. */
     EXCLUSIVE4      = 2,
+    /*
+     * New to NFSv4.1. If session is persistent,
+     * GUARDED4 MUST be used. Otherwise, use
+     * EXCLUSIVE4_1 instead of EXCLUSIVE4.
+     */
+    EXCLUSIVE4_1    = 3
 };
 
 struct creatverfattr {
@@ -1053,6 +1550,7 @@ enum open_delegation_type4 {
     OPEN_DELEGATE_NONE      = 0,
     OPEN_DELEGATE_READ      = 1,
     OPEN_DELEGATE_WRITE     = 2,
+    OPEN_DELEGATE_NONE_EXT  = 3 /* New to NFSv4.1 */
 };
 
 enum open_claim_type4 {
@@ -1064,6 +1562,26 @@ enum open_claim_type4 {
     CLAIM_PREVIOUS          = 1,
     CLAIM_DELEGATE_CUR      = 2,
     CLAIM_DELEGATE_PREV     = 3,
+
+    /*
+     * Not a reclaim.
+     *
+     * Like CLAIM_NULL, but object identified
+     * by the current filehandle.
+     */
+    CLAIM_FH                = 4, /* New to NFSv4.1 */
+
+    /*
+     * Like CLAIM_DELEGATE_CUR, but object identified
+     * by current filehandle.
+     */
+    CLAIM_DELEG_CUR_FH      = 5, /* New to NFSv4.1 */
+
+    /*
+     * Like CLAIM_DELEGATE_PREV, but object identified
+     * by current filehandle.
+     */
+    CLAIM_DELEG_PREV_FH     = 6 /* New to NFSv4.1 */
 };
 
 /* STRFMT1: {1} stid:{0} */
@@ -1113,6 +1631,37 @@ union open_claim4 switch (open_claim_type4 claim) {
         /* CURRENT_FH: directory */
         /* STRFMT1: {0} DH:{fh:crc32}/{1} */
         component4      name;
+
+    /*
+     * Like CLAIM_NULL. No special rights
+     * to file. Ordinary OPEN of the
+     * specified file by current filehandle.
+     */
+    case CLAIM_FH: /* New to NFSv4.1 */
+        /* CURRENT_FH: regular file to open */
+        /* STRFMT1: {0}:{fh:crc32} */
+        void;
+
+    /*
+     * Like CLAIM_DELEGATE_PREV. Right to file based on a
+     * delegation granted to a previous boot
+     * instance of the client.  File is identified by
+     * by filehandle.
+     */
+    case CLAIM_DELEG_PREV_FH: /* New to NFSv4.1 */
+        /* CURRENT_FH: file being opened */
+        /* STRFMT1: {0}:{fh:crc32} */
+        void;
+
+    /*
+     * Like CLAIM_DELEGATE_CUR. Right to file based on
+     * a delegation granted by the server.
+     * File is identified by filehandle.
+     */
+    case CLAIM_DELEG_CUR_FH: /* New to NFSv4.1 */
+        /* CURRENT_FH: file being opened */
+        /* STRFMT1: {0}:{fh:crc32} stid:{1} */
+        stateid4       stateid;
 };
 
 /*
@@ -1145,6 +1694,34 @@ struct open_write_delegation4 {
     nfsace4   permissions; /* Defines users who don't need an ACCESS call as part of a delegated open. */
 };
 
+/* New to NFSv4.1 */
+enum why_no_delegation4 {
+    WND4_NOT_WANTED         = 0,
+    WND4_CONTENTION         = 1,
+    WND4_RESOURCE           = 2,
+    WND4_NOT_SUPP_FTYPE     = 3,
+    WND4_WRITE_DELEG_NOT_SUPP_FTYPE = 4,
+    WND4_NOT_SUPP_UPGRADE   = 5,
+    WND4_NOT_SUPP_DOWNGRADE = 6,
+    WND4_CANCELLED          = 7,
+    WND4_IS_DIR             = 8
+};
+
+/* New to NFSv4.1 */
+/* STRFMT1: {0} */
+union open_none_delegation4 switch (why_no_delegation4 why) {
+        case WND4_CONTENTION:
+                /* Server will push delegation */
+                /* STRFMT1: {0} push:{1} */
+                bool push;
+        case WND4_RESOURCE:
+                /* Server will signal availability */
+                /* STRFMT1: {0} signal:{1} */
+                bool signal;
+        default:
+                void;
+};
+
 /* STRFMT1: {1} */
 union open_delegation4 switch (open_delegation_type4 deleg_type) {
         case OPEN_DELEGATE_NONE:
@@ -1153,6 +1730,8 @@ union open_delegation4 switch (open_delegation_type4 deleg_type) {
                 open_read_delegation4 read;
         case OPEN_DELEGATE_WRITE:
                 open_write_delegation4 write;
+        case OPEN_DELEGATE_NONE_EXT: /* New to NFSv4.1 */
+                open_none_delegation4 whynone;
 };
 
 /*
@@ -1162,6 +1741,10 @@ union open_delegation4 switch (open_delegation_type4 deleg_type) {
 const OPEN4_RESULT_CONFIRM           = 0x00000002;
 /* Type of file locking behavior at the server */
 const OPEN4_RESULT_LOCKTYPE_POSIX    = 0x00000004;
+/* Server will preserve file if removed while open */
+const OPEN4_RESULT_PRESERVE_UNLINKED = 0x00000008;
+/* Server may use CB_NOTIFY_LOCK on locks derived from this open */
+const OPEN4_RESULT_MAY_NOTIFY_LOCK   = 0x00000020;
 
 /* STRFMT1: stid:{0} {4} */
 /* CLASSATTR: _opdisp=const.OP_GETFH */
@@ -1203,6 +1786,7 @@ struct OPENATTR4res {
 /*
  * OPEN_CONFIRM: Confirm the Open
  * ======================================================================
+ * Obsolete in NFSv4.1
  */
 /* OBJATTR: fh=self.nfs4_fh */
 struct OPEN_CONFIRM4args {
@@ -1432,6 +2016,7 @@ union RENAME4res switch (nfsstat4 status) {
 /*
  * RENEW: Renew a Lease
  * ======================================================================
+ * Obsolete in NFSv4.1
  */
 /* STRFMT1: clientid:{0} */
 struct RENEW4args {
@@ -1555,6 +2140,7 @@ struct cb_client4 {
 /*
  * SETCLIENTID: Negotiate Clientid
  * ======================================================================
+ * Obsolete in NFSv4.1
  */
 /* STRFMT1: "" */
 struct SETCLIENTID4args {
@@ -1583,6 +2169,7 @@ union SETCLIENTID4res switch (nfsstat4 status) {
 /*
  * SETCLIENTID_CONFIRM: Confirm Clientid
  * ======================================================================
+ * Obsolete in NFSv4.1
 */
 /* STRFMT1: clientid:{0} */
 struct SETCLIENTID_CONFIRM4args {
@@ -1640,6 +2227,7 @@ union WRITE4res switch (nfsstat4 status) {
 /*
  * RELEASE_LOCKOWNER: Notify Server to Release Lockowner State
  * ======================================================================
+ * Obsolete in NFSv4.1
  */
 struct RELEASE_LOCKOWNER4args {
     lock_owner4     owner;
@@ -1654,6 +2242,677 @@ struct RELEASE_LOCKOWNER4res {
  * ======================================================================
  */
 struct ILLEGAL4res {
+    nfsstat4        status;
+};
+
+/*
+ * ======================================================================
+ * Operations new to NFSv4.1
+ * ======================================================================
+ */
+/*
+ * BACKCHANNEL_CTL: Backchannel Control
+ * ======================================================================
+ */
+struct authsys_parms {
+    unsigned int  stamp;
+    string        machinename<255>;
+    unsigned int  uid;
+    unsigned int  gid;
+    unsigned int  gids<16>;
+};
+
+struct gss_cb_handles4 {
+    rpc_gss_svc_t  service; /* RFC 2203 */
+    gsshandle4_t   server_handle;
+    gsshandle4_t   client_handle;
+};
+
+union callback_sec_parms4 switch (nfs_secflavor4 flavor) {
+    case AUTH_NONE:
+        void;
+    case AUTH_SYS:
+        authsys_parms   sys_cred; /* RFC 1831 */
+    case RPCSEC_GSS:
+        gss_cb_handles4 gss_handles;
+};
+
+struct BACKCHANNEL_CTL4args {
+    uint32_t                cb_program;
+    callback_sec_parms4     sec_parms<>;
+};
+
+struct BACKCHANNEL_CTL4res {
+    nfsstat4 status;
+};
+
+/*
+ * BIND_CONN_TO_SESSION: Associate Connection with Session
+ * ======================================================================
+ */
+enum channel_dir_from_client4 {
+    CDFC4_FORE             = 0x1,
+    CDFC4_BACK             = 0x2,
+    CDFC4_FORE_OR_BOTH     = 0x3,
+    CDFC4_BACK_OR_BOTH     = 0x7
+};
+
+struct BIND_CONN_TO_SESSION4args {
+    sessionid4     sessionid;
+    channel_dir_from_client4 dir;
+    bool           rdma_mode;
+};
+
+enum channel_dir_from_server4 {
+    CDFS4_FORE     = 0x1,
+    CDFS4_BACK     = 0x2,
+    CDFS4_BOTH     = 0x3
+};
+
+struct BIND_CONN_TO_SESSION4resok {
+    sessionid4     sessionid;
+    channel_dir_from_server4 dir;
+    bool           rdma_mode;
+};
+
+union BIND_CONN_TO_SESSION4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        BIND_CONN_TO_SESSION4resok resok;
+    default: void;
+};
+
+/*
+ * EXCHANGE_ID: Instantiate Client ID
+ * ======================================================================
+ */
+const EXCHGID4_FLAG_SUPP_MOVED_REFER    = 0x00000001;
+const EXCHGID4_FLAG_SUPP_MOVED_MIGR     = 0x00000002;
+const EXCHGID4_FLAG_SUPP_FENCE_OPS      = 0x00000004; /* New to NFSv4.2 */
+
+const EXCHGID4_FLAG_BIND_PRINC_STATEID  = 0x00000100;
+
+const EXCHGID4_FLAG_USE_NON_PNFS        = 0x00010000;
+const EXCHGID4_FLAG_USE_PNFS_MDS        = 0x00020000;
+const EXCHGID4_FLAG_USE_PNFS_DS         = 0x00040000;
+
+const EXCHGID4_FLAG_MASK_PNFS           = 0x00070000;
+
+const EXCHGID4_FLAG_UPD_CONFIRMED_REC_A = 0x40000000;
+const EXCHGID4_FLAG_CONFIRMED_R         = 0x80000000;
+
+struct client_owner4 {
+    verifier4  verifier;
+    opaque     ownerid<NFS4_OPAQUE_LIMIT>;
+};
+
+struct state_protect_ops4 {
+    bitmap4 enforce;
+    bitmap4 allow;
+};
+
+struct ssv_sp_parms4 {
+    state_protect_ops4      ops;
+    sec_oid4                hash_algs<>;
+    sec_oid4                encr_algs<>;
+    uint32_t                window;
+    uint32_t                num_gss_handles;
+};
+
+enum state_protect_how4 {
+    SP4_NONE = 0,
+    SP4_MACH_CRED = 1,
+    SP4_SSV = 2
+};
+
+/* STRFMT1: {0} */
+union state_protect4_a switch(state_protect_how4 how) {
+    case SP4_NONE:
+        void;
+    case SP4_MACH_CRED:
+        state_protect_ops4  mach_ops;
+    case SP4_SSV:
+        ssv_sp_parms4       ssv_parms;
+};
+
+struct nfs_impl_id4 {
+    utf8str_cis  domain;
+    utf8str_cs   name;
+    nfstime4     date;
+};
+
+/* STRFMT1: flags:{1:#010x} {2} */
+struct EXCHANGE_ID4args {
+    client_owner4           clientowner;
+    uint32_t                flags;
+    state_protect4_a        state_protect;
+    nfs_impl_id4            client_impl_id<1>;
+};
+
+struct ssv_prot_info4 {
+    state_protect_ops4     ops;
+    uint32_t               hash_alg;
+    uint32_t               encr_alg;
+    uint32_t               ssv_len;
+    uint32_t               window;
+    gsshandle4_t           handles<>;
+};
+
+/* STRFMT1: {0} */
+union state_protect4_r switch(state_protect_how4 how) {
+    case SP4_NONE:
+        void;
+    case SP4_MACH_CRED:
+        state_protect_ops4     mach_ops;
+    case SP4_SSV:
+        ssv_prot_info4         ssv_info;
+};
+
+/*
+ * NFSv4.1 server Owner
+ */
+struct server_owner4 {
+    uint64_t  minor_id;
+    opaque    major_id<NFS4_OPAQUE_LIMIT>;
+};
+
+/* STRFMT1: clientid:{0} seqid:{1} flags:{2:#010x} {3} */
+struct EXCHANGE_ID4resok {
+    clientid4        clientid;
+    sequenceid4      sequenceid;
+    uint32_t         flags;
+    state_protect4_r state_protect;
+    server_owner4    server_owner;
+    opaque           server_scope<NFS4_OPAQUE_LIMIT>;
+    nfs_impl_id4     server_impl_id<1>;
+};
+
+/* STRFMT1: {1} */
+union EXCHANGE_ID4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        EXCHANGE_ID4resok  resok;
+    default:
+        void;
+};
+
+/*
+ * CREATE_SESSION: Create New Session and Confirm Client ID
+ * ======================================================================
+ */
+struct channel_attrs4 {
+    count4                  headerpadsize;
+    count4                  maxrequestsize;
+    count4                  maxresponsesize;
+    count4                  maxresponsesize_cached;
+    count4                  maxoperations;
+    count4                  maxrequests;
+    uint32_t                rdma_ird<1>;
+};
+
+const CREATE_SESSION4_FLAG_PERSIST              = 0x00000001;
+const CREATE_SESSION4_FLAG_CONN_BACK_CHAN       = 0x00000002;
+const CREATE_SESSION4_FLAG_CONN_RDMA            = 0x00000004;
+
+/* STRFMT1: clientid:{0} seqid:{1} cb_prog:{5:#010x} */
+struct CREATE_SESSION4args {
+    clientid4               clientid;
+    sequenceid4             sequenceid;
+
+    uint32_t                flags;
+
+    channel_attrs4          fore_chan_attrs;
+    channel_attrs4          back_chan_attrs;
+
+    uint32_t                cb_program;
+    callback_sec_parms4     sec_parms<>;
+};
+
+/* STRFMT1: sessionid:{0:crc32} seqid:{1} */
+struct CREATE_SESSION4resok {
+    sessionid4              sessionid;
+    sequenceid4             sequenceid;
+    uint32_t                flags;
+    channel_attrs4          fore_chan_attrs;
+    channel_attrs4          back_chan_attrs;
+};
+
+/* STRFMT1: {1} */
+union CREATE_SESSION4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        CREATE_SESSION4resok    resok;
+    default:
+        void;
+};
+
+/*
+ * DESTROY_SESSION: Destroy a Session
+ * ======================================================================
+ */
+/* STRFMT1: sessionid:{0:crc32} */
+struct DESTROY_SESSION4args {
+    sessionid4      sessionid;
+};
+
+/* STRFMT1: "" */
+struct DESTROY_SESSION4res {
+    nfsstat4 status;
+};
+
+/*
+ * FREE_STATEID: Free Stateid with No Locks
+ * ======================================================================
+ */
+/* STRFMT1: stid:{0} */
+struct FREE_STATEID4args {
+    stateid4        stateid;
+};
+
+/* STRFMT1: "" */
+struct FREE_STATEID4res {
+    nfsstat4 status;
+};
+
+/*
+ * GET_DIR_DELEGATION: Get a Directory Delegation
+ * ======================================================================
+ */
+typedef nfstime4 attr_notice4;
+
+/* OBJATTR: fh=self.nfs4_fh */
+struct GET_DIR_DELEGATION4args {
+    /* CURRENT_FH: delegated directory */
+    bool            deleg_avail;
+    bitmap4         notification;
+    attr_notice4    child_attr_delay;
+    attr_notice4    attr_delay;
+    bitmap4         child_attributes;
+    bitmap4         attributes;
+};
+
+struct GET_DIR_DELEGATION4resok {
+    verifier4       verifier;
+    /* Stateid for get_dir_delegation */
+    stateid4        stateid;
+    /* Which notifications can the server support */
+    bitmap4         notification;
+    bitmap4         child_attributes;
+    bitmap4         attributes;
+};
+
+enum gddrnf4_status {
+    GDD4_OK         = 0,
+    GDD4_UNAVAIL    = 1
+};
+
+union GET_DIR_DELEGATION4res_non_fatal switch (gddrnf4_status status) {
+    case GDD4_OK:
+        GET_DIR_DELEGATION4resok  resok;
+    case GDD4_UNAVAIL:
+        bool  signal;
+};
+
+union GET_DIR_DELEGATION4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        GET_DIR_DELEGATION4res_non_fatal  res;
+    default:
+        void;
+};
+
+/*
+ * GETDEVICEINFO: Get Device Information
+ * ======================================================================
+ */
+/* STRFMT1: devid:{0:crc16} count:{2:umax32} */
+struct GETDEVICEINFO4args {
+    deviceid4       deviceid;
+    layouttype4     type;
+    count4          maxcount;
+    bitmap4         notification;
+};
+
+/* STRFMT1: {0} */
+struct GETDEVICEINFO4resok {
+    device_addr4    device_addr;
+    bitmap4         notification;
+};
+
+/* STRFMT1: {1} */
+union GETDEVICEINFO4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        GETDEVICEINFO4resok     resok;
+    case NFS4ERR_TOOSMALL:
+        /* STRFMT1: count:{1:umax32} */
+        count4                  mincount;
+    default:
+        void;
+};
+
+/*
+ * GETDEVICELIST: Get All Device Mappings for a File System
+ * ======================================================================
+ * Obsolete in NFSv4.2
+ */
+/* OBJATTR: fh=self.nfs4_fh */
+struct GETDEVICELIST4args {
+    /* CURRENT_FH: object belonging to the file system */
+    layouttype4     type;
+    /* number of deviceIDs to return */
+    count4          maxdevices;
+    nfs_cookie4     cookie;
+    verifier4       verifier;
+};
+
+struct GETDEVICELIST4resok {
+    nfs_cookie4     cookie;
+    verifier4       verifier;
+    deviceid4       deviceid_list<>;
+    bool            eof;
+};
+
+union GETDEVICELIST4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        GETDEVICELIST4resok     resok;
+    default:
+        void;
+};
+
+/*
+ * LAYOUTCOMMIT: Commit Writes Made Using a Layout
+ * ======================================================================
+ */
+union newtime4 switch (bool timechanged) {
+    case TRUE:
+        nfstime4           time;
+    case FALSE:
+        void;
+};
+
+union newoffset4 switch (bool newoffset) {
+    case TRUE:
+        offset4           offset;
+    case FALSE:
+        void;
+};
+
+/* OBJATTR: fh=self.nfs4_fh */
+struct LAYOUTCOMMIT4args {
+    /* CURRENT_FH: file */
+    offset4                 offset;
+    length4                 length;
+    bool                    reclaim;
+    stateid4                stateid;
+    newoffset4              last_write_offset;
+    newtime4                time_modify;
+    layoutupdate4           layoutupdate;
+};
+union newsize4 switch (bool sizechanged) {
+    case TRUE:
+        length4  size;
+    case FALSE:
+        void;
+};
+
+struct LAYOUTCOMMIT4resok {
+    newsize4  newsize;
+};
+
+union LAYOUTCOMMIT4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        LAYOUTCOMMIT4resok  resok;
+    default:
+        void;
+};
+
+/*
+ * LAYOUTGET: Get Layout Information
+ * ======================================================================
+ */
+/* OBJATTR: fh=self.nfs4_fh */
+/* STRFMT1: FH:{fh:crc32} {2:@14} off:{3:umax64} len:{4:umax64} stid:{6} */
+struct LAYOUTGET4args {
+    /* CURRENT_FH: file */
+    bool                    avail;
+    layouttype4             type;
+    layoutiomode4           iomode;
+    offset4                 offset;
+    length4                 length;
+    length4                 minlength;
+    stateid4                stateid;
+    count4                  maxcount;
+};
+
+/* STRFMT1: stid:{1} layout:{2} */
+struct LAYOUTGET4resok {
+    bool               return_on_close;
+    stateid4           stateid;
+    layout4            layout<>;
+};
+
+/* STRFMT1: {1} */
+union LAYOUTGET4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        LAYOUTGET4resok  resok;
+    case NFS4ERR_LAYOUTTRYLATER:
+        /* Server will signal layout availability */
+        /* STRFMT1: signal:{1} */
+        bool  signal;
+    default:
+        void;
+};
+
+/*
+ * LAYOUTRETURN: Release Layout Information
+ * ======================================================================
+ */
+/* OBJATTR: fh=self.nfs4_fh */
+/* STRFMT1: FH:{fh:crc32} {2:@14} {3} */
+struct LAYOUTRETURN4args {
+    /* CURRENT_FH: file */
+    bool           reclaim;
+    layouttype4    type;
+    layoutiomode4  iomode;
+    layoutreturn4  layoutreturn;
+};
+
+/* STRFMT1: stid:{1} */
+union layoutreturn_stateid switch (bool present) {
+    case TRUE:
+        stateid4  stateid;
+    case FALSE:
+        /* STRFMT1: "" */
+        void;
+};
+
+/* STRFMT1: {1} */
+union LAYOUTRETURN4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        layoutreturn_stateid  stateid;
+    default:
+        void;
+};
+
+/*
+ * SECINFO_NO_NAME: Get Security on Unnamed Object
+ * ======================================================================
+ */
+enum secinfo_style4 {
+    SECINFO_STYLE4_CURRENT_FH       = 0,
+    SECINFO_STYLE4_PARENT           = 1
+};
+
+/* CURRENT_FH: object or child directory */
+typedef secinfo_style4 SECINFO_NO_NAME4args;
+
+/* CURRENTFH: consumed if status is NFS4_OK */
+typedef SECINFO4res SECINFO_NO_NAME4res;
+
+/*
+ * SEQUENCE: Supply Per-Procedure Sequencing and Control
+ * ======================================================================
+ */
+struct SEQUENCE4args {
+    sessionid4     sessionid;
+    sequenceid4    sequenceid;
+    slotid4        slotid;
+    slotid4        highest_slotid;
+    bool           cachethis;
+};
+
+const SEQ4_STATUS_CB_PATH_DOWN                  = 0x00000001;
+const SEQ4_STATUS_CB_GSS_CONTEXTS_EXPIRING      = 0x00000002;
+const SEQ4_STATUS_CB_GSS_CONTEXTS_EXPIRED       = 0x00000004;
+const SEQ4_STATUS_EXPIRED_ALL_STATE_REVOKED     = 0x00000008;
+const SEQ4_STATUS_EXPIRED_SOME_STATE_REVOKED    = 0x00000010;
+const SEQ4_STATUS_ADMIN_STATE_REVOKED           = 0x00000020;
+const SEQ4_STATUS_RECALLABLE_STATE_REVOKED      = 0x00000040;
+const SEQ4_STATUS_LEASE_MOVED                   = 0x00000080;
+const SEQ4_STATUS_RESTART_RECLAIM_NEEDED        = 0x00000100;
+const SEQ4_STATUS_CB_PATH_DOWN_SESSION          = 0x00000200;
+const SEQ4_STATUS_BACKCHANNEL_FAULT             = 0x00000400;
+const SEQ4_STATUS_DEVID_CHANGED                 = 0x00000800;
+const SEQ4_STATUS_DEVID_DELETED                 = 0x00001000;
+
+struct SEQUENCE4resok {
+    sessionid4      sessionid;
+    sequenceid4     sequenceid;
+    slotid4         slotid;
+    slotid4         highest_slotid;
+    slotid4         target_highest_slotid;
+    uint32_t        status_flags;
+};
+
+union SEQUENCE4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        SEQUENCE4resok  resok;
+    default:
+        void;
+};
+
+/*
+ * SET_SSV: Update SSV for a Client ID
+ * ======================================================================
+ */
+struct ssa_digest_input4 {
+    SEQUENCE4args seqargs;
+};
+
+struct SET_SSV4args {
+    opaque          ssv<>;
+    opaque          digest<>;
+};
+
+struct ssr_digest_input4 {
+    SEQUENCE4res seqres;
+};
+
+struct SET_SSV4resok {
+    opaque          digest<>;
+};
+
+union SET_SSV4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        SET_SSV4resok   resok;
+    default:
+        void;
+};
+
+/*
+ * TEST_STATEID: Test Stateids for Validity
+ * ======================================================================
+ */
+/* STRFMT1: stids:{0} */
+struct TEST_STATEID4args {
+    stateid4        stateids<>;
+};
+
+/* STRFMT1: status:{0} */
+struct TEST_STATEID4resok {
+    nfsstat4        status_codes<>;
+};
+
+/* STRFMT1: {1} */
+union TEST_STATEID4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        TEST_STATEID4resok resok;
+    default:
+        void;
+};
+
+/*
+ * WANT_DELEGATION: Request Delegation
+ * ======================================================================
+ */
+union deleg_claim4 switch (open_claim_type4 claim) {
+    /*
+     * No special rights to object. Ordinary delegation
+     * request of the specified object. Object identified
+     * by filehandle.
+     */
+    case CLAIM_FH:
+        void;
+
+    /*
+     * Right to file based on a delegation granted
+     * to a previous boot instance of the client.
+     * File is specified by filehandle.
+     */
+    case CLAIM_DELEG_PREV_FH:
+        /* CURRENT_FH: object being delegated */
+        void;
+
+    /*
+     * Right to the file established by an open previous
+     * to server reboot.  File identified by filehandle.
+     * Used during server reclaim grace period.
+     */
+    case CLAIM_PREVIOUS:
+        /* CURRENT_FH: object being reclaimed */
+        open_delegation_type4   deleg_type;
+};
+
+struct WANT_DELEGATION4args {
+    uint32_t      want;
+    deleg_claim4  claim;
+};
+
+union WANT_DELEGATION4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        open_delegation4  resok;
+    default:
+        void;
+};
+
+/*
+ * DESTROY_CLIENTID: Destroy a Client ID
+ * ======================================================================
+ */
+/* STRFMT1: clientid:{0} */
+struct DESTROY_CLIENTID4args {
+    clientid4       clientid;
+};
+
+/* STRFMT1: "" */
+struct DESTROY_CLIENTID4res {
+    nfsstat4        status;
+};
+
+/*
+ * RECLAIM_COMPLETE: Indicates Reclaims Finished
+ * ======================================================================
+ */
+/* STRFMT1: one_fs:{0} */
+struct RECLAIM_COMPLETE4args {
+    /*
+     * If one_fs TRUE,
+     *
+     *    CURRENT_FH: object in
+     *    filesystem reclaim is
+     *    complete for.
+     */
+    bool            one_fs;
+};
+
+/* STRFMT1: "" */
+struct RECLAIM_COMPLETE4res {
     nfsstat4        status;
 };
 
@@ -1698,6 +2957,7 @@ union nfs_argop4 switch (nfs_opnum4 argop) {
     case OP_OPENATTR:
         OPENATTR4args opopenattr;
     case OP_OPEN_CONFIRM:
+        /* Not used in NFSv4.1 */
         OPEN_CONFIRM4args opopen_confirm;
     case OP_OPEN_DOWNGRADE:
         OPEN_DOWNGRADE4args opopen_downgrade;
@@ -1723,6 +2983,7 @@ union nfs_argop4 switch (nfs_opnum4 argop) {
     case OP_RENAME:
         RENAME4args oprename;
     case OP_RENEW:
+        /* Not used in NFSv4.1 */
         RENEW4args oprenew;
     case OP_RESTOREFH:
         /* GLOBAL: nfs4_fh=self.nfs4_sfh */
@@ -1737,15 +2998,59 @@ union nfs_argop4 switch (nfs_opnum4 argop) {
     case OP_SETATTR:
         SETATTR4args opsetattr;
     case OP_SETCLIENTID:
+        /* Not used in NFSv4.1 */
         SETCLIENTID4args opsetclientid;
     case OP_SETCLIENTID_CONFIRM:
+        /* Not used in NFSv4.1 */
         SETCLIENTID_CONFIRM4args opsetclientid_confirm;
     case OP_VERIFY:
         VERIFY4args opverify;
     case OP_WRITE:
         WRITE4args opwrite;
     case OP_RELEASE_LOCKOWNER:
+        /* Not used in NFSv4.1 */
         RELEASE_LOCKOWNER4args oprelease_lockowner;
+
+    /* New to NFSv4.1 */
+    case OP_BACKCHANNEL_CTL:
+        BACKCHANNEL_CTL4args opbackchannel_ctl;
+    case OP_BIND_CONN_TO_SESSION:
+        BIND_CONN_TO_SESSION4args opbind_conn_to_session;
+    case OP_EXCHANGE_ID:
+        EXCHANGE_ID4args opexchange_id;
+    case OP_CREATE_SESSION:
+        CREATE_SESSION4args opcreate_session;
+    case OP_DESTROY_SESSION:
+        DESTROY_SESSION4args opdestroy_session;
+    case OP_FREE_STATEID:
+        FREE_STATEID4args opfree_stateid;
+    case OP_GET_DIR_DELEGATION:
+        GET_DIR_DELEGATION4args opget_dir_delegation;
+    case OP_GETDEVICEINFO:
+        GETDEVICEINFO4args opgetdeviceinfo;
+    case OP_GETDEVICELIST:
+        GETDEVICELIST4args opgetdevicelist;
+    case OP_LAYOUTCOMMIT:
+        LAYOUTCOMMIT4args oplayoutcommit;
+    case OP_LAYOUTGET:
+        LAYOUTGET4args oplayoutget;
+    case OP_LAYOUTRETURN:
+        LAYOUTRETURN4args oplayoutreturn;
+    case OP_SECINFO_NO_NAME:
+        SECINFO_NO_NAME4args opsecinfo_no_name;
+    case OP_SEQUENCE:
+        SEQUENCE4args opsequence;
+    case OP_SET_SSV:
+        SET_SSV4args opset_ssv;
+    case OP_TEST_STATEID:
+        TEST_STATEID4args optest_stateid;
+    case OP_WANT_DELEGATION:
+        WANT_DELEGATION4args opwant_delegation;
+    case OP_DESTROY_CLIENTID:
+        DESTROY_CLIENTID4args opdestroy_clientid;
+    case OP_RECLAIM_COMPLETE:
+        RECLAIM_COMPLETE4args opreclaim_complete;
+
     case OP_ILLEGAL:
         /* Illegal operation */
         /* STRFMT2: ILLEGAL4args() */
@@ -1791,6 +3096,7 @@ union nfs_resop4 switch (nfs_opnum4 resop){
     case OP_OPENATTR:
         OPENATTR4res opopenattr;
     case OP_OPEN_CONFIRM:
+        /* Not used in NFSv4.1 */
         OPEN_CONFIRM4res opopen_confirm;
     case OP_OPEN_DOWNGRADE:
         OPEN_DOWNGRADE4res opopen_downgrade;
@@ -1811,6 +3117,7 @@ union nfs_resop4 switch (nfs_opnum4 resop){
     case OP_RENAME:
         RENAME4res oprename;
     case OP_RENEW:
+        /* Not used in NFSv4.1 */
         RENEW4res oprenew;
     case OP_RESTOREFH:
         RESTOREFH4res oprestorefh;
@@ -1821,15 +3128,59 @@ union nfs_resop4 switch (nfs_opnum4 resop){
     case OP_SETATTR:
         SETATTR4res opsetattr;
     case OP_SETCLIENTID:
+        /* Not used in NFSv4.1 */
         SETCLIENTID4res opsetclientid;
     case OP_SETCLIENTID_CONFIRM:
+        /* Not used in NFSv4.1 */
         SETCLIENTID_CONFIRM4res opsetclientid_confirm;
     case OP_VERIFY:
         VERIFY4res opverify;
     case OP_WRITE:
         WRITE4res opwrite;
     case OP_RELEASE_LOCKOWNER:
+        /* Not used in NFSv4.1 */
         RELEASE_LOCKOWNER4res oprelease_lockowner;
+
+    /* New to NFSv4.1 */
+    case OP_BACKCHANNEL_CTL:
+        BACKCHANNEL_CTL4res opbackchannel_ctl;
+    case OP_BIND_CONN_TO_SESSION:
+        BIND_CONN_TO_SESSION4res opbind_conn_to_session;
+    case OP_EXCHANGE_ID:
+        EXCHANGE_ID4res opexchange_id;
+    case OP_CREATE_SESSION:
+        CREATE_SESSION4res opcreate_session;
+    case OP_DESTROY_SESSION:
+        DESTROY_SESSION4res opdestroy_session;
+    case OP_FREE_STATEID:
+        FREE_STATEID4res opfree_stateid;
+    case OP_GET_DIR_DELEGATION:
+        GET_DIR_DELEGATION4res opget_dir_delegation;
+    case OP_GETDEVICEINFO:
+        GETDEVICEINFO4res opgetdeviceinfo;
+    case OP_GETDEVICELIST:
+        GETDEVICELIST4res opgetdevicelist;
+    case OP_LAYOUTCOMMIT:
+        LAYOUTCOMMIT4res oplayoutcommit;
+    case OP_LAYOUTGET:
+        LAYOUTGET4res oplayoutget;
+    case OP_LAYOUTRETURN:
+        LAYOUTRETURN4res oplayoutreturn;
+    case OP_SECINFO_NO_NAME:
+        SECINFO_NO_NAME4res opsecinfo_no_name;
+    case OP_SEQUENCE:
+        SEQUENCE4res opsequence;
+    case OP_SET_SSV:
+        SET_SSV4res opset_ssv;
+    case OP_TEST_STATEID:
+        TEST_STATEID4res optest_stateid;
+    case OP_WANT_DELEGATION:
+        WANT_DELEGATION4res opwant_delegation;
+    case OP_DESTROY_CLIENTID:
+        DESTROY_CLIENTID4res opdestroy_clientid;
+    case OP_RECLAIM_COMPLETE:
+        RECLAIM_COMPLETE4res opreclaim_complete;
+
     case OP_ILLEGAL:
         /* Illegal operation */
         ILLEGAL4res opillegal;
@@ -1837,7 +3188,6 @@ union nfs_resop4 switch (nfs_opnum4 resop){
 
 /* INHERIT: packet.nfs.nfsbase.NFSbase */
 /* GLOBAL: nfs4_fh=None */
-/* STRFMT2: COMPOUND4 tag={0!r}, minorversion={1}, array={2} */
 struct COMPOUND4args {
     utf8str_cs      tag;
     uint32_t        minorversion;
@@ -1847,7 +3197,6 @@ struct COMPOUND4args {
 /* INHERIT: packet.nfs.nfsbase.NFSbase */
 /* GLOBAL: nfs4_fh=None */
 /* XARG: minorversion */
-/* STRFMT2: COMPOUND4 status={0}, tag={1!r}, array={2} */
 struct COMPOUND4res {
     nfsstat4        status;
     utf8str_cs      tag;
@@ -1866,6 +3215,17 @@ struct COMPOUND4res {
 enum nfs_cb_opnum4 {
     OP_CB_GETATTR               = 3,
     OP_CB_RECALL                = 4,
+    /* Callback operations new to NFSv4.1 */
+    OP_CB_LAYOUTRECALL          = 5,
+    OP_CB_NOTIFY                = 6,
+    OP_CB_PUSH_DELEG            = 7,
+    OP_CB_RECALL_ANY            = 8,
+    OP_CB_RECALLABLE_OBJ_AVAIL  = 9,
+    OP_CB_RECALL_SLOT           = 10,
+    OP_CB_SEQUENCE              = 11,
+    OP_CB_WANTS_CANCELLED       = 12,
+    OP_CB_NOTIFY_LOCK           = 13,
+    OP_CB_NOTIFY_DEVICEID       = 14,
     /* Illegal callback operation */
     OP_CB_ILLEGAL               = 10044
 };
@@ -1916,6 +3276,289 @@ struct CB_ILLEGAL4res {
     nfsstat4        status;
 };
 
+/*
+ * NFSv4.1 callback arguments and results
+ */
+
+/*
+ * CB_LAYOUTRECALL: Recall Layout from Client
+ * ======================================================================
+ */
+enum layoutrecall_type4 {
+    LAYOUTRECALL4_FILE = LAYOUT4_RET_REC_FILE,
+    LAYOUTRECALL4_FSID = LAYOUT4_RET_REC_FSID,
+    LAYOUTRECALL4_ALL  = LAYOUT4_RET_REC_ALL
+};
+
+/* STRFMT1: FH:{0:crc32} stid:{3} off:{1:umax64} len:{2:umax64} */
+struct layoutrecall_file4 {
+    nfs_fh4         fh;
+    offset4         offset;
+    length4         length;
+    stateid4        stateid;
+};
+
+/* STRFMT1: {1} */
+union layoutrecall4 switch(layoutrecall_type4 recalltype) {
+    case LAYOUTRECALL4_FILE:
+        layoutrecall_file4 layout;
+    case LAYOUTRECALL4_FSID:
+        fsid4              fsid;
+    case LAYOUTRECALL4_ALL:
+        void;
+};
+
+/* STRFMT1: {1:@14} {3} */
+struct CB_LAYOUTRECALL4args {
+    layouttype4             type;
+    layoutiomode4           iomode;
+    bool                    changed;
+    layoutrecall4           recall;
+};
+struct CB_LAYOUTRECALL4res {
+    nfsstat4        status;
+};
+
+/*
+ * CB_NOTIFY: Notify Client of Directory Changes
+ * ======================================================================
+ */
+
+/*
+ * Directory notification types.
+ */
+enum notify_type4 {
+    NOTIFY4_CHANGE_CHILD_ATTRS     = 0,
+    NOTIFY4_CHANGE_DIR_ATTRS       = 1,
+    NOTIFY4_REMOVE_ENTRY           = 2,
+    NOTIFY4_ADD_ENTRY              = 3,
+    NOTIFY4_RENAME_ENTRY           = 4,
+    NOTIFY4_CHANGE_COOKIE_VERIFIER = 5
+};
+
+/* Changed entry information.  */
+struct notify_entry4 {
+    component4      name;
+    fattr4          attrs;
+};
+
+/* Previous entry information */
+struct prev_entry4 {
+    notify_entry4   entry;
+    /* what READDIR returned for this entry */
+    nfs_cookie4     cookie;
+};
+
+struct notify_remove4 {
+    notify_entry4   entry;
+    nfs_cookie4     cookie;
+};
+
+struct notify_add4 {
+    /*
+     * Information on object
+     * possibly renamed over.
+     */
+    notify_remove4      old_entry<1>;
+    notify_entry4       new_entry;
+    /* what READDIR would have returned for this entry */
+    nfs_cookie4         new_cookie<1>;
+    prev_entry4         prev_entry<1>;
+    bool                last_entry;
+};
+
+struct notify_attr4 {
+    notify_entry4   entry;
+};
+
+struct notify_rename4 {
+    notify_remove4  old_entry;
+    notify_add4     new_entry;
+};
+
+struct notify_verifier4 {
+    verifier4       old_verifier;
+    verifier4       new_verifier;
+};
+
+/*
+ * Objects of type notify_<>4 and
+ * notify_device_<>4 are encoded in this.
+ */
+typedef opaque notifylist4<>; /* STRHEX:1 */
+
+struct notify4 {
+    /* composed from notify_type4 or notify_deviceid_type4 */
+    bitmap4         mask;
+    notifylist4     values;
+};
+
+struct CB_NOTIFY4args {
+    stateid4    stateid;
+    nfs_fh4     fh;
+    notify4     changes<>;
+};
+
+struct CB_NOTIFY4res {
+    nfsstat4    status;
+};
+
+/*
+ * CB_PUSH_DELEG: Offer Previously Requested Delegation to Client
+ * ======================================================================
+ */
+struct CB_PUSH_DELEG4args {
+    nfs_fh4          fh;
+    open_delegation4 delegation;
+
+};
+
+struct CB_PUSH_DELEG4res {
+    nfsstat4 status;
+};
+
+/*
+ * CB_RECALL_ANY: Keep Any N Recallable Objects
+ * ======================================================================
+ */
+const RCA4_TYPE_MASK_RDATA_DLG          = 0;
+const RCA4_TYPE_MASK_WDATA_DLG          = 1;
+const RCA4_TYPE_MASK_DIR_DLG            = 2;
+const RCA4_TYPE_MASK_FILE_LAYOUT        = 3;
+const RCA4_TYPE_MASK_BLK_LAYOUT         = 4;
+const RCA4_TYPE_MASK_OBJ_LAYOUT_MIN     = 8;
+const RCA4_TYPE_MASK_OBJ_LAYOUT_MAX     = 9;
+const RCA4_TYPE_MASK_OTHER_LAYOUT_MIN   = 12;
+const RCA4_TYPE_MASK_OTHER_LAYOUT_MAX   = 15;
+
+struct CB_RECALL_ANY4args      {
+    uint32_t        objects_to_keep;
+    bitmap4         mask;
+};
+
+struct CB_RECALL_ANY4res {
+    nfsstat4        status;
+};
+
+/*
+ * CB_RECALLABLE_OBJ_AVAIL: Signal Resources for Recallable Objects
+ * ======================================================================
+ */
+typedef CB_RECALL_ANY4args CB_RECALLABLE_OBJ_AVAIL4args;
+
+struct CB_RECALLABLE_OBJ_AVAIL4res {
+    nfsstat4        status;
+};
+
+/*
+ * CB_RECALL_SLOT: Change Flow Control Limits
+ * ======================================================================
+ */
+struct CB_RECALL_SLOT4args {
+    slotid4       target_highest_slotid;
+};
+
+struct CB_RECALL_SLOT4res {
+    nfsstat4   status;
+};
+
+/*
+ * CB_SEQUENCE: Supply Backchannel Sequencing and Control
+ * ======================================================================
+ */
+struct referring_call4 {
+    sequenceid4     sequenceid;
+    slotid4         slotid;
+};
+
+struct referring_call_list4 {
+    sessionid4      sessionid;
+    referring_call4 referring_calls<>;
+};
+
+struct CB_SEQUENCE4args {
+    sessionid4           sessionid;
+    sequenceid4          sequenceid;
+    slotid4              slotid;
+    slotid4              highest_slotid;
+    bool                 cachethis;
+    referring_call_list4 referring_call_lists<>;
+};
+
+struct CB_SEQUENCE4resok {
+    sessionid4         sessionid;
+    sequenceid4        sequenceid;
+    slotid4            slotid;
+    slotid4            highest_slotid;
+    slotid4            target_highest_slotid;
+};
+
+union CB_SEQUENCE4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        CB_SEQUENCE4resok  resok;
+    default:
+        void;
+};
+
+/*
+ * CB_WANTS_CANCELLED: Cancel Pending Delegation Wants
+ * ======================================================================
+ */
+struct CB_WANTS_CANCELLED4args {
+    bool contended;
+    bool resourced;
+};
+
+struct CB_WANTS_CANCELLED4res {
+    nfsstat4        status;
+};
+
+/*
+ * CB_NOTIFY_LOCK: Notify Client of Possible Lock Availability
+ * ======================================================================
+ */
+struct CB_NOTIFY_LOCK4args {
+    nfs_fh4      fh;
+    lock_owner4  lock_owner;
+};
+
+struct CB_NOTIFY_LOCK4res {
+    nfsstat4  status;
+};
+
+/*
+ * CB_NOTIFY_DEVICEID: Notify Client of Device ID Changes
+ * ======================================================================
+ */
+/*
+ * Device notification types.
+ */
+enum notify_deviceid_type4 {
+    NOTIFY_DEVICEID4_CHANGE = 1,
+    NOTIFY_DEVICEID4_DELETE = 2
+};
+
+/* For NOTIFY4_DEVICEID4_DELETE */
+struct notify_deviceid_delete4 {
+    layouttype4     type;
+    deviceid4       deviceid;
+};
+
+/* For NOTIFY4_DEVICEID4_CHANGE */
+struct notify_deviceid_change4 {
+    layouttype4     type;
+    deviceid4       deviceid;
+    bool            immediate;
+};
+
+struct CB_NOTIFY_DEVICEID4args {
+    notify4 changes<>;
+};
+
+struct CB_NOTIFY_DEVICEID4res {
+    nfsstat4        status;
+};
+
 /* OBJATTR: op=argop */
 /* STRFMT1: {1} */
 /* STRFMT2: {1} */
@@ -1924,6 +3567,29 @@ union nfs_cb_argop4 switch (nfs_cb_opnum4 argop) {
         CB_GETATTR4args opcbgetattr;
     case OP_CB_RECALL:
         CB_RECALL4args opcbrecall;
+
+    /* New to NFSv4.1 */
+    case OP_CB_LAYOUTRECALL:
+        CB_LAYOUTRECALL4args opcblayoutrecall;
+    case OP_CB_NOTIFY:
+        CB_NOTIFY4args opcbnotify;
+    case OP_CB_PUSH_DELEG:
+        CB_PUSH_DELEG4args opcbpush_deleg;
+    case OP_CB_RECALL_ANY:
+        CB_RECALL_ANY4args opcbrecall_any;
+    case OP_CB_RECALLABLE_OBJ_AVAIL:
+        CB_RECALLABLE_OBJ_AVAIL4args opcbrecallable_obj_avail;
+    case OP_CB_RECALL_SLOT:
+        CB_RECALL_SLOT4args opcbrecall_slot;
+    case OP_CB_SEQUENCE:
+        CB_SEQUENCE4args opcbsequence;
+    case OP_CB_WANTS_CANCELLED:
+        CB_WANTS_CANCELLED4args opcbwants_cancelled;
+    case OP_CB_NOTIFY_LOCK:
+        CB_NOTIFY_LOCK4args opcbnotify_lock;
+    case OP_CB_NOTIFY_DEVICEID:
+        CB_NOTIFY_DEVICEID4args opcbnotify_deviceid;
+
     case OP_CB_ILLEGAL:
         /* Illegal callback operation */
         void;
@@ -1937,6 +3603,29 @@ union nfs_cb_resop4 switch (nfs_cb_opnum4 resop){
         CB_GETATTR4res opcbgetattr;
     case OP_CB_RECALL:
         CB_RECALL4res opcbrecall;
+
+    /* New to NFSv4.1 */
+    case OP_CB_LAYOUTRECALL:
+        CB_LAYOUTRECALL4res opcblayoutrecall;
+    case OP_CB_NOTIFY:
+        CB_NOTIFY4res opcbnotify;
+    case OP_CB_PUSH_DELEG:
+        CB_PUSH_DELEG4res opcbpush_deleg;
+    case OP_CB_RECALL_ANY:
+        CB_RECALL_ANY4res opcbrecall_any;
+    case OP_CB_RECALLABLE_OBJ_AVAIL:
+        CB_RECALLABLE_OBJ_AVAIL4res opcbrecallable_obj_avail;
+    case OP_CB_RECALL_SLOT:
+        CB_RECALL_SLOT4res opcbrecall_slot;
+    case OP_CB_SEQUENCE:
+        CB_SEQUENCE4res opcbsequence;
+    case OP_CB_WANTS_CANCELLED:
+        CB_WANTS_CANCELLED4res opcbwants_cancelled;
+    case OP_CB_NOTIFY_LOCK:
+        CB_NOTIFY_LOCK4res opcbnotify_lock;
+    case OP_CB_NOTIFY_DEVICEID:
+        CB_NOTIFY_DEVICEID4res opcbnotify_deviceid;
+
     case OP_CB_ILLEGAL:
         /* Illegal callback operation */
         CB_ILLEGAL4res opcbillegal;
@@ -1944,7 +3633,6 @@ union nfs_cb_resop4 switch (nfs_cb_opnum4 resop){
 
 /* INHERIT: packet.nfs.nfsbase.NFSbase */
 /* GLOBAL: nfs4_fh=None */
-/* STRFMT2: CB_COMPOUND4 tag={0!r}, minorversion={1}, callback_ident={2:#010x}, array={3} */
 struct CB_COMPOUND4args {
     utf8str_cs      tag;
     uint32_t        minorversion;
@@ -1955,7 +3643,6 @@ struct CB_COMPOUND4args {
 /* INHERIT: packet.nfs.nfsbase.NFSbase */
 /* GLOBAL: nfs4_fh=None */
 /* XARG: minorversion */
-/* STRFMT2: CB_COMPOUND4 status={0}, tag={1!r}, array={2} */
 struct CB_COMPOUND4res {
     nfsstat4 status;
     utf8str_cs      tag;
