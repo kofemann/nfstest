@@ -29,7 +29,7 @@ from baseobj import BaseObj
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '1.0'
+__version__   = '1.1'
 
 # RPC type constants
 RPC_CALL  = 0
@@ -148,9 +148,10 @@ class RPCload(BaseObj):
        This is used as a base class for an RPC payload object
     """
     # Class attributes
+    _pindex  = 0    # Discard this number of characters from the procedure name
     _strname = None # Name to display in object's debug representation level=1
 
-    def rpc_str(self, name=_strname):
+    def rpc_str(self, name=None):
         """Display RPC string"""
         out = ""
         rpc = self._rpc
@@ -171,3 +172,22 @@ class RPCload(BaseObj):
         if RPC_xid:
             out += "xid:0x%08x " % rpc.xid
         return out
+
+    def __str__(self):
+        """Informal string representation"""
+        rdebug = self.debug_repr()
+        if rdebug == 1:
+            out = self.rpc_str(self._strname)
+            out += "%-10s" % str(self.procedure)[self._pindex:]
+            if LOAD_body and getattr(self, "switch", None) is not None:
+                itemstr = str(self.switch)
+                if len(itemstr):
+                    out += " " + itemstr
+
+            rpc = self._rpc
+            if rpc.type and getattr(self, "status", 0) != 0:
+                # Display the status of the packet only if it is an error
+                out += " %s" % self.status
+            return out
+        else:
+            return BaseObj.__str__(self)
