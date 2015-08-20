@@ -23,7 +23,7 @@ import nfstest_config as c
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '2.2'
+__version__   = '2.3'
 
 class Unpack(object):
     """Unpack object
@@ -97,9 +97,9 @@ class Unpack(object):
            # Get string padded to a 4 byte boundary, discard padding bytes
            buffer = x.unpack_string(pad=4)
 
-           # Get an array of integers
+           # Get an array of unsigned integers
            alist = x.unpack_array()
-           # Get a fixed length array of integers
+           # Get a fixed length array of unsigned integers
            alist = x.unpack_array(ltype=10)
            # Get an array of short integers
            alist = x.unpack_array(Unpack.unpack_short)
@@ -108,12 +108,12 @@ class Unpack(object):
            alist = x.unpack_array(Unpack.unpack_string, Unpack.unpack_short)
            # Get an array of strings, the length of each string is given by
            # a short integer and each string is padded to a 4 byte boundary
-           alist = x.unpack_array(Unpack.unpack_string, args={'ltype':Unpack.unpack_short, 'pad':4})
+           alist = x.unpack_array(Unpack.unpack_string, uargs={'ltype':Unpack.unpack_short, 'pad':4})
            # Get an array of objects decoded by item_obj where the first
            # argument to item_obj is the unpack object, e.g., item = item_obj(x)
            alist = x.unpack_array(item_obj)
 
-           # Get a list of integers
+           # Get a list of unsigned integers
            alist = x.unpack_list()
            # Get a list of short integers
            alist = x.unpack_list(Unpack.unpack_short)
@@ -122,12 +122,16 @@ class Unpack(object):
            alist = x.unpack_list(Unpack.unpack_string, Unpack.unpack_short)
            # Get a list of strings, the length of each string is given by
            # a short integer and each string is padded to a 4 byte boundary
-           alist = x.unpack_list(Unpack.unpack_string, args={'ltype':Unpack.unpack_short, 'pad':4})
+           alist = x.unpack_list(Unpack.unpack_string, uargs={'ltype':Unpack.unpack_short, 'pad':4})
 
            # Unpack a conditional, it unpacks a conditional flag first and
            # if it is true it unpacks the item given and returns it. If the
            # conditional flag decoded is false, the method returns None
            buffer = x.unpack_conditional(Unpack.unpack_opaque)
+
+           # Unpack an array of unsigned integers and convert array into
+           # a single long integer
+           bitmask = unpack_bitmap()
     """
     def __init__(self, data):
         """Constructor
@@ -282,64 +286,38 @@ class Unpack(object):
         """Get a fixed length opaque"""
         return self.read(size, pad=4)
 
-    def unpack_string(self, *kwts, **kwds):
+    def unpack_string(self, ltype=unpack_uint, pad=0, maxcount=0):
         """Get a variable length string
 
            ltype:
                Function to decode length of string [default: unpack_uint]
                Could also be given as an integer to have a fixed length string
-               Given as the first positional argument or as a named argument
            pad:
                Get and discard padding bytes [default: 0]
                If given, string is padded to this byte boundary
            maxcount:
                Maximum length of string [default: any length]
         """
-        # Process positional arguments
-        ltype = Unpack.unpack_uint
-        if len(kwts):
-            ltype = kwts[0]
-        # Process named arguments
-        ltype    = kwds.pop('ltype', ltype)
-        pad      = kwds.pop('pad', 0)
-        maxcount = kwds.pop('maxcount', 0)
-
         slen = self._get_ltype(ltype)
         if maxcount > 0 and slen > maxcount:
             raise Exception, "String exceeds maximum length"
         return self.read(slen, pad)
 
-    def unpack_array(self, *kwts, **kwds):
+    def unpack_array(self, unpack_item=unpack_uint, ltype=unpack_uint, uargs={}, maxcount=0, islist=False):
         """Get a variable length array, the type of objects in the array
            is given by the unpacking function unpack_item and the type
            to decode the length of the array is given by ltype
 
            unpack_item:
                Unpack function for each item in the array [default: unpack_uint]
-               Given as the first positional argument or as a named argument
            ltype:
                Function to decode length of array [default: unpack_uint]
                Could also be given as an integer to have a fixed length array
-               Given as the second positional argument or as a named argument
-           args:
+           uargs:
                Named arguments to pass to unpack_item function [default: {}]
            maxcount:
                Maximum length of array [default: any length]
         """
-        # Process positional arguments
-        unpack_item = Unpack.unpack_uint
-        ltype       = Unpack.unpack_uint
-        if len(kwts):
-            unpack_item = kwts[0]
-        if len(kwts) > 1:
-            ltype = kwts[1]
-        # Process named arguments
-        unpack_item = kwds.pop('unpack_item', unpack_item)
-        ltype       = kwds.pop('ltype', ltype)
-        uargs       = kwds.pop('args', {})
-        islist      = kwds.pop('islist', False)
-        maxcount    = kwds.pop('maxcount', 0)
-
         ret = []
         # Get length of array
         slen = self._get_ltype(ltype)
@@ -361,33 +339,29 @@ class Unpack(object):
 
            unpack_item:
                Unpack function for each item in the list [default: unpack_uint]
-               Given as the first positional argument or as a named argument
            ltype:
                Function to decode the next item flag [default: unpack_uint]
-               Given as the second positional argument or as a named argument
-           args:
+           uargs:
                Named arguments to pass to unpack_item function [default: {}]
         """
         kwds['islist'] = True
         return self.unpack_array(*kwts, **kwds)
 
-    def unpack_conditional(self, unpack_item=unpack_uint, ltype=unpack_uint, args={}):
+    def unpack_conditional(self, unpack_item=unpack_uint, ltype=unpack_uint, uargs={}):
         """Get an item if condition flag given by ltype is true, if condition
            flag is false then return None
 
            unpack_item:
                Unpack function for item if condition is true [default: unpack_uint]
-               Given as the first positional argument or as a named argument
            ltype:
                Function to decode the condition flag [default: unpack_uint]
-               Given as the second positional argument or as a named argument
-           args:
+           uargs:
                Named arguments to pass to unpack_item function [default: {}]
         """
         # Get condition flag
         if self._get_ltype(ltype):
             # Unpack item if condition is true
-            return unpack_item(self, **args)
+            return unpack_item(self, **uargs)
         return None
 
     def unpack_bitmap(self):
