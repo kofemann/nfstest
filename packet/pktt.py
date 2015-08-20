@@ -52,7 +52,7 @@ from packet.link.ethernet import ETHERNET
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '1.0.6'
+__version__   = '2.0'
 
 BaseObj.debug_map(0x100000000, 'pkt1', "PKT1: ")
 BaseObj.debug_map(0x200000000, 'pkt2', "PKT2: ")
@@ -565,11 +565,16 @@ class Pktt(BaseObj, Unpack):
         isarg = True
         lhs, opr, rhs = self._split_match(uargs)
 
-        if _nfsopmap.get(lhs):
+        if self.pkt.rpc.version == 3 or _nfsopmap.get(lhs):
             try:
-                # Top level NFS packet info
+                # Top level NFSv4 packet info or NFSv3 packet
                 expr = self._process_match("self.pkt.nfs.", lhs, opr, rhs)
-                return eval(expr)
+                if eval(expr):
+                    # Set NFSop and NFSidx
+                    self.pkt.NFSop = self.pkt.nfs
+                    self.pkt.NFSidx = 0
+                    return True
+                return False
             except Exception:
                 return False
 
