@@ -24,6 +24,7 @@ import nfstest_config as c
 from baseobj import BaseObj
 from packet.nfs.nfs import NFS
 from rpc_creds import rpc_credential
+from packet.nfs.mount3 import MOUNT3args,MOUNT3res
 
 # Module constants
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
@@ -352,6 +353,7 @@ class RPC(GSS):
            SEQUENCE4res, GETATTR4res, etc.
         """
         ret = None
+        layer = None
         pktt = self._pktt
         unpack = pktt.unpack
         self.decode_gss_data()
@@ -360,17 +362,26 @@ class RPC(GSS):
         try:
             if self.program == 100003:
                 # Decode NFS layer
+                layer = "nfs"
                 ret = NFS(self, False)
+            elif self.program == 100005:
+                # MOUNT protocol
+                layer = "mount"
+                if self.type == 0:
+                    ret = MOUNT3args(unpack, self.procedure)
+                else:
+                    ret = MOUNT3res(unpack, self.procedure)
             elif self.program >= 0x40000000 and self.program < 0x60000000:
                 # This is a crude way to figure out if call/reply is a callback
                 # based on the fact that NFS is always program 100003 and anything
                 # in the transient program range is considered a callback
+                layer = "nfs"
                 ret = NFS(self, True)
 
             if ret:
                 ret._rpc = self
                 self.decode_gss_checksum()
-                pktt.pkt.nfs = ret
+                setattr(pktt.pkt, layer, ret)
         except Exception:
             # Could not decode RPC load
             self.dprint('PKT3', traceback.format_exc())
