@@ -1021,7 +1021,7 @@ class XDRobject:
         xarg_nodisp_names = []
         if len(xarg_list):
             for xarg in xarg_list:
-                if xarg[1] == "disp" and xarg[0] not in dnames:
+                if xarg[1] == "disp":
                     xarg_set_names.append(xarg[0])
                 else:
                     xarg_nodisp_names.append(xarg[0])
@@ -1117,7 +1117,8 @@ class XDRobject:
 
         if self.item_dlist:
             maxlen = len(max([x[0] for x in self.item_dlist]+xarg_set_names+xarg_nodisp_names+oattrlist, key=len))
-            self.set_vars(fd, deftags, dnames, indent+tindent, pre=True)
+            if deftype == STRUCT:
+                self.set_vars(fd, deftags, dnames, indent+tindent, pre=True)
 
             if deftype == UNION and (xarg_set_names or xarg_nodisp_names):
                 mlen = len(max(xarg_set_names+xarg_nodisp_names, key=len))
@@ -1127,7 +1128,27 @@ class XDRobject:
             for name in xarg_nodisp_names:
                 # This is an XARG variable
                 sps = " " * (mlen - len(name))
-                fd.write("%s%sself.%s%s = %s\n" % (indent, tindent, name, sps, name))
+                valname = name
+                for item in self.item_dlist:
+                    vname,dname,pdef,adef,clist,tag,comms,pcomms = item
+                    if name == vname:
+                        valname = "%s(%s)" % (dname, name)
+                        break
+                fd.write("%s%sself.%s%s = %s\n" % (indent, tindent, name, sps, valname))
+
+            if deftype == UNION:
+                self.set_vars(fd, deftags, dnames, indent+tindent, pre=True)
+
+            for name in xarg_set_names:
+                # This is an XARG variable with "disp" option
+                sps = " " * (mlen - len(name))
+                valname = name
+                for item in self.item_dlist:
+                    vname,dname,pdef,adef,clist,tag,comms,pcomms = item
+                    if name == vname:
+                        valname = "%s(%s)" % (dname, name)
+                        break
+                fd.write('%s%sself.set_attr("%s", %s%s)\n' % (indent, tindent, name, sps, valname))
 
         #===========================================================
         # Create python definition of STRUCT/UNION for all vars
