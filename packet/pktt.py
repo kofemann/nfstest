@@ -473,7 +473,7 @@ class Pktt(BaseObj, Unpack):
         self.offset += ldata
         return data
 
-    def _split_match(self, args):
+    def _split_match(self, uargs):
         """Split match arguments and return a tuple (lhs, opr, rhs)
            where lhs is the left hand side of the given argument expression,
            opr is the operation and rhs is the right hand side of the given
@@ -483,7 +483,7 @@ class Pktt(BaseObj, Unpack):
 
            Valid opr values are: ==, !=, <, >, <=, >=, in
         """
-        m = re.search(r"([^!=<>]+)\s*([!=<>]+|in)\s*(.*)", args)
+        m = re.search(r"([^!=<>]+)\s*([!=<>]+|in)\s*(.*)", uargs)
         lhs = m.group(1).rstrip()
         opr = m.group(2)
         rhs = m.group(3)
@@ -538,32 +538,32 @@ class Pktt(BaseObj, Unpack):
 
         return expr
 
-    def _match(self, layer, args):
+    def _match(self, layer, uargs):
         """Default match function."""
         if not hasattr(self.pkt, layer):
             return False
 
         if layer == "nfs":
             # Use special matching function for NFS
-            texpr = self.match_nfs(args)
+            texpr = self.match_nfs(uargs)
         else:
             # Use general match
             obj = "self.pkt.%s." % layer.lower()
-            lhs, opr, rhs = self._split_match(args)
+            lhs, opr, rhs = self._split_match(uargs)
             expr = self._process_match(obj, lhs, opr, rhs)
             texpr = eval(expr)
-        self.dprint('PKT2', "    %d: match_%s(%s) -> %r" % (self.pkt.record.index, layer, args, texpr))
+        self.dprint('PKT2', "    %d: match_%s(%s) -> %r" % (self.pkt.record.index, layer, uargs, texpr))
         return texpr
 
     def clear_xid_list(self):
         """Clear list of outstanding xids"""
         self._match_xid_list = []
 
-    def _match_nfs(self, args):
+    def _match_nfs(self, uargs):
         """Match NFS values on current packet."""
         array = None
         isarg = True
-        lhs, opr, rhs = self._split_match(args)
+        lhs, opr, rhs = self._split_match(uargs)
 
         if _nfsopmap.get(lhs):
             try:
@@ -589,7 +589,7 @@ class Pktt(BaseObj, Unpack):
             idx += 1
         return False
 
-    def match_nfs(self, args):
+    def match_nfs(self, uargs):
         """Match NFS values on current packet.
 
            In NFSv4, there is a single compound procedure with multiple
@@ -657,8 +657,8 @@ class Pktt(BaseObj, Unpack):
            the match engine to match the second or Nth occurrence of an
            operation.
         """
-        texpr = self._match_nfs(args)
-        self.dprint('PKT2', "    %d: match_nfs(%s) -> %r" % (self.pkt.record.index, args, texpr))
+        texpr = self._match_nfs(uargs)
+        self.dprint('PKT2', "    %d: match_nfs(%s) -> %r" % (self.pkt.record.index, uargs, texpr))
         return texpr
 
     def _convert_match(self, ast):
@@ -701,22 +701,22 @@ class Pktt(BaseObj, Unpack):
             # Comparison
             if isin:
                 regex = re.search(r'(.*)(self\._match)_(\w+)\.(.*)', ret)
-                data = regex.groups()
-                func = data[1]
+                data  = regex.groups()
+                func  = data[1]
                 layer = data[2]
-                args = data[0] + data[3]
+                uargs = data[0] + data[3]
             else:
                 regex = re.search(r"^((\w+)\()?(self\._match)_(\w+)\.(.*)", ret)
-                data = regex.groups()
-                func = data[2]
+                data  = regex.groups()
+                func  = data[2]
                 layer = data[3]
                 if data[0] is None:
-                    args = data[4]
+                    uargs = data[4]
                 else:
-                    args = data[0] + data[4]
+                    uargs = data[0] + data[4]
             # Escape all single quotes since the whole string will be quoted
-            args = re.sub(r"'", "\\'", args)
-            ret = "(%s('%s','%s'))" % (func, layer, args)
+            uargs = re.sub(r"'", "\\'", uargs)
+            ret = "(%s('%s','%s'))" % (func, layer, uargs)
 
         return ret
 
