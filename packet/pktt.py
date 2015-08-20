@@ -517,10 +517,10 @@ class Pktt(BaseObj, Unpack):
                expr = "item.argop==25"
 
                # Membership (in) processing
-               expr = x._process_match('item.', '62', 'in', 'obj_attributes')
+               expr = x._process_match('item.', '62', 'in', 'attributes')
 
                Returns the following expression ready to be evaluated:
-               expr = "62 in item.obj_attributes"
+               expr = "62 in item.attributes"
         """
         if rhs[:3] == 're(':
             # Regular expression, it must be in rhs
@@ -596,41 +596,40 @@ class Pktt(BaseObj, Unpack):
            operations, matching becomes a little bit tricky in order to make
            the matching expression easy to use. The NFS object's name space
            gets converted into a flat name space for the sole purpose of
-           matching. In other words, all operation objects in argarray or
-           resarray are treated as being part of the NFS object's top level
-           attributes.
+           matching. In other words, all operation objects in array are
+           treated as being part of the NFS object's top level attributes.
 
            Consider the following NFS object:
                nfsobj = COMPOUND4res(
                    status=NFS4_OK,
                    tag='NFSv4_tag',
-                   resarray=[
+                   array = [
                        nfs_resop4(
                            resop=OP_SEQUENCE,
                            opsequence=SEQUENCE4res(
-                               sr_status=NFS4_OK,
-                               sr_resok4=SEQUENCE4resok(
-                                   sr_sessionid='sessionid',
-                                   sr_sequenceid=25,
-                                   sr_slotid=0,
-                                   sr_highest_slotid=0,
-                                   sr_target_highest_slotid=15,
-                                   sr_status_flags=0,
-                               )
-                           )
+                               status=NFS4_OK,
+                               resok=SEQUENCE4resok(
+                                   sessionid='sessionid',
+                                   sequenceid=29,
+                                   slotid=0,
+                                   highest_slotid=179,
+                                   target_highest_slotid=179,
+                                   status_flags=0,
+                               ),
+                           ),
                        ),
                        nfs_resop4(
                            resop=OP_PUTFH,
-                           opputfh=PUTFH4res(
-                               status=NFS4_OK
-                           )
+                           opputfh = PUTFH4res(
+                               status=NFS4_OK,
+                           ),
                        ),
                        ...
                    ]
                ),
 
            The result for operation PUTFH is the second in the list:
-               putfh = nfsobj.resarray[1]
+               putfh = nfsobj.array[1]
 
            From this putfh object the status operation can be accessed as:
                status = putfh.opputfh.status
@@ -640,12 +639,12 @@ class Pktt(BaseObj, Unpack):
 
            In this example, the following match expression 'NFS.status == 0'
            could match the top level status of the compound (nfsobj.status)
-           or the putfh status (nfsobj.resarray[1].status)
+           or the putfh status (nfsobj.array[1].status)
 
-           The following match expression 'NFS.sr_sequenceid == 25' will also
+           The following match expression 'NFS.sequenceid == 25' will also
            match this packet as well, even though the actual expression should
-           be 'nfsobj.resarray[0].opsequence.sr_resok4.sr_sequenceid == 25' or
-           simply 'nfsobj.resarray[0].sr_sequenceid == 25'.
+           be 'nfsobj.array[0].opsequence.resok.sequenceid == 25' or
+           simply 'nfsobj.array[0].sequenceid == 25'.
 
            This approach makes the match expressions simpler at the expense of
            having some ambiguities on where the actual matched occurred. If a
@@ -754,13 +753,13 @@ class Pktt(BaseObj, Unpack):
                while x.match(r"IP.src == re('192\.168\.1\.\d*')"):
                    print x.pkt.tcp
 
-               # Find packet having a GETATTR asking for FATTR4_FS_LAYOUT_TYPE(bit 62)
+               # Find packet having a GETATTR asking for FATTR4_FS_LAYOUT_TYPES(bit 62)
                pkt_call = x.match("NFS.attr_request & 0x4000000000000000L != 0")
                if pkt_call:
                    # Find GETATTR reply
                    xid = pkt_call.rpc.xid
-                   # Find reply where the number 62 is in the array NFS.obj_attributes
-                   pkt_reply = x.match("RPC.xid == %d and 62 in NFS.obj_attributes" % xid)
+                   # Find reply where the number 62 is in the array NFS.attributes
+                   pkt_reply = x.match("RPC.xid == %d and 62 in NFS.attributes" % xid)
 
                # Find the next WRITE request
                pkt = x.match("NFS.argop == 38")
