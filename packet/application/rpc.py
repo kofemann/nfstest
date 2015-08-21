@@ -24,6 +24,7 @@ import nfstest_config as c
 from baseobj import BaseObj
 from packet.nfs.nfs import NFS
 from rpc_creds import rpc_credential
+from packet.nfs.nlm4 import NLM4args,NLM4res
 from packet.nfs.mount3 import MOUNT3args,MOUNT3res
 from packet.nfs.portmap2 import PORTMAP2args,PORTMAP2res
 
@@ -372,6 +373,13 @@ class RPC(GSS):
                     ret = MOUNT3args(unpack, self.procedure)
                 else:
                     ret = MOUNT3res(unpack, self.procedure)
+            elif self.program == 100021:
+                # NLM protocol
+                layer = "nlm"
+                if self.type == 0:
+                    ret = NLM4args(unpack, self.procedure)
+                else:
+                    ret = NLM4res(unpack, self.procedure)
             elif self.program == 100000:
                 # PORTMAP protocol
                 layer = "portmap"
