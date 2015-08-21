@@ -25,6 +25,7 @@ from baseobj import BaseObj
 from packet.nfs.nfs import NFS
 from rpc_creds import rpc_credential
 from packet.nfs.mount3 import MOUNT3args,MOUNT3res
+from packet.nfs.portmap2 import PORTMAP2args,PORTMAP2res
 
 # Module constants
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
@@ -371,6 +372,13 @@ class RPC(GSS):
                     ret = MOUNT3args(unpack, self.procedure)
                 else:
                     ret = MOUNT3res(unpack, self.procedure)
+            elif self.program == 100000:
+                # PORTMAP protocol
+                layer = "portmap"
+                if self.type == 0:
+                    ret = PORTMAP2args(unpack, self.procedure)
+                else:
+                    ret = PORTMAP2res(unpack, self.procedure)
             elif self.program >= 0x40000000 and self.program < 0x60000000:
                 # This is a crude way to figure out if call/reply is a callback
                 # based on the fact that NFS is always program 100003 and anything
