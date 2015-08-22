@@ -1,11 +1,8 @@
 /*
- * Copyright (c) 2010 IETF Trust and the persons identified
+ * Copyright (c) 2015 IETF Trust and the persons identified
  * as the document authors.  All rights reserved.
  *
- * The document authors are identified in RFC 3530 and
- * RFC 5661.
- *
- * Redistribution and use in source and binary forms, with
+ * The Redistribution and use in source and binary forms, with
  * or without modification, are permitted provided that the
  * following conditions are met:
  *
@@ -38,6 +35,14 @@
  *   OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
  *   IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  *   ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * This code was derived from [draft-ietf-nfsv4-minorversion2-dot-x-38].
+ *
+ *  Copyright (C) The IETF Trust (2007-2014)
+ *  All Rights Reserved.
+ *
+ *  Copyright (C) The Internet Society (1998-2006).
+ *  All Rights Reserved.
  *
  *=====================================================================
  * This Document was changed to add directives for converting
@@ -205,6 +210,17 @@ enum nfsstat4 {
     NFS4ERR_REJECT_DELEG               = 10085,/* cb rejected delegation  */
     NFS4ERR_RETURNCONFLICT             = 10086,/* layout get before return*/
     NFS4ERR_DELEG_REVOKED              = 10087,/* no return-state revoked */
+
+    /*
+     * NFSv4.2 errors start here
+     */
+    NFS4ERR_PARTNER_NOTSUPP            = 10088,/* s2s not supported       */
+    NFS4ERR_PARTNER_NO_AUTH            = 10089,/* s2s not authorized      */
+    NFS4ERR_UNION_NOTSUPP              = 10090,/* Arm of union not supp   */
+    NFS4ERR_OFFLOAD_DENIED             = 10091,/* dest not allowing copy  */
+    NFS4ERR_WRONG_LFS                  = 10092,/* LFS not supported       */
+    NFS4ERR_BADLABEL                   = 10093,/* incorrect label         */
+    NFS4ERR_OFFLOAD_NO_REQS            = 10094 /* dest not meeting reqs   */
 };
 
 /*
@@ -258,6 +274,12 @@ typedef opaque                  deviceid4[NFS4_DEVICEID4_SIZE]; /* STRHEX:1 */
 typedef uint32_t                fs_charset_cap4;
 typedef uint32_t                nfl_util4; /* STRHEX:1 */
 typedef opaque                  gsshandle4_t<>; /* STRHEX:1 */
+
+/*
+ * New to NFSv4.2
+ */
+typedef string                  secret4<>;
+typedef uint32_t                policy4;
 
 /*
  * Timeval
@@ -769,6 +791,68 @@ const FSCHARSET_CAP4_CONTAINS_NON_UTF8  = 0x1;
 const FSCHARSET_CAP4_ALLOWS_ONLY_UTF8   = 0x2;
 
 /*
+ * Data structures new to NFSv4.2
+ */
+
+enum netloc_type4 {
+    NL4_NAME    = 1,
+    NL4_URL     = 2,
+    NL4_NETADDR = 3
+};
+
+/* STRFMT1: {0} {1} */
+union netloc4 switch (netloc_type4 type) {
+    case NL4_NAME:    utf8str_cis name;
+    case NL4_URL:     utf8str_cis url;
+    case NL4_NETADDR: netaddr4    addr;
+};
+
+enum change_attr_type4 {
+    NFS4_CHANGE_TYPE_IS_MONOTONIC_INCR         = 0,
+    NFS4_CHANGE_TYPE_IS_VERSION_COUNTER        = 1,
+    NFS4_CHANGE_TYPE_IS_VERSION_COUNTER_NOPNFS = 2,
+    NFS4_CHANGE_TYPE_IS_TIME_METADATA          = 3,
+    NFS4_CHANGE_TYPE_IS_UNDEFINED              = 4
+};
+
+/* STRFMT1: lfs:{0} pi:{1} */
+struct labelformat_spec4 {
+    policy4 lfs;
+    policy4 pi;
+};
+
+/* STRFMT1: {0} data:{1} */
+struct sec_label4 {
+    labelformat_spec4       lfs;
+    opaque                  data<>;
+};
+
+/* Used in RPCSEC_GSSv3 */
+struct copy_from_auth_priv {
+    secret4             secret;
+    netloc4             destination;
+    /* the NFSv4 user name that the user principal maps to */
+    utf8str_mixed       username;
+};
+
+/* Used in RPCSEC_GSSv3 */
+struct copy_to_auth_priv {
+    /* equal to cfap_shared_secret */
+    secret4             secret;
+    netloc4             source<>;
+    /* the NFSv4 user name that the user principal maps to */
+    utf8str_mixed       username;
+};
+
+/* Used in RPCSEC_GSSv3 */
+struct copy_confirm_auth_priv {
+    /* equal to GSS_GetMIC() of cfap_shared_secret */
+    opaque              secret<>;
+    /* the NFSv4 user name that the user principal maps to */
+    utf8str_mixed       username;
+};
+
+/*
  * Attributes
  */
 typedef bitmap4                 fattr4_supported_attrs;
@@ -851,6 +935,13 @@ typedef nfsacl41                fattr4_dacl;
 typedef nfsacl41                fattr4_sacl;
 typedef change_policy4          fattr4_change_policy;
 typedef fs_locations_info4      fattr4_fs_locations_info;
+/*
+ * Attributes new to NFSv4.2
+ */
+typedef length4                 fattr4_clone_blksize;
+typedef uint64_t                fattr4_space_freed;
+typedef change_attr_type4       fattr4_change_attr_type;
+typedef sec_label4              fattr4_sec_label;
 
 /* FMAP:1 */
 enum nfs_fattr4 {
@@ -942,6 +1033,14 @@ enum nfs_fattr4 {
     FATTR4_RETENTION_HOLD     = 73,
     FATTR4_MODE_SET_MASKED    = 74,
     FATTR4_FS_CHARSET_CAP     = 76,
+
+    /*
+     * New to NFSv4.2
+     */
+    FATTR4_CLONE_BLKSIZE      = 77,
+    FATTR4_SPACE_FREED        = 78,
+    FATTR4_CHANGE_ATTR_TYPE   = 79,
+    FATTR4_SEC_LABEL          = 80,
 };
 
 /*
@@ -1062,7 +1161,7 @@ enum nfs_opnum4 {
     OP_FREE_STATEID        = 45,
     OP_GET_DIR_DELEGATION  = 46,
     OP_GETDEVICEINFO       = 47,
-    OP_GETDEVICELIST       = 48,
+    OP_GETDEVICELIST       = 48, /* Mandatory not-to-implement in NFSv4.2 */
     OP_LAYOUTCOMMIT        = 49,
     OP_LAYOUTGET           = 50,
     OP_LAYOUTRETURN        = 51,
@@ -1073,6 +1172,20 @@ enum nfs_opnum4 {
     OP_WANT_DELEGATION     = 56,
     OP_DESTROY_CLIENTID    = 57,
     OP_RECLAIM_COMPLETE    = 58,
+    /* New operations for NFSv4.2 */
+    OP_ALLOCATE            = 59,
+    OP_COPY                = 60,
+    OP_COPY_NOTIFY         = 61,
+    OP_DEALLOCATE          = 62,
+    OP_IO_ADVISE           = 63,
+    OP_LAYOUTERROR         = 64,
+    OP_LAYOUTSTATS         = 65,
+    OP_OFFLOAD_CANCEL      = 66,
+    OP_OFFLOAD_STATUS      = 67,
+    OP_READ_PLUS           = 68,
+    OP_SEEK                = 69,
+    OP_WRITE_SAME          = 70,
+    OP_CLONE               = 71,
     /* Illegal operation */
     OP_ILLEGAL             = 10044
 };
@@ -2552,7 +2665,7 @@ union GET_DIR_DELEGATION4res_non_fatal switch (gddrnf4_status status) {
 
 union GET_DIR_DELEGATION4res switch (nfsstat4 status) {
     case NFS4_OK:
-        GET_DIR_DELEGATION4res_non_fatal  res;
+        GET_DIR_DELEGATION4res_non_fatal  resok;
     default:
         void;
 };
@@ -2916,6 +3029,382 @@ struct RECLAIM_COMPLETE4res {
     nfsstat4        status;
 };
 
+/*
+ * ======================================================================
+ * Operations new to NFSv4.2
+ * ======================================================================
+ */
+
+/*
+ * ALLOCATE: Reserve Space in A Region of a File
+ * ======================================================================
+ */
+/* STRFMT1: stid:{0} off:{1:umax64} len:{2:umax64} */
+struct ALLOCATE4args {
+    /* CURRENT_FH: file */
+    stateid4        stateid;
+    offset4         offset;
+    length4         length;
+};
+
+/* STRFMT1: "" */
+struct ALLOCATE4res {
+    nfsstat4        status;
+};
+
+/*
+ * COPY: Initiate a server-side copy
+ * ======================================================================
+ */
+/* STRFMT1: src:(stid:{0} off:{2:umax64}) dst:(stid:{1} off:{3:umax64}) len:{4:umax64} */
+struct COPY4args {
+    /* SAVED_FH: source file */
+    /* CURRENT_FH: destination file */
+    stateid4        src_stateid;
+    stateid4        dst_stateid;
+    offset4         src_offset;
+    offset4         dst_offset;
+    length4         count;
+    bool            consecutive;
+    bool            synchronous;
+    netloc4         src_servers<>;
+};
+
+/* STRFMT1: stid:{0} len:{1:umax64} verf:{3} {2} */
+struct write_response4 {
+    stateid4        callback_id<1>;
+    length4         count;
+    stable_how4     committed;
+    verifier4       verifier;
+};
+
+/* STRFMT1: cons:{2} sync:{3} */
+struct copy_requirements4 {
+    bool            consecutive;
+    bool            synchronous;
+};
+
+/* STRFMT1: {0} {1} */
+struct COPY4resok {
+    write_response4         response;
+    copy_requirements4      requirements;
+};
+
+/* STRFMT1: {1} */
+union COPY4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        COPY4resok              resok;
+    case NFS4ERR_OFFLOAD_NO_REQS:
+        copy_requirements4      requirements;
+    default:
+        void;
+};
+
+/*
+ * COPY_NOTIFY: Notify a Source Server of a Future Copy
+ * ======================================================================
+ */
+/* STRFMT1: stid:{0} {1} */
+struct COPY_NOTIFY4args {
+    /* CURRENT_FH: source file */
+    stateid4  stateid;
+    netloc4   dst_server;
+};
+
+/* STRFMT1: lease:{0} stid:{1} {2} */
+struct COPY_NOTIFY4resok {
+    nfstime4  lease_time;
+    stateid4  stateid;
+    netloc4   src_servers<>;
+};
+
+/* STRFMT1: {1} */
+union COPY_NOTIFY4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        COPY_NOTIFY4resok resok;
+    default:
+        void;
+};
+
+/*
+ * DEALLOCATE: Unreserve Space in a Region of a File
+ * ======================================================================
+ */
+/* STRFMT1: stid:{0} off:{1:umax64} len:{2:umax64} */
+struct DEALLOCATE4args {
+    /* CURRENT_FH: file */
+    stateid4  stateid;
+    offset4   offset;
+    length4   length;
+};
+
+/* STRFMT1: "" */
+struct DEALLOCATE4res {
+    nfsstat4  status;
+};
+
+/*
+ * IO_ADVISE: Application I/O Access Pattern Hints
+ * ======================================================================
+ */
+enum IO_ADVISE_type4 {
+    IO_ADVISE4_NORMAL                  = 0,
+    IO_ADVISE4_SEQUENTIAL              = 1,
+    IO_ADVISE4_SEQUENTIAL_BACKWARDS    = 2,
+    IO_ADVISE4_RANDOM                  = 3,
+    IO_ADVISE4_WILLNEED                = 4,
+    IO_ADVISE4_WILLNEED_OPPORTUNISTIC  = 5,
+    IO_ADVISE4_DONTNEED                = 6,
+    IO_ADVISE4_NOREUSE                 = 7,
+    IO_ADVISE4_READ                    = 8,
+    IO_ADVISE4_WRITE                   = 9,
+    IO_ADVISE4_INIT_PROXIMITY          = 10
+};
+
+/* STRFMT1: stid:{0} off:{1:umax64} len:{2:umax64} hints:{3} */
+struct IO_ADVISE4args {
+    /* CURRENT_FH: file */
+    stateid4        stateid;
+    offset4         offset;
+    length4         count;
+    bitmap4         hints;
+};
+
+/* STRFMT1: hints:{0} */
+struct IO_ADVISE4resok {
+    bitmap4         hints;
+};
+
+/* STRFMT1: {1} */
+union IO_ADVISE4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        IO_ADVISE4resok resok;
+    default:
+        void;
+};
+
+/*
+ * LAYOUTERROR: Provide Errors for the Layout
+ * ======================================================================
+ */
+/* STRFMT1: devid:{0:crc16} stat:{1} op:{2} */
+struct device_error4 {
+    deviceid4       deviceid;
+    nfsstat4        status;
+    nfs_opnum4      opnum;
+};
+
+/* STRFMT1: off:{0:umax64} len:{1:umax64} stid:{2} {3} */
+struct LAYOUTERROR4args {
+    /* CURRENT_FH: file */
+    offset4         offset;
+    length4         length;
+    stateid4        stateid;
+    device_error4   errors<>;
+};
+
+/* STRFMT1: "" */
+struct LAYOUTERROR4res {
+    nfsstat4        status;
+};
+
+/*
+ * LAYOUTSTATS: Provide Statistics for the Layout
+ * ======================================================================
+ */
+/* STRFMT1: count:{0:umax64} bytes:{1:umax64} */
+struct io_info4 {
+    uint64_t        count;
+    uint64_t        bytes;
+};
+
+/* STRFMT1: off:{0:umax64} len:{1:umax64} stid:{2} */
+struct LAYOUTSTATS4args {
+    /* CURRENT_FH: file */
+    offset4         offset;
+    length4         length;
+    stateid4        stateid;
+    io_info4        read;
+    io_info4        write;
+    deviceid4       deviceid;
+    layoutupdate4   layoutupdate;
+};
+
+/* STRFMT1: "" */
+struct LAYOUTSTATS4res {
+    nfsstat4        status;
+};
+
+/*
+ * OFFLOAD_CANCEL: Stop an Offloaded Operation
+ * ======================================================================
+ */
+/* STRFMT1: stid:{0} */
+struct OFFLOAD_CANCEL4args {
+    /* CURRENT_FH: file to cancel */
+    stateid4        stateid;
+};
+
+/* STRFMT1: "" */
+struct OFFLOAD_CANCEL4res {
+    nfsstat4        status;
+};
+
+/*
+ * OFFLOAD_STATUS: Poll for Status of Asynchronous Operation
+ * ======================================================================
+ */
+/* STRFMT1: stid:{0} */
+struct OFFLOAD_STATUS4args {
+    /* CURRENT_FH: destination file */
+    stateid4        stateid;
+};
+
+/* STRFMT1: len:{0:umax64} {1} */
+struct OFFLOAD_STATUS4resok {
+    length4         count;
+    nfsstat4        complete<1>;
+};
+
+/* STRFMT1: {1} */
+union OFFLOAD_STATUS4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        OFFLOAD_STATUS4resok  resok;
+    default:
+        void;
+};
+
+/*
+ * READ_PLUS: READ Data or Holes from a File
+ * ======================================================================
+ */
+/* STRFMT1: stid:{0} off:{1:umax64} len:{2:umax32} */
+struct READ_PLUS4args {
+    /* CURRENT_FH: file */
+    stateid4        stateid;
+    offset4         offset;
+    count4          count;
+};
+
+enum data_content4 {
+    NFS4_CONTENT_DATA = 0,
+    NFS4_CONTENT_HOLE = 1
+};
+
+/* STRFMT1: off:{0:umax64} count:{1:umax32} */
+struct data4 {
+    offset4         offset;
+    opaque          data<>; /* FOPAQUE:count */
+};
+
+/* STRFMT1: off:{0:umax64} len:{1:umax64} */
+struct data_info4 {
+    offset4         offset;
+    length4         length;
+};
+
+/* STRFMT1: {1} */
+union read_plus_content switch (data_content4 content) {
+    case NFS4_CONTENT_DATA:
+        data4       data;
+    case NFS4_CONTENT_HOLE:
+        data_info4  hole;
+    default:
+        void;
+};
+
+/*
+ * Allow a return of an array of contents.
+ */
+/* STRFMT1: eof:{0} {1} */
+struct read_plus_res4 {
+    bool               eof;
+    read_plus_content  contents<>;
+};
+
+/* STRFMT1: {1} */
+union READ_PLUS4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        read_plus_res4  resok;
+    default:
+        void;
+};
+
+/*
+ * SEEK: Find the Next Data or Hole
+ * ======================================================================
+ */
+/* STRFMT1: stid:{0} off:{1:umax64} {2} */
+struct SEEK4args {
+    /* CURRENT_FH: file */
+    stateid4        stateid;
+    offset4         offset;
+    data_content4   what;
+};
+
+/* STRFMT1: eof:{0} off:{1:umax64} */
+struct seek_res4 {
+    bool            eof;
+    offset4         offset;
+};
+
+/* STRFMT1: {1} */
+union SEEK4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        seek_res4   resok;
+    default:
+        void;
+};
+
+/*
+ * WRITE_SAME: WRITE an ADB Multiple Times to a File
+ * ======================================================================
+ */
+/* STRFMT1: off:{0:umax64} bsize:{1:umax64} bcount:{2:umax64} */
+struct app_data_block4 {
+    offset4         offset;
+    length4         block_size;
+    length4         block_count;
+    length4         reloff_blocknum;
+    count4          block_num;
+    length4         reloff_pattern;
+    opaque          pattern<>;
+};
+
+/* STRFMT1: stid:{0} {2} {1} */
+struct WRITE_SAME4args {
+    /* CURRENT_FH: file */
+    stateid4        stateid;
+    stable_how4     stable;
+    app_data_block4 adb;
+};
+
+/* STRFMT1: {1} */
+union WRITE_SAME4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        write_response4  resok;
+    default:
+        void;
+};
+
+/*
+ * CLONE: Clone a Range of File Into Another File
+ * ======================================================================
+ */
+struct CLONE4args {
+    /* SAVED_FH: source file */
+    /* CURRENT_FH: destination file */
+    stateid4        src_stateid;
+    stateid4        dst_stateid;
+    offset4         src_offset;
+    offset4         dst_offset;
+    length4         count;
+};
+
+struct CLONE4res {
+    nfsstat4        status;
+};
+
 /* OBJATTR: op=argop */
 /* STRFMT1: {1} */
 /* STRFMT2: {1} */
@@ -3029,6 +3518,7 @@ union nfs_argop4 switch (nfs_opnum4 argop) {
     case OP_GETDEVICEINFO:
         GETDEVICEINFO4args opgetdeviceinfo;
     case OP_GETDEVICELIST:
+        /* Not used in NFSv4.2 */
         GETDEVICELIST4args opgetdevicelist;
     case OP_LAYOUTCOMMIT:
         LAYOUTCOMMIT4args oplayoutcommit;
@@ -3050,6 +3540,34 @@ union nfs_argop4 switch (nfs_opnum4 argop) {
         DESTROY_CLIENTID4args opdestroy_clientid;
     case OP_RECLAIM_COMPLETE:
         RECLAIM_COMPLETE4args opreclaim_complete;
+
+    /* New to NFSv4.2 */
+    case OP_ALLOCATE:
+        ALLOCATE4args opallocate;
+    case OP_COPY:
+        COPY4args opcopy;
+    case OP_COPY_NOTIFY:
+        COPY_NOTIFY4args opcopy_notify;
+    case OP_DEALLOCATE:
+        DEALLOCATE4args opdeallocate;
+    case OP_IO_ADVISE:
+        IO_ADVISE4args opio_advise;
+    case OP_LAYOUTERROR:
+        LAYOUTERROR4args oplayouterror;
+    case OP_LAYOUTSTATS:
+        LAYOUTSTATS4args oplayoutstats;
+    case OP_OFFLOAD_CANCEL:
+        OFFLOAD_CANCEL4args opoffload_cancel;
+    case OP_OFFLOAD_STATUS:
+        OFFLOAD_STATUS4args opoffload_status;
+    case OP_READ_PLUS:
+        READ_PLUS4args opread_plus;
+    case OP_SEEK:
+        SEEK4args opseek;
+    case OP_WRITE_SAME:
+        WRITE_SAME4args opwrite_same;
+    case OP_CLONE:
+        CLONE4args opclone;
 
     case OP_ILLEGAL:
         /* Illegal operation */
@@ -3159,6 +3677,7 @@ union nfs_resop4 switch (nfs_opnum4 resop){
     case OP_GETDEVICEINFO:
         GETDEVICEINFO4res opgetdeviceinfo;
     case OP_GETDEVICELIST:
+        /* Not used in NFSv4.2 */
         GETDEVICELIST4res opgetdevicelist;
     case OP_LAYOUTCOMMIT:
         LAYOUTCOMMIT4res oplayoutcommit;
@@ -3180,6 +3699,34 @@ union nfs_resop4 switch (nfs_opnum4 resop){
         DESTROY_CLIENTID4res opdestroy_clientid;
     case OP_RECLAIM_COMPLETE:
         RECLAIM_COMPLETE4res opreclaim_complete;
+
+    /* New to NFSv4.2 */
+    case OP_ALLOCATE:
+        ALLOCATE4res opallocate;
+    case OP_COPY:
+        COPY4res opcopy;
+    case OP_COPY_NOTIFY:
+        COPY_NOTIFY4res opcopy_notify;
+    case OP_DEALLOCATE:
+        DEALLOCATE4res opdeallocate;
+    case OP_IO_ADVISE:
+        IO_ADVISE4res opio_advise;
+    case OP_LAYOUTERROR:
+        LAYOUTERROR4res oplayouterror;
+    case OP_LAYOUTSTATS:
+        LAYOUTSTATS4res oplayoutstats;
+    case OP_OFFLOAD_CANCEL:
+        OFFLOAD_CANCEL4res opoffload_cancel;
+    case OP_OFFLOAD_STATUS:
+        OFFLOAD_STATUS4res opoffload_status;
+    case OP_READ_PLUS:
+        READ_PLUS4res opread_plus;
+    case OP_SEEK:
+        SEEK4res opseek;
+    case OP_WRITE_SAME:
+        WRITE_SAME4res opwrite_same;
+    case OP_CLONE:
+        CLONE4res opclone;
 
     case OP_ILLEGAL:
         /* Illegal operation */
@@ -3226,6 +3773,8 @@ enum nfs_cb_opnum4 {
     OP_CB_WANTS_CANCELLED       = 12,
     OP_CB_NOTIFY_LOCK           = 13,
     OP_CB_NOTIFY_DEVICEID       = 14,
+    /* Callback operations new to NFSv4.2 */
+    OP_CB_OFFLOAD               = 15,
     /* Illegal callback operation */
     OP_CB_ILLEGAL               = 10044
 };
@@ -3559,6 +4108,32 @@ struct CB_NOTIFY_DEVICEID4res {
     nfsstat4        status;
 };
 
+/*
+ * New to NFSv4.2
+ * ======================================================================
+ */
+
+/*
+ * CB_OFFLOAD: Report Results of an Asynchronous Operation
+ * ======================================================================
+ */
+union offload_info4 switch (nfsstat4 status) {
+    case NFS4_OK:
+        write_response4 resok;
+    default:
+        length4         count;
+};
+
+struct CB_OFFLOAD4args {
+    nfs_fh4         fh;
+    stateid4        stateid;
+    offload_info4   info;
+};
+
+struct CB_OFFLOAD4res {
+    nfsstat4        status;
+};
+
 /* OBJATTR: op=argop */
 /* STRFMT1: {1} */
 /* STRFMT2: {1} */
@@ -3590,8 +4165,13 @@ union nfs_cb_argop4 switch (nfs_cb_opnum4 argop) {
     case OP_CB_NOTIFY_DEVICEID:
         CB_NOTIFY_DEVICEID4args opcbnotify_deviceid;
 
+    /* New to NFSv4.2 */
+    case OP_CB_OFFLOAD:
+        CB_OFFLOAD4args opcboffload;
+
     case OP_CB_ILLEGAL:
         /* Illegal callback operation */
+        /* STRFMT2: CB_ILLEGAL4args() */
         void;
 };
 
@@ -3625,6 +4205,10 @@ union nfs_cb_resop4 switch (nfs_cb_opnum4 resop){
         CB_NOTIFY_LOCK4res opcbnotify_lock;
     case OP_CB_NOTIFY_DEVICEID:
         CB_NOTIFY_DEVICEID4res opcbnotify_deviceid;
+
+    /* New to NFSv4.2 */
+    case OP_CB_OFFLOAD:
+        CB_OFFLOAD4res opcboffload;
 
     case OP_CB_ILLEGAL:
         /* Illegal callback operation */
