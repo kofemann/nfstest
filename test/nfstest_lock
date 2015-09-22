@@ -1127,4 +1127,5 @@ try:
 except Exception:
     x.test(False, traceback.format_exc())
 finally:
+    x.cleanup()
     x.exit()
