@@ -594,4 +594,5 @@ except Exception:
 finally:
     # Unmount server on remote client
     x.clientobj.umount()
+    x.cleanup()
     x.exit()
