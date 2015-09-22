@@ -647,6 +647,8 @@ class TestUtil(NFSUtil):
         if self.nocleanup:
             # Nothing to clean up
             return
+        # Cleanup just once
+        self.nocleanup = True
 
         self.dprint('DBG7', "CLEANUP starts")
         if not self.keeptraces and (self.rmtraces or self._msg_count[FAIL] == 0):
@@ -677,6 +679,7 @@ class TestUtil(NFSUtil):
                         os.unlink(rfile)
             except:
                 pass
+        self.umount()
         self.dprint('DBG7', "CLEANUP done")
 
     def run_tests(self, **kwargs):
