@@ -1621,16 +1621,16 @@ class PosixTest(TestUtil):
 ################################################################################
 #  Entry point
 x = PosixTest(usage=USAGE, testnames=TESTNAMES, sid=SCRIPT_ID)
-x.setup(nfiles=2)
-
-x.umount()
-x.mount()
 
 try:
+    x.setup(nfiles=2)
+    x.umount()
+    x.mount()
+
     # Run all the tests
     x.run_tests()
 except Exception:
     x.test(False, traceback.format_exc())
 finally:
-    x.umount()
+    x.cleanup()
     x.exit()
