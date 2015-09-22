@@ -637,9 +637,10 @@ class DelegTest(TestUtil):
 ################################################################################
 #  Entry point
 x = DelegTest(usage=USAGE, testnames=TESTNAMES, sid=SCRIPT_ID)
-x.setup(nfiles=3)
 
 try:
+    x.setup(nfiles=3)
+
     # Run all the tests
     x.run_tests()
 except Exception:
@@ -648,4 +649,5 @@ finally:
     if x.clientobj != None:
         # Unmount server on remote client
         x.clientobj.umount()
+    x.cleanup()
     x.exit()
