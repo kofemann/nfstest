@@ -28,10 +28,15 @@ the whole file into memory.
 Packet layers supported:
     - ETHERNET II (RFC 894)
     - IP layer (supports IPv4 and IPv6)
+    - UDP layer
     - TCP layer
     - RPC layer
     - NFS v4.0
     - NFS v4.1 including pNFS file layouts
+    - NFS v4.2
+    - PORTMAP v2
+    - MOUNT v3
+    - NLM v4
 """
 import os
 import re
@@ -41,6 +46,7 @@ import token
 import struct
 import parser
 import symbol
+import binascii
 import nfstest_config as c
 from baseobj import BaseObj
 from packet.unpack import Unpack
@@ -66,6 +72,18 @@ _token_map = dict(token.tok_name.items() + symbol.sym_name.items())
 _nfsopmap = {'status': 1, 'tag': 1}
 # Match function map
 _match_func_map = dict(zip(PKT_layers,["self._match_%s"%x for x in PKT_layers]))
+
+def crc32(value):
+    """Convert string to its crc32 representation"""
+    return binascii.crc32(value) & 0xffffffff
+
+def crc16(value):
+    """Convert string to its crc16 representation"""
+    return binascii.crc_hqx(value, 0xa5a5) & 0xffff
+
+def hex(value):
+    """Convert string to its hex representation"""
+    return "0x" + value.encode("hex")
 
 class Header(BaseObj):
     # Class attributes
@@ -522,21 +540,37 @@ class Pktt(BaseObj, Unpack):
                Returns the following expression ready to be evaluated:
                expr = "62 in item.attributes"
         """
+        func = None
+        if opr != 'in':
+            regex = re.search(r"(\w+)\((.*)\)", lhs)
+            if regex:
+                lhs = regex.group(2)
+                func = regex.group(1)
+
         if rhs[:3] == 're(':
             # Regular expression, it must be in rhs
             rhs = "re.search" + rhs[2:]
             if opr == "!=":
                 rhs = "not " + rhs
-            expr = rhs[:-1] + ", str(" + obj + lhs +  "))"
+            LHS = rhs[:-1] + ", str(" + obj + lhs +  "))"
+            RHS = ""
+            opr = ""
         elif opr == 'in':
+            opr = " in "
             if self.inlhs:
-                expr = obj + lhs + ' ' + opr + ' ' + rhs
+                LHS = obj + lhs
+                RHS = rhs
             else:
-                expr = lhs + ' ' + opr + ' ' + obj + rhs
+                LHS = lhs
+                RHS = obj + rhs
         else:
-            expr = obj + lhs + opr + rhs
+            LHS = obj + lhs
+            RHS = rhs
 
-        return expr
+        if func is not None:
+            LHS = "%s(%s)" % (func, LHS)
+
+        return LHS + opr + RHS
 
     def _match(self, layer, uargs):
         """Default match function."""
