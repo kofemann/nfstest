@@ -25,7 +25,7 @@ import packet.nfs.nfs4_const as const4
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '1.0'
+__version__   = '1.1'
 
 # NFSv4 operation priority for displaying purposes
 priority = {
@@ -38,13 +38,26 @@ priority = {
     const4.OP_CREATE           : 90,
     const4.OP_LAYOUTGET        : 85,
     const4.OP_LAYOUTRETURN     : 85,
+    const4.OP_LAYOUTERROR      : 85,
+    const4.OP_LAYOUTSTATS      : 85,
     const4.OP_GETDEVICEINFO    : 84,
+    const4.OP_OFFLOAD_STATUS   : 83,
+    const4.OP_OFFLOAD_CANCEL   : 83,
+    const4.OP_CLONE            : 82,
+    const4.OP_COPY             : 82,
+    const4.OP_COPY_NOTIFY      : 82,
     const4.OP_WRITE            : 80,
     const4.OP_READ             : 80,
+    const4.OP_READ_PLUS        : 80,
+    const4.OP_WRITE_SAME       : 80,
     const4.OP_COMMIT           : 80,
+    const4.OP_SEEK             : 75,
     const4.OP_LOCK             : 70,
     const4.OP_LOCKT            : 70,
     const4.OP_LOCKU            : 70,
+    const4.OP_ALLOCATE         : 65,
+    const4.OP_DEALLOCATE       : 65,
+    const4.OP_IO_ADVISE        : 65,
     const4.OP_LOOKUP           : 60,
     const4.OP_READDIR          : 55,
     const4.OP_RENAME           : 50,
