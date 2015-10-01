@@ -58,10 +58,11 @@ from optparse import OptionParser, IndentedHelpFormatter
 
 # Module constants
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.1'
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = '1.1'
 
+# Constants
 PASS = 0
 HEAD = 1
 INFO = 2
@@ -1022,7 +1023,30 @@ class TestUtil(NFSUtil):
         os.mkdir(self.absdir, mode)
         return self.dirname
 
-    def create_file(self, offset=0, size=None, dir=None, mode=None):
+    def write_data(self, fd, offset=0, size=None, pattern=None):
+        """Write data to the file given by the file descriptor
+
+           fd:
+               File descriptor
+           offset:
+               File offset where data will be written to [default: 0]
+           size:
+               Total number of bytes to write [default: --filesize option]
+           pattern:
+               Data pattern to write to the file [default: data_pattern default]
+        """
+        if size is None:
+            size = self.filesize
+
+        while size > 0:
+            # Write as much as wsize bytes per write call
+            dsize = min(self.wsize, size)
+            os.lseek(fd, offset, 0)
+            count = os.write(fd, self.data_pattern(offset, dsize, pattern))
+            size -= count
+            offset += count
+
+    def create_file(self, offset=0, size=None, dir=None, mode=None, **kwds):
         """Create a file starting to write at given offset with total size
            of written data given by the size option.
 
@@ -1034,6 +1058,8 @@ class TestUtil(NFSUtil):
                Create file under this directory
            mode:
                File permissions [default: use default OS permissions]
+           pattern:
+               Data pattern to write to the file [default: data_pattern default]
 
            Returns the file name created, the file name is also stored
            in the object attribute filename -- attribute absfile is also
@@ -1041,6 +1067,7 @@ class TestUtil(NFSUtil):
 
            File created is removed at object destruction.
         """
+        pattern = kwds.pop("pattern", None)
         self.get_filename(dir=dir)
         if size is None:
             size = self.filesize
@@ -1048,9 +1075,7 @@ class TestUtil(NFSUtil):
         self.dprint('DBG3', "Creating file [%s] %d@%d" % (self.absfile, size, offset))
         fd = os.open(self.absfile, os.O_WRONLY|os.O_CREAT|os.O_SYNC)
         try:
-            if offset:
-                os.lseek(fd, offset, 0)
-            os.write(fd, self.data_pattern(offset, size))
+            self.write_data(fd, offset, size, pattern)
         finally:
             os.close(fd)
         if mode != None:
