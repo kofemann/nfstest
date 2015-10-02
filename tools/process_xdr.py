@@ -24,7 +24,7 @@ from optparse import OptionParser, IndentedHelpFormatter
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.0"
+__version__   = "1.1"
 
 USAGE = """%prog [options] <xdrfile1.x> [<xdrfile2.x> ...]
 
@@ -176,7 +176,18 @@ using the following syntax:
         access4 = lambda unpack: Bitmap(unpack, const.nfs4_access, sep=",")
         For more information see packet.utils.
     TRY: 1
-        Add try/except block to object definition"""
+        Add try/except block to object definition
+
+Also, the following comment markers are processed. The marker must be in
+the first line of a multi-line comment:
+
+    __DESCRIPTION__
+        Description for the decoding module. If it is not given a default
+        description is used.
+    __CONST__
+        Description for the constants module. If it is not given a default
+        description is used. This marker is given within the same comment
+        starting with the __DESCRIPTION__ marker."""
 
 # Types to decode using unpack_int()
 int32_list = ["int"]
@@ -278,6 +289,8 @@ class XDRobject:
         # Copyright and module info constants
         self.copyright = None
         self.modconst  = None
+        self.description = None
+        self.desc_const  = None
 
         # Enum data list where each entry is a dictionary having the following keys:
         # deftype, defname, deftags, defcomm, enumlist
@@ -310,6 +323,7 @@ class XDRobject:
         # Input file
         self.xfile = xfile
         (self.bfile, ext) = os.path.splitext(self.xfile)
+        self.bname = os.path.basename(self.bfile)
         # Output file for python class objects
         self.pfile = self.bfile + ".py"
         # Output file for python constants and mapping dictionaries
@@ -630,15 +644,34 @@ class XDRobject:
                 self.old_comment = []
             if re.search(r"\*/", line):
                 # End of multi-line comment
-                if self.copyright is None:
-                    out = ""
-                    for ll in self.multi_comment:
-                        if len(ll) == 0 or ll[0] == "=":
-                            out += "#" + ll + "\n"
-                        else:
-                            out += "# " + ll + "\n"
-                    if re.search(r"Copyright .*\d\d\d\d", out):
-                        # Ignore any copyright comments in XDR file
+                if self.copyright is None or self.description is None:
+                    out = "\n".join(self.multi_comment)
+                    if re.search(r"(Copyright .*\d\d\d\d|__DESCRIPTION__)", out):
+                        # Ignore any copyright and description comments in XDR file
+                        if "__DESCRIPTION__" in self.multi_comment:
+                            while self.multi_comment.pop(0) != "__DESCRIPTION__":
+                                pass
+                            d_list = ['"""']
+                            while len(self.multi_comment) > 0:
+                                dline = self.multi_comment.pop(0)
+                                if dline == "__CONST__":
+                                    # The description of the decoding module
+                                    # ends on the start of the description for
+                                    # the constants module given by the
+                                    # __CONST__ marker
+                                    break
+                                d_list.append(dline)
+                            # Add description to decoding moule
+                            while d_list[-1] == "":
+                                d_list.pop()
+                            if len(d_list) > 1:
+                                self.description = "\n".join(d_list) + '\n"""\n'
+                            # Add description to constants moule
+                            d_list = ['"""'] + self.multi_comment
+                            while d_list[-1] == "":
+                                d_list.pop()
+                            if len(d_list) > 1:
+                                self.desc_const = "\n".join(d_list) + '\n"""\n'
                         self.multi_comment = []
                         self.old_comment = []
                 line = re.sub(r"\*/.*", "", line)
@@ -1296,6 +1329,8 @@ class XDRobject:
         self.copyright = None
         self.modconst  = None
         self.incomment = False
+        self.description = None
+        self.desc_const  = None
         for line in open(self.xfile, "r"):
             line = self.process_comments(line)
             if len(line) == 0:
@@ -1365,6 +1400,11 @@ class XDRobject:
             if self.copyright:
                 fd.write(self.copyright)
             fd.write(self.genstr)
+            if self.desc_const:
+                fd.write(self.desc_const)
+            else:
+                sname = re.sub(r"(\d)", r"v\1", self.bname.upper())
+                fd.write('"""\n%s constants module\n"""\n' % sname)
             if self.modconst:
                 fd.write("import nfstest_config as c\n")
                 fd.write(self.modconst)
@@ -1441,6 +1481,11 @@ class XDRobject:
         if self.copyright:
             fd.write(self.copyright)
         fd.write(self.genstr)
+        if self.description:
+            fd.write(self.description)
+        else:
+            sname = re.sub(r"(\d)", r"v\1", self.bname.upper())
+            fd.write('"""\n%s decoding module\n"""\n' % sname)
         import_list = []
         import_dict = {
             "packet.utils":  ["*"],
@@ -1460,7 +1505,7 @@ class XDRobject:
         if self.modconst:
             import_list.append("import nfstest_config as c\n")
         if self.enum_data:
-            import_list.append("import %s_const as const\n" % self.bfile)
+            import_list.append("import %s_const as const\n" % self.bname)
 
         for objpath in import_dict:
             import_str = "from %s import %s\n" % (objpath, ", ".join(import_dict[objpath]))
@@ -1482,6 +1527,8 @@ class XDRobject:
         need_newline = False
         self.copyright = None
         self.incomment = False
+        self.description = None
+        self.desc_const  = None
         for line in open(self.xfile, "r"):
             line = self.process_comments(line)
             if len(line) == 0:
