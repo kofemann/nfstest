@@ -36,7 +36,7 @@
  *   IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  *   ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * This code was derived from [draft-ietf-nfsv4-minorversion2-dot-x-38].
+ * This code was derived from [draft-ietf-nfsv4-minorversion2-dot-x-39].
  *
  *  Copyright (C) The IETF Trust (2007-2014)
  *  All Rights Reserved.
@@ -938,7 +938,7 @@ typedef fs_locations_info4      fattr4_fs_locations_info;
 /*
  * Attributes new to NFSv4.2
  */
-typedef length4                 fattr4_clone_blksize;
+typedef uint64_t                fattr4_clone_blksize;
 typedef uint64_t                fattr4_space_freed;
 typedef change_attr_type4       fattr4_change_attr_type;
 typedef sec_label4              fattr4_sec_label;
