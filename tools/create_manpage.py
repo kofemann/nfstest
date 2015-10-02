@@ -343,9 +343,20 @@ def create_manpage(src, dst):
     if classes:
         # Process all classes
         for line in classes:
-            m = re.search(r'^class\s+(\w+)(.*)', line)
+            # Class definition:
+            #     class classname(prototype)
+            # or a copy of different class:
+            #     classname = class sourceclass(prototype)
+            m = re.search(r'^((\w+)\s+=\s+)?class\s+(\w+)(.*)', line)
             if m:
-                class_list.append({'name': m.group(1), 'proto': m.group(2), 'body': [], 'res': []})
+                data = m.groups()
+                if data[1] is None:
+                    copy = None
+                    cls_name = data[2]
+                else:
+                    copy = data[2]
+                    cls_name = data[1]
+                class_list.append({'name': cls_name, 'proto': data[3], 'body': [], 'res': [], 'copy': copy})
             elif class_list:
                 class_list[-1]['body'].append(line)
         for cls in class_list:
@@ -465,7 +476,10 @@ def create_manpage(src, dst):
     if class_list:
         print >>fd, '.SH CLASSES'
         for cls in class_list:
-            if cls['body']:
+            if cls['body'] and cls['copy']:
+                print >>fd, ".SS class %s%s" % (cls['name'], cls['proto'])
+                print >>fd, "%s = class %s%s" % (cls['name'], cls['copy'], cls['proto'])
+            elif cls['body']:
                 print >>fd, ".SS class %s%s" % (cls['name'], cls['proto'])
                 for line in cls['body']:
                     print >>fd, line
