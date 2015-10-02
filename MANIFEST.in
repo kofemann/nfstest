@@ -1,6 +1,7 @@
 include README
 include COPYING
 include tools/create_manpage.py
+include tools/process_xdr.py
 include tools/__init__.py
 include howto-contribute.txt
 include man/*.gz
