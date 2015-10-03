@@ -96,6 +96,8 @@ def _lstrip(lines, br=False):
             if line[0] in ("'", '"'):
                 line = '\\t' + line
         ret.append(line)
+    while len(ret) and ret[-1] == "":
+        ret.pop()
     return ret
 
 def _process_func(lines):
@@ -190,7 +192,12 @@ def create_manpage(src, dst):
         proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         pstdout, pstderr = proc.communicate()
         proc.wait()
-        lines = re.sub('Total time:.*', '', pstdout).split('\n')
+        lines = re.sub('Total time:.*', '', pstdout)
+        lines = re.sub('TIME:\s+[0-9.]+s.*', '', lines)
+        lines = re.sub('0 tests \(0 passed, 0 failed\)', '', lines)
+        lines = lines.split('\n')
+        while lines[-1] == "":
+            lines.pop()
     else:
         absmodule = os.path.splitext(src)[0].replace('/', '.')
         cmd = "pydoc %s" % absmodule
