@@ -48,12 +48,17 @@ following:
     the whole file into memory.
 
     Packet layers supported:
-        - Ethernet II (RFC 894)
-        - IP layer (supports v4 only)
+        - ETHERNET II (RFC 894)
+        - IP layer (supports IPv4 and IPv6)
         - TCP layer
+        - UDP layer
         - RPC layer
         - NFS v4.0
         - NFS v4.1 including pNFS file layouts
+        - NFS v4.2
+        - PORTMAP v2
+        - MOUNT v3
+        - NLM v4
 
 
 Requirements and limitations
@@ -131,6 +136,24 @@ Tests
     Valid for NFSv4.0 and NFSv4.1 including pNFS
 
 
+    nfstest_lock - Locking tests
+    ============================
+    Basic locking tests verify that a lock is granted using various arguments
+    to fcntl. These include blocking and non-blocking locks, read or write locks,
+    where the file is opened either for reading, writing or both. It also checks
+    different ranges including limit conditions.
+
+    Non-overlapping tests verity that locks are granted on both the client under
+    test and a second process or a remote client when locking the same file.
+
+    Overlapping tests verity that a lock is granted on the client under test
+    and a second process or a remote client trying to lock the same file will
+    be denied if a non-blocking lock is issue or will be blocked if a blocking
+    lock is issue on the second process or remote client.
+
+    Valid for any version of NFS
+
+
     nfstest_pnfs - Basic pNFS functional tests
     ==========================================
     Verify basic pNFS functionality for file (both READ and WRITE), including
@@ -160,11 +183,22 @@ Tests
     Valid for any version of NFS
 
 
+Tools
+=====
+    nfstest_io - I/O tool
+    =====================
+    This I/O tool is used to create and manipulate files of different types.
+    The arguments allow running for a specified period of time as well as running
+    multiple processes. Each process modifies a single file at a time and the
+    file name space is different for each process so there are no collisions
+    between two different processes modifying the same file.
+
+
 Installation
 ============
 1. Install package using one of the following methods:
    a. Install the rpm as root:
-      # rpm -i NFStest-1.0.1-1.noarch.rpm
+      # rpm -i NFStest-2.0-1.noarch.rpm
 
       All manual pages are available
       $ man nfstest
@@ -173,17 +207,19 @@ Installation
       $ nfstest_pnfs --help
 
    b. Untar the tarball:
-      $ cd ~
-      $ tar -zxvf NFStest-1.0.1.tar.gz
+      Get the latest tarball from http://wiki.linux-nfs.org/wiki/index.php/NFStest
+
+      $ tar -zxvf NFStest-2.0.tar.gz
 
       The tests can run without installation, just set the python path
       environment variable:
-      $ export PYTHONPATH=~/NFStest-1.0.1
-      $ cd NFStest-1.0.1/test
+      $ cd NFStest-2.0
+      $ export PYTHONPATH=$PWD
+      $ cd test
       $ ./nfstest_pnfs --help
 
       Or install to standard python site-packages and executable directories:
-      $ cd ~/NFStest-1.0.1
+      $ cd ~/NFStest-2.0
       $ sudo python setup.py install
 
       All manual pages are available
@@ -198,8 +234,9 @@ Installation
 
       The tests can run without installation, just set the python path
       environment variable:
-      $ export PYTHONPATH=~/nfstest
-      $ cd nfstest/test
+      $ cd nfstest
+      $ export PYTHONPATH=$PWD
+      $ cd test
       $ ./nfstest_pnfs --help
 
       Or install to standard python site-packages and executable directories:
@@ -243,13 +280,17 @@ Run the tests
    The only required option is --server
    $ nfstest_dio --server 192.168.0.11
 
+   The only required option is --server but use the --client option
+   to run the conflicting lock tests
+   $ nfstest_lock --server 192.168.0.11 --client 192.168.0.20
+
    The only required option is --server
    $ nfstest_posix --server 192.168.0.11
 
 
 Useful options
 ==============
---help
+-h, --help
    All tests have this option to display usage information and options available
 
 --createlog
@@ -258,7 +299,7 @@ Useful options
 --keeptraces
    Do not remove any trace files at the end of execution
 
---verbose <none|opts|info|debug|all|intbitmask>
+-v, --verbose <none|opts|info|debug|all|intbitmask>
    Verbose level for info/debug messages
 
    Example:
@@ -316,4 +357,3 @@ Useful options
 --rpcdebug <flags>
    Set RPC kernel debug flags and save log messages. Use any of the valid flags
    given for module 'rpc' on command 'rpcdebug'.
-
