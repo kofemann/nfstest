@@ -333,23 +333,26 @@ def create_manpage(src, dst):
             installation.append(line)
         elif section == 'options':
             if progname == 'NFStest':
-                optsname = re.search(r'^(--.+)', line)
+                optsname = re.search(r'^(((-\w(\s+\S+)?),\s+)?--.+)', line)
             else:
-                optsname = re.search(r'^\s*(.*--(\S+))\s*(.*)', line)
+                optsname = re.search(r'^\s*(((-\w(\s+\S+)?),\s+)?--(\S+))\s*(.*)', line)
             if optsname:
                 if option:
                     options.append(option)
                     option = {}
                 option['name'] = optsname.group(1)
-                if len(optsname.groups()) >= 3 and len(optsname.group(3)) > 0:
-                    option['desc'] = [optsname.group(3)]
+                if len(optsname.groups()) >= 6 and len(optsname.group(6)) > 0:
+                    option['desc'] = [optsname.group(6)]
                 else:
                     option['desc'] = []
             else:
                 if progname == 'NFStest':
                     option['desc'].append(line)
                 else:
-                    option['desc'].append(line.lstrip())
+                    if line[0:4] == "    ":
+                        option['desc'].append(line.lstrip())
+                    else:
+                        option['group'] = line.lstrip()
         elif section == 'class':
             line = line.lstrip().lstrip('|')
             classes.append(line)
@@ -520,9 +523,11 @@ def create_manpage(src, dst):
     if options and progname != 'NFStest':
         print >>fd, '.SH OPTIONS'
         for option in options:
-            print >>fd, '.TP'
-            print >>fd, '.B %s' % option['name']
+            print >>fd, '.IP "%s"' % option['name']
             print >>fd, '\n'.join(_lstrip(option['desc']))
+            if option.get('group'):
+                print >>fd, '\n.SS %s\n' % option['group']
+
     if tests:
         print >>fd, '.SH TESTS'
         for test in tests:
@@ -548,8 +553,7 @@ def create_manpage(src, dst):
     if options and progname == 'NFStest':
         print >>fd, '.SH USEFUL OPTIONS'
         for option in options:
-            print >>fd, '.TP'
-            print >>fd, '.B %s' % option['name']
+            print >>fd, '.IP "%s"' % option['name']
             print >>fd, '\n'.join(_lstrip(option['desc']))
     if notes:
         print >>fd, '.SH NOTES'
