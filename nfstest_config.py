@@ -152,7 +152,7 @@ NFSTEST_ALLMODS = [
 
 NFSTEST_MAN1  = _get_manpages(['README'], NFSTEST_MANDIR, 1)
 NFSTEST_MAN1 += _get_manpages(NFSTEST_SCRIPTS, NFSTEST_MANDIR, 1)
-NFSTEST_MAN1 += _get_manpages(NFSTEST_ALLMODS, NFSTEST_MANDIR, 1, mod=True)
+NFSTEST_MAN3  = _get_manpages(NFSTEST_ALLMODS, NFSTEST_MANDIR, 3, mod=True)
 NFSTEST_MODULES = ['baseobj', 'formatstr', 'nfstest_config']
 NFSTEST_PACKAGES = [
     'nfstest',

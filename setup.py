@@ -53,5 +53,6 @@ setup(
     data_files = [
         # Man pages for scripts
         (os.path.join(c.NFSTEST_USRMAN, 'man1'), c.NFSTEST_MAN1),
+        (os.path.join(c.NFSTEST_USRMAN, 'man3'), c.NFSTEST_MAN3),
     ],
 )
