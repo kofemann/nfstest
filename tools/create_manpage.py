@@ -147,6 +147,8 @@ def create_manpage(src, dst):
     func_list = []
     test = {}
     tests = []
+    tool = {}
+    tools = []
     option = {}
     options = []
     section = ''
@@ -227,6 +229,9 @@ def create_manpage(src, dst):
             continue
         elif re.search(r'^Tests', line):
             section = 'tests'
+            continue
+        elif re.search(r'^Tools', line):
+            section = 'tools'
             continue
         elif re.search(r'^Installation', line):
             section = 'installation'
@@ -309,6 +314,21 @@ def create_manpage(src, dst):
                 test['desc'] = []
             else:
                 test['desc'].append(line)
+        elif section == 'tools':
+            if progname == 'NFStest':
+                if re.search(r'^\s*=+', line):
+                    continue
+                toolname = re.search(r'\s*(\w+)\s+-', line)
+            else:
+                toolname = re.search(r'\s*(.*):$', line)
+            if toolname:
+                if tool:
+                    tools.append(tool)
+                    tool = {}
+                tool['name'] = toolname.group(1)
+                tool['desc'] = []
+            else:
+                tool['desc'].append(line)
         elif section == 'installation':
             installation.append(line)
         elif section == 'options':
@@ -345,6 +365,9 @@ def create_manpage(src, dst):
     if test and section != 'tests':
         tests.append(test)
         test = {}
+    if tool and section != 'tests':
+        tools.append(tool)
+        tool = {}
 
     class_list = []
     if classes:
@@ -503,9 +526,16 @@ def create_manpage(src, dst):
     if tests:
         print >>fd, '.SH TESTS'
         for test in tests:
-            #print >>fd, '.TP'
-            print >>fd, '.SS %s' % test['name']
+            print >>fd, '.SS %s\n.nf' % test['name']
             print >>fd, '\n'.join(_lstrip(test['desc']))
+            print >>fd, '.fi'
+
+    if tools:
+        print >>fd, '.SH TOOLS'
+        for tool in tools:
+            print >>fd, '.SS %s\n.nf' % tool['name']
+            print >>fd, '\n'.join(_lstrip(tool['desc']))
+            print >>fd, '.fi'
 
     if installation:
         print >>fd, '.SH INSTALLATION'
