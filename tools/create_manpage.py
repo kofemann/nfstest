@@ -412,12 +412,11 @@ def create_manpage(src, dst):
                 elif re.search(r'^(Static )?[mM]ethods defined here:', line):
                     body += _process_func(method_desc)
                     method_desc = []
-                    body.append('.P\n.B %s\n.br\n%s' % (line, '-' * len(line)))
+                    body.append('.P\n.B %s\n%s' % (line, '-' * len(line)))
                     in_methods = True
                 elif in_methods and re.search(r'^\w+(\s+=\s+\w+)?\(', line):
                     body += _process_func(method_desc)
                     method_desc = []
-                    body.append('.TP')
                     body.append('.B %s' % line)
                 elif in_methods:
                     method_desc.append(line)
@@ -458,16 +457,19 @@ def create_manpage(src, dst):
     is_local_function = False
     for line in _lstrip(func_list):
         regex = re.search(r'(\w+)\((.*)\)', line)
+        if not regex:
+            regex = re.search(r'(\w+)\s+(lambda)\s+(.*)', line)
         if regex:
             data = regex.groups()
+            if len(data) == 3:
+                line = "%s(%s)" % (data[0], data[2])
             is_local_function = False
             functions += _process_func(func_desc)
             func_desc = []
             if data[1] != "..." or data[0] not in mod_funcs:
                 # Only include functions defined locally,
                 # do not include any function from imported modules
-                functions.append('.TP')
-                functions.append('.B %s' % line)
+                functions.append('.SS %s' % line)
                 is_local_function = True
         elif is_local_function:
             func_desc.append(line)
