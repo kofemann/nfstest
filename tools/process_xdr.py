@@ -1611,7 +1611,8 @@ class XDRobject:
                     if defname == "bool":
                         # Rename "bool" definition
                         defname = "nfs_bool"
-                    out = "class %s(Enum):\n    _enumdict = const.%s" % (defname, defname)
+                    objdesc = '    """enum %s"""\n    ' % defname
+                    out = "class %s(Enum):\n%s_enumdict = const.%s" % (defname, objdesc, defname)
                     mcommstr, incommstr = self.get_comments(defcomments, out, "", "", newobj=True)
                     if len(mcommstr):
                         fd.write(mcommstr)
