@@ -513,11 +513,12 @@ def create_manpage(src, dst):
         for cls in class_list:
             if cls['body'] and cls['copy']:
                 print >>fd, ".SS class %s%s" % (cls['name'], cls['proto'])
-                print >>fd, "%s = class %s%s" % (cls['name'], cls['copy'], cls['proto'])
+                print >>fd, ".nf\n%s = class %s%s\n.fi" % (cls['name'], cls['copy'], cls['proto'])
             elif cls['body']:
-                print >>fd, ".SS class %s%s" % (cls['name'], cls['proto'])
+                print >>fd, ".SS class %s%s\n.nf" % (cls['name'], cls['proto'])
                 for line in cls['body']:
                     print >>fd, line
+                print >>fd, ".fi"
     if functions:
         print >>fd, '.SH FUNCTIONS'
         for line in functions:
