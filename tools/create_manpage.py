@@ -61,7 +61,7 @@ def _get_see_also(src, modules, local_mods):
             if src in (osrc, osrcpy):
                 continue
             mangz = c.NFSTEST_MAN_MAP.get(osrc) or c.NFSTEST_MAN_MAP.get(osrcpy)
-            obj = "\\fB%s\\fR" % os.path.split(item)[1]
+            obj = ".BR %s" % os.path.split(item)[1]
             if mangz:
                 m = re.search(r'([^\.]+)\.gz$', mangz)
                 if m:
@@ -69,7 +69,7 @@ def _get_see_also(src, modules, local_mods):
                     parent_objs[obj] = 1
     objs = parent_objs.keys()
     objs.sort()
-    return ', '.join(objs)
+    return ',\n'.join(objs)
 
 def _check_script(script):
     fd = open(script, 'r')
@@ -520,7 +520,7 @@ def create_manpage(src, dst):
 
     if len(see_also) > 0:
         print >>fd, '.SH SEE ALSO'
-        print >>fd, see_also
+        print >>fd, see_also + "\n"
 
     print >>fd, '.SH BUGS'
     if len(bugs) > 0:
