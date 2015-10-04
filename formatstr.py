@@ -30,7 +30,11 @@ from binascii import crc32,crc_hqx
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '1.0.2'
+__version__   = '1.1'
+
+# Display variables
+CRC16 = True
+CRC32 = True
 
 # Maximum integer map
 _max_map = {
@@ -157,11 +161,15 @@ class FormatStr(Formatter):
                     xprefix = "0x"
                 return xprefix + value.encode("hex")
             elif fmt == "crc32":
-                # CRC32 format
-                return "{0:#010x}".format(crc32(value) & 0xffffffff)
+                if CRC32:
+                    return "{0:#010x}".format(crc32(value) & 0xffffffff)
+                else:
+                    return str(value)
             elif fmt == "crc16":
-                # CRC16 format
-                return "{0:#06x}".format(crc_hqx(value, 0xa5a5) & 0xffff)
+                if CRC16:
+                    return "{0:#06x}".format(crc_hqx(value, 0xa5a5) & 0xffff)
+                else:
+                    return str(value)
             elif xmod == "@":
                 # Format {0:@starindex[,endindex]} is like value[starindex:endindex]
                 #   {0:@3} is like value[3:]
