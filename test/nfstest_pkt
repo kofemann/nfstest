@@ -1,0 +1,322 @@
+#!/usr/bin/env python
+#===============================================================================
+# Copyright 2014 NetApp, Inc. All Rights Reserved,
+# contribution by Jorge Mora <mora@netapp.com>
+#
+# This program is free software; you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation; either version 2 of the License, or (at your option) any later
+# version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+#===============================================================================
+import os
+import re
+import sys
+import formatstr
+import packet.utils as utils
+from packet.pktt import Pktt
+from optparse import OptionParser,OptionGroup,IndentedHelpFormatter
+
+# Module constants
+__author__    = "Jorge Mora (mora@netapp.com)"
+__copyright__ = "Copyright (C) 2014 NetApp, Inc."
+__license__   = "GPL v2"
+__version__   = "1.0"
+
+USAGE = """%prog [options] <trace1.cap> [<trace2.cap> ...]
+
+Packet trace decoder
+====================
+Decode and display all packets in the packet trace file(s) given.
+The match option gives the ability to search for specific packets within
+the packet trace file. Other options allow displaying of their corresponding
+call or reply when only one or the other is matched. Only a range of packets
+can be displayed if the start and/or end options are used.
+
+There are three levels of verbosity in which they are specified using
+a bitmap, where the most significant bit gives a more verbose output.
+Verbose level 1 is used as a default where each packet is displayed
+condensed to one line using the last layer of the packet as the main output.
+By default only the NFS packets (NFS, MOUNT, NLM, etc.) are displayed.
+
+The packet trace files are processed either serially or in parallel.
+The packets are displayed using their timestamps so they are always
+displayed in the correct order even if the files given are out of order.
+If the packet traces were captured one after the other the packets
+are displayed serially, first the packets of the first file according
+to their timestamps, then the second and so forth. If the packet traces
+were captured at the same time on multiple clients the packets are
+displayed in parallel, packets are interleaved from all the files when
+displayed again according to their timestamps.
+
+Note:
+When using the --call option, a packet call can be displayed out of order
+if the call is not matched explicitly but its reply is matched so its
+corresponding call is displayed right before the reply.
+
+Examples:
+    # Display all NFS packets (one line per packet)
+    # Display only the NFS packets by default.
+    # Default for --verbose option is 1 -- one line per packet
+    $ %prog /tmp/trace.cap
+
+    # Display all NFS packets (one line per layer)
+    $ %prog -v 2 /tmp/trace.cap
+
+    # Display all NFS packets (real verbose, all items in each layer are displayed)
+    $ %prog -v 4 /tmp/trace.cap
+
+    # Display all NFS packets (display both verbose level 1 and 2)
+    $ %prog -v 3 /tmp/trace.cap
+
+    # Display all TCP packets (this will display all RPC and NFS packets as well)
+    $ %prog -l tcp /tmp/trace.cap
+
+    # Display all packets
+    $ %prog -l all /tmp/trace.cap
+
+    # Display all NFS, NLM, MOUNT and PORTMAP packets
+    $ %prog -l nfs,nlm,mount,portmap /tmp/trace.cap
+
+    # Display packets 100 through 199
+    $ %prog -s 100 -e 200 -l all /tmp/trace.cap
+
+    # Display all NFS packets with non-zero status
+    $ %prog -m "nfs.status != 0" /tmp/trace.cap
+
+    # Display all NFSv4 WRITE packets
+    $ %prog -m "rpc.version == 4 and nfs.op == 38" /tmp/trace.cap
+
+    # Display all NFSv4 WRITE calls
+    $ %prog -m "rpc.version == 4 and nfs.argop == 38" /tmp/trace.cap
+
+    # Display all NFS packets having a file name as f00000001 (OPEN, LOOKUP, etc.)
+    # including their replies
+    $ %prog -r -m "nfs.name == 'f00000001'" /tmp/trace.cap
+
+    # Display all NFS packets with non-zero status including their respective calls
+    $ %prog -c -m "nfs.status != 0" /tmp/trace.cap
+    $ %prog -d "pkt_call,pkt" -m "nfs.status != 0" /tmp/trace.cap
+
+    # Display all TCP packets (just the TCP layer)
+    $ %prog -d "pkt.tcp" -l tcp /tmp/trace.cap
+
+    # Display all NFS file handles
+    $ %prog -d "pkt.NFSop.fh" -m "len(nfs.fh) > 0" /tmp/trace.cap
+
+    # Display all RPC packets including the record infomation (packet number, timestamp, etc.)
+    # For verbose level 1 (default) the "," separator will be converted to a
+    # space if all items are only pkt(.*)? or pkt_call(.*)?
+    $ %prog -d "pkt.record,pkt.rpc" -l rpc /tmp/trace.cap
+
+    # Display all RPC packets including the record infomation (packet number, timestamp, etc.)
+    # For verbose level 2 the "," separator will be converted to a new line if
+    # all items are only pkt(.*)? or pkt_call(.*)?
+    $ %prog -v 2 -d "pkt.record,pkt.rpc" -l rpc /tmp/trace.cap
+
+    # Display all RPC packets including the record infomation (packet number, timestamp, etc.)
+    # using the given display format
+    $ %prog -d ">>> record: pkt.record   >>> rpc: pkt.rpc" -l rpc /tmp/trace.cap
+
+    # Display all packets truncating all strings to 100 bytes
+    # This is useful when some packets are very large and there
+    # is no need to display all the data
+    $ %prog --strsize 100 -v 2 -l all /tmp/trace.cap
+
+    # Display all NFSv4 packets displaying the main operation of the compound
+    # e.g., display "WRITE" instead of "SEQUENCE;PUTFH;WRITE"
+    $ %prog --nfs-mainop 1 -l nfs /tmp/trace.cap
+
+    # Have all CRC16 strings displayed as plain strings
+    # e.g., display unformatted state ids
+    $ %prog --crc16 0 /tmp/trace.cap
+
+    # Have all CRC32 strings displayed as plain strings
+    # e.g., display unformatted file handles
+    $ %prog --crc32 0 /tmp/trace.cap
+
+    # Display packets using India time zone
+    $ %prog --tz "UTC-5:30" /tmp/trace.cap
+    $ %prog --tz "Asia/Kolkata" /tmp/trace.cap
+
+    # Display all packets for all trace files given
+    # The packets are displayed in order using their timestamps
+    $ %prog trace1.cap trace2.cap trace3.cap"""
+
+# Command line options
+opts = OptionParser(USAGE, formatter = IndentedHelpFormatter(2, 25), version = "%prog " + __version__)
+vhelp  = "Verbose level bitmask [default: %default]. "
+vhelp += " bitmap 0x01: one line per packet. "
+vhelp += " bitmap 0x02: one line per layer. "
+vhelp += " bitmap 0x04: real verbose. "
+opts.add_option("-v", "--verbose", type="int", default=1, help=vhelp)
+lhelp  = "Layers to display [default: '%default']. "
+lhelp += "Valid layers: ethernet, ip, tcp, udp, rpc, nfs, nlm, mount, portmap"
+opts.add_option("-l", "--layers", default="nfs,nlm,mount,portmap", help=lhelp)
+shelp = "Start index [default: %default]"
+opts.add_option("-s", "--start", type="int", default=0, help=shelp)
+ehelp = "End index [default: %default]"
+opts.add_option("-e", "--end", type="int", default=0, help=ehelp)
+mhelp = "Match string [default: %default]"
+opts.add_option("-m", "--match", default="True", help=mhelp)
+chelp = "If matching a reply packet, include its coresponding call in the output"
+opts.add_option("-c", "--call", action="store_true", default=False, help=chelp)
+rhelp = "If matching a call packet, include its coresponding reply in the output"
+opts.add_option("-r", "--reply", action="store_true", default=False, help=rhelp)
+dhelp = "Print specific packet or part of a packet [default: %default]"
+opts.add_option("-d", "--display", default="pkt", help=dhelp)
+hhelp = "Time zone to use to display timestamps"
+opts.add_option("-z", "--tz", default=None, help=hhelp)
+
+rpcdisp = OptionGroup(opts, "RPC display")
+hhelp = "Display RPC type [default: %default]"
+rpcdisp.add_option("--rpc-type", default=str(utils.RPC_type), help=hhelp)
+hhelp = "Display RPC load type (NFS, NLM, etc.) [default: %default]"
+rpcdisp.add_option("--rpc-load", default=str(utils.RPC_load), help=hhelp)
+hhelp = "Display RPC load version [default: %default]"
+rpcdisp.add_option("--rpc-ver", default=str(utils.RPC_ver), help=hhelp)
+hhelp = "Display RPC xid [default: %default]"
+rpcdisp.add_option("--rpc-xid", default=str(utils.RPC_xid), help=hhelp)
+opts.add_option_group(rpcdisp)
+
+pktdisp = OptionGroup(opts, "Packet display")
+hhelp = "Display NFSv4 main operation only [default: %default]"
+pktdisp.add_option("--nfs-mainop", default=str(utils.NFS_mainop), help=hhelp)
+hhelp = "Display RPC payload body [default: %default]"
+pktdisp.add_option("--load-body", default=str(utils.LOAD_body), help=hhelp)
+hhelp = "Display CRC16 encoded strings [default: %default]"
+pktdisp.add_option("--crc16", default=str(formatstr.CRC16), help=hhelp)
+hhelp = "Display CRC32 encoded strings [default: %default]"
+pktdisp.add_option("--crc32", default=str(formatstr.CRC32), help=hhelp)
+hhelp = "Truncate all strings to this size [default: %default]"
+pktdisp.add_option("--strsize", type="int", default=0, help=hhelp)
+opts.add_option_group(pktdisp)
+
+debug = OptionGroup(opts, "Debug")
+hhelp = "Set debug level messages"
+debug.add_option("--debug-level", default="", help=hhelp)
+opts.add_option_group(debug)
+
+# Run parse_args to get options
+vopts, args = opts.parse_args()
+
+if len(args) < 1:
+    opts.error("No packet trace file!")
+
+if vopts.tz is not None:
+    os.environ["TZ"] = vopts.tz
+
+allpkts = False
+if vopts.layers == "all":
+    allpkts = True
+layers = vopts.layers.split(",")
+
+utils.RPC_type     = eval(vopts.rpc_type)
+utils.RPC_load     = eval(vopts.rpc_load)
+utils.RPC_ver      = eval(vopts.rpc_ver)
+utils.RPC_xid      = eval(vopts.rpc_xid)
+utils.NFS_mainop   = eval(vopts.nfs_mainop)
+utils.LOAD_body    = eval(vopts.load_body)
+formatstr.CRC16    = eval(vopts.crc16)
+formatstr.CRC32    = eval(vopts.crc32)
+
+# Re-open stdout to set file descriptor to unbuffered
+sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
+
+if vopts.call:
+    vopts.display = "pkt_call,pkt"
+
+# Process the --display option
+dlist = []
+dobjonly = True
+dcommaonly = True
+if vopts.display != "pkt":
+    data = re.sub(r'"', '\\"', vopts.display)
+    data = eval('"' + data + '"')
+    mlist = re.split(r"\b(pkt(_call)?\b(\.[\.\w]+)?)", data)
+    if mlist[0] == "":
+        mlist.pop(0)
+    if mlist[-1] == "":
+        mlist.pop()
+    while mlist:
+        item = mlist.pop(0)
+        if re.search(r"^pkt(_call)?\b", item):
+            dlist.append([item, 1])
+            # Remove extra matches from nested regex
+            mlist.pop(0)
+            mlist.pop(0)
+            if item not in ["pkt", "pkt_call"]:
+                dobjonly = False
+        else:
+            dlist.append([item, 0])
+            if item != ",":
+                dcommaonly = False
+
+def display_pkt(vlevel, pkttobj):
+    """Display packet for given verbose level"""
+    pkt = pkttobj.pkt
+    if not vopts.verbose & vlevel:
+        return
+    level = 2
+    if vlevel == 0x01:
+        level = 1
+    pkttobj.debug_repr(level)
+
+    disp = str
+    if vlevel == 0x04:
+        disp = repr
+
+    rpctype = 0
+    if pkttobj.pkt == "rpc":
+        rpctype = pkttobj.pkt.rpc.type
+
+    if dlist:
+        slist = []
+        sep = ""
+        if dcommaonly:
+            if not dobjonly and vlevel == 0x01:
+                sep = " "
+            else:
+                sep = "\n"
+        for item in dlist:
+            if (rpctype == 0 or pkttobj.reply_matched) and item[0] == "pkt_call":
+                continue
+            if item[1]:
+                try:
+                    slist.append(disp(eval("pkttobj.%s" % item[0])))
+                except:
+                    pass
+            elif not dcommaonly:
+                slist.append(item[0])
+        out = sep.join(slist)
+    else:
+        out = disp(pkt)
+    print out
+
+################################################################################
+# Entry point
+pkttobj = Pktt(args)
+if vopts.start > 1:
+    pkttobj[vopts.start - 1]
+if vopts.strsize > 0:
+    pkttobj.strsize(vopts.strsize)
+if len(vopts.debug_level):
+    pkttobj.debug_level(vopts.debug_level)
+
+maxindex = None
+if vopts.end > 0:
+    maxindex = vopts.end
+
+while pkttobj.match(vopts.match, rewind=False, reply=vopts.reply, maxindex=maxindex):
+    pkt = pkttobj.pkt
+    if pkt.record.index >= vopts.start:
+        if allpkts or pkt in layers:
+            if vopts.verbose & 0x01:
+                display_pkt(0x01, pkttobj)
+            if vopts.verbose & 0x02:
+                display_pkt(0x02, pkttobj)
+            if vopts.verbose & 0x04:
+                display_pkt(0x04, pkttobj)

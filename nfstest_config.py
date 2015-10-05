@@ -108,6 +108,7 @@ NFSTEST_SCRIPTS = [
     'test/nfstest_dio',
     'test/nfstest_io',
     'test/nfstest_lock',
+    'test/nfstest_pkt',
     'test/nfstest_pnfs',
     'test/nfstest_posix',
 ]
