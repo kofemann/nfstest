@@ -3039,7 +3039,7 @@ struct RECLAIM_COMPLETE4res {
  * ALLOCATE: Reserve Space in A Region of a File
  * ======================================================================
  */
-/* STRFMT1: stid:{0} off:{1:umax64} len:{2:umax64} */
+/* STRFMT1: FH:{fh:crc32} stid:{0} off:{1:umax64} len:{2:umax64} */
 struct ALLOCATE4args {
     /* CURRENT_FH: file */
     stateid4        stateid;
@@ -3056,7 +3056,7 @@ struct ALLOCATE4res {
  * COPY: Initiate a server-side copy
  * ======================================================================
  */
-/* STRFMT1: src:(stid:{0} off:{2:umax64}) dst:(stid:{1} off:{3:umax64}) len:{4:umax64} */
+/* STRFMT1: FH:{fh:crc32} src:(stid:{0} off:{2:umax64}) dst:(stid:{1} off:{3:umax64}) len:{4:umax64} */
 struct COPY4args {
     /* SAVED_FH: source file */
     /* CURRENT_FH: destination file */
@@ -3104,7 +3104,7 @@ union COPY4res switch (nfsstat4 status) {
  * COPY_NOTIFY: Notify a Source Server of a Future Copy
  * ======================================================================
  */
-/* STRFMT1: stid:{0} {1} */
+/* STRFMT1: FH:{fh:crc32} stid:{0} {1} */
 struct COPY_NOTIFY4args {
     /* CURRENT_FH: source file */
     stateid4  stateid;
@@ -3130,7 +3130,7 @@ union COPY_NOTIFY4res switch (nfsstat4 status) {
  * DEALLOCATE: Unreserve Space in a Region of a File
  * ======================================================================
  */
-/* STRFMT1: stid:{0} off:{1:umax64} len:{2:umax64} */
+/* STRFMT1: FH:{fh:crc32} stid:{0} off:{1:umax64} len:{2:umax64} */
 struct DEALLOCATE4args {
     /* CURRENT_FH: file */
     stateid4  stateid;
@@ -3161,7 +3161,7 @@ enum IO_ADVISE_type4 {
     IO_ADVISE4_INIT_PROXIMITY          = 10
 };
 
-/* STRFMT1: stid:{0} off:{1:umax64} len:{2:umax64} hints:{3} */
+/* STRFMT1: FH:{fh:crc32} stid:{0} off:{1:umax64} len:{2:umax64} hints:{3} */
 struct IO_ADVISE4args {
     /* CURRENT_FH: file */
     stateid4        stateid;
@@ -3194,7 +3194,7 @@ struct device_error4 {
     nfs_opnum4      opnum;
 };
 
-/* STRFMT1: off:{0:umax64} len:{1:umax64} stid:{2} {3} */
+/* STRFMT1: FH:{fh:crc32} off:{0:umax64} len:{1:umax64} stid:{2} {3} */
 struct LAYOUTERROR4args {
     /* CURRENT_FH: file */
     offset4         offset;
@@ -3218,7 +3218,7 @@ struct io_info4 {
     uint64_t        bytes;
 };
 
-/* STRFMT1: off:{0:umax64} len:{1:umax64} stid:{2} */
+/* STRFMT1: FH:{fh:crc32} off:{0:umax64} len:{1:umax64} stid:{2} */
 struct LAYOUTSTATS4args {
     /* CURRENT_FH: file */
     offset4         offset;
@@ -3239,7 +3239,7 @@ struct LAYOUTSTATS4res {
  * OFFLOAD_CANCEL: Stop an Offloaded Operation
  * ======================================================================
  */
-/* STRFMT1: stid:{0} */
+/* STRFMT1: FH:{fh:crc32} stid:{0} */
 struct OFFLOAD_CANCEL4args {
     /* CURRENT_FH: file to cancel */
     stateid4        stateid;
@@ -3254,7 +3254,7 @@ struct OFFLOAD_CANCEL4res {
  * OFFLOAD_STATUS: Poll for Status of Asynchronous Operation
  * ======================================================================
  */
-/* STRFMT1: stid:{0} */
+/* STRFMT1: FH:{fh:crc32} stid:{0} */
 struct OFFLOAD_STATUS4args {
     /* CURRENT_FH: destination file */
     stateid4        stateid;
@@ -3278,7 +3278,7 @@ union OFFLOAD_STATUS4res switch (nfsstat4 status) {
  * READ_PLUS: READ Data or Holes from a File
  * ======================================================================
  */
-/* STRFMT1: stid:{0} off:{1:umax64} len:{2:umax32} */
+/* STRFMT1: FH:{fh:crc32} stid:{0} off:{1:umax64} len:{2:umax32} */
 struct READ_PLUS4args {
     /* CURRENT_FH: file */
     stateid4        stateid;
@@ -3334,7 +3334,7 @@ union READ_PLUS4res switch (nfsstat4 status) {
  * SEEK: Find the Next Data or Hole
  * ======================================================================
  */
-/* STRFMT1: stid:{0} off:{1:umax64} {2} */
+/* STRFMT1: FH:{fh:crc32} stid:{0} off:{1:umax64} {2} */
 struct SEEK4args {
     /* CURRENT_FH: file */
     stateid4        stateid;
@@ -3371,7 +3371,7 @@ struct app_data_block4 {
     opaque          pattern<>;
 };
 
-/* STRFMT1: stid:{0} {2} {1} */
+/* STRFMT1: FH:{fh:crc32} stid:{0} {2} {1} */
 struct WRITE_SAME4args {
     /* CURRENT_FH: file */
     stateid4        stateid;
@@ -3391,6 +3391,7 @@ union WRITE_SAME4res switch (nfsstat4 status) {
  * CLONE: Clone a Range of File Into Another File
  * ======================================================================
  */
+/* STRFMT1: FH:{fh:crc32} src:(stid:{0} off:{2:umax64}) dst:(stid:{1} off:{3:umax64}) len:{4:umax64} */
 struct CLONE4args {
     /* SAVED_FH: source file */
     /* CURRENT_FH: destination file */
@@ -3401,6 +3402,7 @@ struct CLONE4args {
     length4         count;
 };
 
+/* STRFMT1: "" */
 struct CLONE4res {
     nfsstat4        status;
 };
