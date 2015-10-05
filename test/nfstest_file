@@ -1,0 +1,377 @@
+#!/usr/bin/env python
+#===============================================================================
+# Copyright 2014 NetApp, Inc. All Rights Reserved,
+# contribution by Jorge Mora <mora@netapp.com>
+#
+# This program is free software; you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation; either version 2 of the License, or (at your option) any later
+# version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+#===============================================================================
+import os
+import re
+import sys
+import time
+import formatstr
+import packet.nfs.nfs3_const as nfs3
+import packet.nfs.nfs4_const as nfs4
+from packet.pktt import Pktt,crc32,crc16
+from optparse import OptionParser,OptionGroup,IndentedHelpFormatter
+
+# Module constants
+__author__    = "Jorge Mora (mora@netapp.com)"
+__copyright__ = "Copyright (C) 2014 NetApp, Inc."
+__license__   = "GPL v2"
+__version__   = "1.0"
+
+USAGE = """%prog [options] -p <filepath> <trace1.cap> [<trace2.cap> ...]
+
+Find all packets for a specific file
+====================================
+Display all NFS packets for the specified path. It takes a relative path,
+where it searches for each of the directory entries given in the path until
+it gets the file handle for the directory where the file is located. Once the
+directory file handle is found, a LOOKUP or OPEN/CREATE is searched for the
+given file name. If the file lookup or creation is found, all file handles
+and state ids associated with that file are searched and all packets found,
+including their respective replies are displayed.
+
+There are three levels of verbosity in which they are specified using
+a bitmap, where the most significant bit gives a more verbose output.
+Verbose level 1 is used as a default where each packet is displayed
+condensed to one line using the last layer of the packet as the main output.
+
+The packet trace files are processed either serially or in parallel.
+The packets are displayed using their timestamps so they are always
+displayed in the correct order even if the files given are out of order.
+If the packet traces were captured one after the other the packets
+are displayed serially, first the packets of the first file according
+to their timestamps, then the second and so forth. If the packet traces
+were captured at the same time on multiple clients the packets are
+displayed in parallel, packets are interleaved from all the files when
+displayed again according to their timestamps.
+
+Note:
+A packet call can be displayed out of order if the call is not matched
+by any of the file handles, state ids or names but its reply is matched
+so its corresponding call is displayed right before the reply.
+
+Examples:
+    # Find all packets for relative path:
+    %prog -p data/name_d_1/name_d_2/name_f_13 nested_dir_v3.cap
+
+    # Find all packets for relative path, starting with a directory file handle:
+    %prog -p DH:0x34ac5f28/name_d_1/name_d_2/name_f_13 nested_dir_v3.cap
+
+    # Find all packets for file, starting with a directory file handle:
+    %prog -p DH:0x0c35bb58/name_f_13 nested_dir_v3.cap
+
+    # Find all packets for file handle
+    %prog -p FH:0xc3f001b4 /tmp/trace.cap
+
+    # Find all packets for file, including all operations for the given state id
+    %prog -p f00000001 --stid 0x0fd4 /tmp/trace.cap
+
+    # Display all packets for file (one line per layer)
+    %prog -p f00000001 -v 2 /tmp/trace.cap
+
+    # Display all packets for file
+    # (real verbose, all items in each layer are displayed)
+    %prog -p f00000001 -v 4 /tmp/trace.cap
+
+    # Display all packets for file (display both verbose level 1 and 2)
+    %prog -p f00000001 -v 3 /tmp/trace.cap
+
+    # Display packets for file between packets 100 through 199
+    $ %prog -p f00000001 -s 100 -e 200 /tmp/trace.cap
+
+    # Display all packets truncating all strings to 100 bytes
+    # This is useful when some packets are very large and there
+    # is no need to display all the data
+    $ %prog -p f00000001 --strsize 100 -v 2 /tmp/trace.cap
+
+    # Display packets using India time zone
+    $ %prog -p f00000001 --tz "UTC-5:30" /tmp/trace.cap
+    $ %prog -p f00000001 --tz "Asia/Kolkata" /tmp/trace.cap
+
+    # Display all packets for file found in all trace files given
+    # The packets are displayed in order using their timestamps
+    $ %prog -p f00000001 trace1.cap trace2.cap trace3.cap"""
+
+# Command line options
+opts = OptionParser(USAGE, formatter = IndentedHelpFormatter(2, 25), version = "%prog " + __version__)
+hhelp = "Path relative to the mount point, the path can be specified by " + \
+        "its file handle 'FH:0xc3f001b4'. Also the relative path could " + \
+        "start with a directory file handle 'DH:0x0c35bb58/file_name'"
+opts.add_option("-p", "--path", default=None, help=hhelp)
+hhelp = "State id to include in the search"
+opts.add_option("--stid", default=None, help=hhelp)
+
+vhelp  = "Verbose level bitmask [default: %default]. "
+vhelp += " bitmap 0x01: one line per packet. "
+vhelp += " bitmap 0x02: one line per layer. "
+vhelp += " bitmap 0x04: real verbose. "
+opts.add_option("-v", "--verbose", type="int", default=1, help=vhelp)
+shelp = "Start index [default: %default]"
+opts.add_option("-s", "--start", type="int", default=0, help=shelp)
+ehelp = "End index [default: %default]"
+opts.add_option("-e", "--end", type="int", default=0, help=ehelp)
+hhelp = "Time zone to use to display timestamps"
+opts.add_option("-z", "--tz", default=None, help=hhelp)
+
+pktdisp = OptionGroup(opts, "Packet display")
+hhelp = "Display CRC16 encoded strings [default: %default]"
+pktdisp.add_option("--crc16", default=str(formatstr.CRC16), help=hhelp)
+hhelp = "Display CRC32 encoded strings [default: %default]"
+pktdisp.add_option("--crc32", default=str(formatstr.CRC32), help=hhelp)
+hhelp = "Truncate all strings to this size [default: %default]"
+pktdisp.add_option("--strsize", type="int", default=0, help=hhelp)
+opts.add_option_group(pktdisp)
+
+debug = OptionGroup(opts, "Debug")
+hhelp = "Set debug level messages"
+debug.add_option("--debug-level", default="", help=hhelp)
+opts.add_option_group(debug)
+
+# Run parse_args to get options
+vopts, args = opts.parse_args()
+
+if vopts.tz is not None:
+    os.environ["TZ"] = vopts.tz
+
+if vopts.path is None:
+    opts.error("No relative path is given")
+if len(args) < 1:
+    opts.error("No packet trace file!")
+
+# Re-open stdout to set file descriptor to unbuffered
+sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
+
+def atoi(text):
+    """Convert string to integer or just return the string if it
+       does not represent an integer
+    """
+    return int(text) if text.isdigit() else text
+
+def natural_keys(text):
+    """Natural sorting function"""
+    return [ atoi(c) for c in re.split('(\d+)', text) ]
+
+def display_pkt(vlevel, pkttobj, pkt):
+    """Display packet for given verbose level"""
+    if not vopts.verbose & vlevel:
+        return
+    level = 2
+    if vlevel == 0x01:
+        level = 1
+    pkttobj.debug_repr(level)
+
+    disp = str
+    if vlevel == 0x04:
+        disp = repr
+
+    print disp(pkt)
+
+def print_pkt(pkttobj, pkt):
+    """Display packet for all verbose levels specified in the verbose option"""
+    if vopts.verbose & 0x01:
+        display_pkt(0x01, pkttobj, pkt)
+    if vopts.verbose & 0x02:
+        display_pkt(0x02, pkttobj, pkt)
+    if vopts.verbose & 0x04:
+        display_pkt(0x04, pkttobj, pkt)
+
+formatstr.CRC16 = eval(vopts.crc16)
+formatstr.CRC32 = eval(vopts.crc32)
+
+dirfh = None
+dirfhcrc32 = None
+idirfh = None
+idirfhcrc32 = None
+
+if os.path.isdir(args[0]):
+    files = [os.path.join(sys.argv[1], x) for x in os.listdir(sys.argv[1])]
+else:
+    files = args
+
+relpath = vopts.path
+paths = relpath.split("/")
+fname = paths.pop()
+files.sort(key=natural_keys)
+
+if len(paths) and paths[0][:3] == "DH:":
+    value = eval(paths.pop(0)[3:])
+    if len(paths) == 0:
+        dirfhcrc32 = value
+    else:
+        idirfhcrc32 = value
+
+paths_c = list(paths)
+dir_paths = []
+fh_list = []
+stid_list = []
+pkttobj = None
+
+if vopts.stid is not None:
+    stid_list.append(eval(vopts.stid))
+
+if fname[:3] == "FH:":
+    fh_list = [eval(fname[3:])]
+    filestr = ""
+
+################################################################################
+# Entry point
+stime = time.time()
+pkttobj = Pktt(files)
+
+maxindex = None
+if vopts.end > 0:
+    maxindex = vopts.end
+if vopts.start > 1:
+    pkttobj[vopts.start - 1]
+if vopts.strsize > 0:
+    pkttobj.strsize(vopts.strsize)
+if len(vopts.debug_level):
+    pkttobj.debug_level(vopts.debug_level)
+
+if dirfhcrc32 is None:
+    # Search for file handle of directory where file is created
+    while len(paths_c):
+        path = paths_c[0]
+        if idirfhcrc32 is None:
+            dirmatch = ""
+        else:
+            dirmatch = " and crc32(nfs.fh) == %d" % idirfhcrc32
+        match_str = "nfs.name == '%s'%s" % (path, dirmatch)
+        while pkttobj.match(match_str, rewind=False, reply=True, maxindex=maxindex):
+            pkt = pkttobj.pkt
+            print_pkt(pkttobj, pkt)
+            if pkt.rpc.type == 1 and hasattr(pkt.nfs, "status") and pkt.nfs.status == 0:
+                # RPC reply
+                paths_c.pop(0)
+                dir_paths.append(path)
+                if pkt.rpc.version == 3:
+                    idirfh = pkt.nfs.fh
+                    idirfhcrc32 = crc32(idirfh)
+                else:
+                    for item in pkt.nfs.array:
+                        if item.resop == nfs4.OP_GETFH:
+                            idirfh = item.fh
+                            idirfhcrc32 = crc32(idirfh)
+                            break
+                if len(paths_c) == 0:
+                    # Last directory -- where file is created
+                    dirfh = idirfh
+                    dirfhcrc32 = idirfhcrc32
+                break
+        if pkttobj.pkt is None:
+            break
+
+# Clear list of outstanding xids
+pkttobj.clear_xid_list()
+isnfsv4 = False
+
+if not fh_list and (dirfhcrc32 is not None or len(paths) == 0):
+    # Search for file handle of file
+    if dirfhcrc32 is None:
+        filestr = "nfs.name == '%s'" % (fname)
+    else:
+        filestr = "(crc32(nfs.fh) == %d and nfs.name == '%s')" % (dirfhcrc32, fname)
+    while pkttobj.match(filestr, rewind=False, maxindex=maxindex):
+        pkt = pkttobj.pkt
+        if pkt:
+            print_pkt(pkttobj, pkt)
+            xid = pkt.rpc.xid
+            pkt = pkttobj.match("RPC.xid == %d" % xid, rewind=False, maxindex=maxindex)
+            if pkt:
+                print_pkt(pkttobj, pkt)
+                if pkt.nfs.status == 0:
+                    if pkt.rpc.version == 3:
+                        fh_list.append(crc32(pkt.nfs.fh))
+                    else:
+                        isnfsv4 = True
+                        for item in pkt.nfs.array:
+                            if item.resop == nfs4.OP_OPEN:
+                                stid_list.append(crc16(item.stateid.other))
+                                if item.delegation.deleg_type in [nfs4.OPEN_DELEGATE_READ, nfs4.OPEN_DELEGATE_WRITE]:
+                                    stid_list.append(crc16(item.delegation.stateid.other))
+                            elif item.resop == nfs4.OP_GETFH:
+                                fh_list.append(crc32(item.fh))
+                                break
+                    break
+
+teststid_xids = []
+if fh_list:
+    # Look for all packets for given stateid and file handle
+    fhstr = " or ".join(["crc32(nfs.fh) == %d" % fh for fh in fh_list])
+    stidstr = " or ".join(["crc16(nfs.stateid.other) == %d" % stid for stid in stid_list])
+    nlmstr = " or ".join(["crc32(nlm.fh) == %d" % fh for fh in fh_list])
+    if isnfsv4:
+        opstr = "(rpc.version > 3 and nfs.op == %d)" % nfs4.OP_TEST_STATEID
+    else:
+        opstr = ""
+    mstr = " or ".join(filter(None, [stidstr, fhstr, nlmstr, filestr, opstr]))
+    while pkttobj.match(mstr, rewind=False, reply=True, maxindex=maxindex):
+        pkt = pkttobj.pkt
+        xid = pkt.rpc.xid
+        if pkt.rpc.type == 1:
+            if xid in teststid_xids:
+                # This reply should not be displayed
+                teststid_xids.remove(xid)
+                continue
+            if not pkttobj.reply_matched:
+                # Display pkt_call for matching replies which the call was never matched
+                print_pkt(pkttobj, pkttobj.pkt_call)
+            if pkt.rpc.version == 4:
+                for item in pkt.nfs.array:
+                    if item.status != 0:
+                        continue
+                    if item.resop == nfs4.OP_OPEN:
+                        stid_list.append(crc16(item.stateid.other))
+                        if item.delegation.deleg_type in [nfs4.OPEN_DELEGATE_READ, nfs4.OPEN_DELEGATE_WRITE]:
+                            stid_list.append(crc16(item.delegation.stateid.other))
+                    elif item.resop == nfs4.OP_GETFH:
+                        fh_list.append(crc32(item.fh))
+                        break
+                    elif item.resop == nfs4.OP_LOCK:
+                        stid_list.append(crc16(item.stateid.other))
+                    elif item.resop == nfs4.OP_LAYOUTGET:
+                        stid_list.append(crc16(item.stateid.other))
+                        for layout in item.layout:
+                            fh_list.extend([crc32(fh) for fh in layout.content.body.fh_list])
+        else:
+            if pkt.rpc.version == 3:
+                if pkt.nfs.op == nfs3.NFSPROC3_RENAME:
+                    filestr = "(crc32(nfs.fh) == %d and nfs.name == '%s')" % (crc32(pkt.nfs.fh), pkt.nfs.newname)
+            elif pkt.rpc.version == 4:
+                mflag = False
+                for item in pkt.nfs.array:
+                    if item.op == nfs4.OP_RENAME:
+                        filestr = "(crc32(nfs.fh) == %d and nfs.name == '%s')" % (crc32(item.fh), item.newname)
+                        break
+                    elif item.op == nfs4.OP_TEST_STATEID:
+                        for stid in item.stateids:
+                            if crc16(stid) not in stid_list:
+                                # The matched TEST_STATEID does not have any stateids we are looking for
+                                teststid_xids.append(xid)
+                                mflag = True
+                                break
+                if mflag:
+                    continue
+        print_pkt(pkttobj, pkt)
+
+        # Make items in list unique
+        fh_list = list(set(fh_list))
+        stid_list = list(set(stid_list))
+
+        fhstr = " or ".join(["crc32(nfs.fh) == %d" % fh for fh in fh_list])
+        stidstr = " or ".join(["crc16(nfs.stateid.other) == %d" % stid for stid in stid_list])
+        nlmstr = " or ".join(["crc32(nlm.fh) == %d" % fh for fh in fh_list])
+        mstr = " or ".join(filter(None, [stidstr, fhstr, nlmstr, filestr, opstr]))
+
+dtime = time.time() - stime
+print "Duration: %d secs\n" % dtime
