@@ -30,13 +30,14 @@ from formatstr import FormatStr
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '1.0.5'
+__version__   = '1.0.6'
 
 # Module variables
 _dindent = ""
 _sindent = "    "
 _dlevel = 0
 _rlevel = 1
+_strsize = 0
 _logfh = None
 _tstamp = True
 _tstampfmt = "{0:date:%H:%M:%S.%q - }"
@@ -140,6 +141,9 @@ class BaseObj(object):
 
            # Set global indentation to 4 spaces for displaying objects
            x.sindent(4)
+
+           # Set global truncation to 64 for displaying string objects
+           x.strsize(64)
 
            # Do not display timestamp for dprint messages
            x.tstamp(enable=False)
@@ -323,6 +327,8 @@ class BaseObj(object):
                 out.append(str(key) + ": " + self._str_value(val))
             return '{' + ', '.join(out) + '}'
         elif type(value) == int or type(value) == long or type(value) == str:
+            if _strsize > 0 and type(value) == str:
+                return repr(value[:_strsize])
             return repr(value)
         else:
             return str(value)
@@ -491,6 +497,12 @@ class BaseObj(object):
         if indent is not None:
             _sindent = " " * indent
         return _sindent
+
+    @staticmethod
+    def strsize(size):
+        """Set global string truncation."""
+        global _strsize
+        _strsize = size
 
     @staticmethod
     def tstamp(enable=None, fmt=None):
