@@ -25,10 +25,10 @@ import packet.nfs.nfs4_const as const4
 __author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '1.1'
+__version__   = '1.2'
 
 # NFSv4 operation priority for displaying purposes
-priority = {
+NFSpriority = {
     const4.OP_EXCHANGE_ID      : 95,
     const4.OP_CREATE_SESSION   : 95,
     const4.OP_DESTROY_SESSION  : 95,
@@ -74,6 +74,23 @@ priority = {
     const4.OP_GETFH            : 10,
 }
 
+CBpriority = {
+    const4.OP_CB_RECALL               : 90,
+    const4.OP_CB_LAYOUTRECALL         : 90,
+    const4.OP_CB_NOTIFY               : 80,
+    const4.OP_CB_OFFLOAD              : 80,
+    const4.OP_CB_PUSH_DELEG           : 70,
+    const4.OP_CB_RECALL_ANY           : 60,
+    const4.OP_CB_RECALLABLE_OBJ_AVAIL : 60,
+    const4.OP_CB_RECALL_SLOT          : 50,
+    const4.OP_CB_WANTS_CANCELLED      : 40,
+    const4.OP_CB_NOTIFY_LOCK          : 30,
+    const4.OP_CB_NOTIFY_DEVICEID      : 20,
+    const4.OP_CB_GETATTR              : 10,
+    const4.OP_CB_SEQUENCE             : 0,
+    const4.OP_CB_ILLEGAL              : 0,
+}
+
 class NFSbase(utils.RPCload):
     """NFS Base object
 
@@ -86,11 +103,17 @@ class NFSbase(utils.RPCload):
         if rdebug == 1:
             # String format for verbose level 1
             out = self.rpc_str("NFS")
+            if rpc.program >= 0x40000000 and rpc.program < 0x60000000:
+                cb_flag  = True
+                priority = CBpriority
+            else:
+                cb_flag  = False
+                priority = NFSpriority
             if rpc.procedure == 0:
                 # NULL procedure
                 out += self.__class__.__name__
                 return out
-            elif rpc.version == 4:
+            elif rpc.version == 4 or cb_flag:
                 # NFS version 4.x
                 if not utils.NFS_mainop:
                     # Display all NFS operation names in the compound
