@@ -271,6 +271,7 @@ class TestUtil(NFSUtil):
         self.opts.add_option("-o", "--mtopts", default=self.mtopts, help="Mount options [default: '%default']")
         self.opts.add_option("-i", "--interface", default=None, help="Device interface [default: '%default']")
         self.opts.add_option("-v", "--verbose", default="none", help="Verbose level [default: '%default']")
+        self.opts.add_option("--tag", default="", help="Informational tag [default: '%default']")
         self.opts.add_option("--nocleanup", action="store_true", default=False, help="Do not cleanup")
         self.opts.add_option("--rmtraces", action="store_true", default=False, help="Remove trace files [default: remove trace files if no errors]")
         self.opts.add_option("--keeptraces", action="store_true", default=False, help="Do not remove any trace files [default: remove trace files if no errors]")
@@ -522,6 +523,10 @@ class TestUtil(NFSUtil):
                 line = "%s = %s" % (key, value)
                 self.dprint('OPTS', line)
             self.dprint('OPTS', "")
+
+            if len(opts.tag) > 0:
+                # Display tag information
+                self.dprint('INFO', "TAG: %s" % opts.tag)
 
             # Display system information
             self.dprint('INFO', "SYSTEM: %s" % " ".join(os.uname()))
