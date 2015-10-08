@@ -136,6 +136,17 @@ Tests
     Valid for NFSv4.0 and NFSv4.1 including pNFS
 
 
+    nfstest_interop - NFS interoperability tests
+    ============================================
+    Basic interoperability tests verify that a file written with different
+    versions of NFS is written correctly. The contents of the file are verified
+    by reading the file back using one of the NFS versions.
+
+    The tests append different data from different versions of NFS one at a
+    time then reads the contents of the file to verify it was written
+    correctly. This is done twice for each test.
+
+
     nfstest_lock - Locking tests
     ============================
     Basic locking tests verify that a lock is granted using various arguments
@@ -192,6 +203,24 @@ Tools
     multiple processes. Each process modifies a single file at a time and the
     file name space is different for each process so there are no collisions
     between two different processes modifying the same file.
+
+    nfstest_pkt - Packet trace decoder
+    ==================================
+    Decode and display all packets in the packet trace file(s) given.
+    The match option gives the ability to search for specific packets within
+    the packet trace file. Other options allow displaying of their corresponding
+    call or reply when only one or the other is matched. Only a range of packets
+    can be displayed if the start and/or end options are used.
+
+    nfstest_file - Find all packets for a specific file
+    ===================================================
+    Display all NFS packets for the specified path. It takes a relative path,
+    where it searches for each of the directory entries given in the path until
+    it gets the file handle for the directory where the file is located. Once the
+    directory file handle is found, a LOOKUP or OPEN/CREATE is searched for the
+    given file name. If the file lookup or creation is found, all file handles
+    and state ids associated with that file are searched and all packets found,
+    including their respective replies are displayed.
 
 
 Installation
@@ -280,12 +309,25 @@ Run the tests
    The only required option is --server
    $ nfstest_dio --server 192.168.0.11
 
+   The only required option is --server
+   $ nfstest_interop --server 192.168.0.11
+
    The only required option is --server but use the --client option
    to run the conflicting lock tests
    $ nfstest_lock --server 192.168.0.11 --client 192.168.0.20
 
    The only required option is --server
    $ nfstest_posix --server 192.168.0.11
+
+   The only required option is --datadir (-d)
+   $ nfstest_io -d /mnt/t/data -v all -n 10 -r 3600
+
+   Display all the NFS packets in the trace file
+   $ nfstest_pkt /tmp/trace.cap
+
+   Display all packets for the file name given
+   The only required option is --path (-p)
+   $ nfstest_file -p f00000001 /tmp/trace.cap
 
 
 Useful options
