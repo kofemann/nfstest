@@ -27,10 +27,10 @@ from string import Formatter
 from binascii import crc32,crc_hqx
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '1.1'
+__version__   = "1.2"
 
 # Display variables
 CRC16 = True
@@ -53,6 +53,58 @@ _max_map = {
         0xffffffffffffffff: "umax64",
     },
 }
+
+# Unit modifiers
+UNIT_NAME = 0
+UNIT_BYTE = "B"
+UNIT_SEP  = ""
+
+# Short name unit suffixes
+UNIT_SUFFIXES = ["","K","M","G","T","P","E","Z"]
+# Long name unit suffixes
+UNIT_SUFFIX_NAME = ["", "Kilo", "Mega", "Giga", "Tera", "Peta", "Exa", "Zetta"]
+
+def str_units(value, precision=2):
+    """Convert number to a string value with units
+
+       value:
+           Number to convert
+       precision:
+           Return string value with the following floating point
+           precision. By default no trailing zeros are returned
+           but if the precision is given as a negative number
+           the precision is enforced [default: 2]
+    """
+    # Get index to unit name
+    idx = 0
+    while value >= 1024:
+        idx += 1
+        value = value/1024.0
+
+    if precision > 0 and round(value,precision) == int(value):
+        # Remove trailing zeros when value is exact or within precision limits
+        precision = 0
+    if UNIT_NAME:
+        suffix = UNIT_SUFFIX_NAME[idx]
+    else:
+        suffix = UNIT_SUFFIXES[idx]
+    if len(suffix):
+        suffix += UNIT_BYTE
+    return "%.*f%s%s" % (abs(precision), value, UNIT_SEP, suffix)
+
+def int_units(value):
+    """Convert string value with units to an integer
+
+       value:
+           String to convert
+
+       Examples:
+           out = num_units("1MB") # out = 1048576
+    """
+    if type(value) == str:
+        v, m = re.search(r"([-\+\.\d]+)\s*(\w?)", value).groups()
+        value = int(float(v) * (1<<(10*UNIT_SUFFIXES.index(m.upper()))))
+    return value
 
 class FormatStr(Formatter):
     """String Formatter object
@@ -123,6 +175,15 @@ class FormatStr(Formatter):
            #         the max name is displayed, else the value is displayed
            out = x.format("{0:max32}", 0x7fffffff) # out = "max32"
            out = x.format("{0:max32}", 35)         # out = "35"
+
+           # Number extension to display the value with units
+           # Format: {0:units[.precision]}
+           # Output: convert value to a string with units, by default
+           #         precision=2 and all trailing zeros are removed.
+           #         To force the precision use a negative number.
+           out = x.format("{0:units}", 1024)    # out = "1KB"
+           out = x.format("{0:units.4}", 2000)  # out = "1.9531KB"
+           out = x.format("{0:units.-2}", 1024) # out = "1.00KB"
 
            # Date extension for int, long or float
            # Format: {0:date[:datefmt]}
@@ -202,6 +263,17 @@ class FormatStr(Formatter):
                 #         {0:max32}: value:0x7fffffff then "max32" is displayed
                 #         {0:max32}: value:35 then 35 is displayed
                 return _max_map[fmt].get(value, str(value))
+            elif fmt[:5] == "units":
+                # Format: {0:units[.precision]}
+                # Output: convert value to a string with units
+                #         (default precision is 2)
+                #         {0:units}: value:1024 then "1KB" is displayed
+                #         {0:units}: value:2000 then "1.95KB is displayed
+                fmts = fmt.split(".", 1)
+                uargs = {}
+                if len(fmts) == 2:
+                    uargs["precision"] = int(fmts[1])
+                return str_units(value, **uargs)
             elif fmt[:4] == "date":
                 # Format: {0:date[:datefmt]}
                 # Output: display value as a date
