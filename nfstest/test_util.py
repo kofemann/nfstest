@@ -47,20 +47,21 @@ import re
 import sys
 import time
 import fcntl
+import ctypes
 import struct
 import inspect
 import textwrap
-from host import Host
+from utils import *
 import nfstest_config as c
 from baseobj import BaseObj
 from nfs_util import NFSUtil
 from optparse import OptionParser, IndentedHelpFormatter
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '1.1'
+__version__   = "1.1"
 
 # Constants
 PASS = 0
@@ -180,6 +181,8 @@ class TestUtil(NFSUtil):
         self._reset_files()
         self._runtest = True
         self.createtraces = False
+        # List of sparse files
+        self.sparse_files = []
 
         for tid in _test_map:
             self._msg_count[tid] = 0
@@ -189,6 +192,10 @@ class TestUtil(NFSUtil):
         self.testopts = {}
         NFSUtil.__init__(self)
         self._init_options()
+
+        # Prototypes for libc functions
+        self.libc.fallocate.argtypes = ctypes.c_int, ctypes.c_int, ctypes.c_ulong, ctypes.c_ulong
+        self.libc.fallocate.restype  = ctypes.c_int
 
     def __del__(self):
         """Destructor
@@ -1065,24 +1072,72 @@ class TestUtil(NFSUtil):
                File permissions [default: use default OS permissions]
            pattern:
                Data pattern to write to the file [default: data_pattern default]
+           ftype:
+               File type to create [default: FTYPE_FILE]
+           hole_list:
+               List of offsets where each hole is located [default: None]
+           hole_size:
+               Size of each hole [default: --wsize option]
 
            Returns the file name created, the file name is also stored
            in the object attribute filename -- attribute absfile is also
            available as the absolute path of the file just created.
 
-           File created is removed at object destruction.
+           File created is removed at cleanup.
         """
-        pattern = kwds.pop("pattern", None)
+        pattern   = kwds.pop("pattern",   None)
+        ftype     = kwds.pop("ftype",     FTYPE_FILE)
+        hole_list = kwds.pop("hole_list", None)
+        hole_size = kwds.pop("hole_size", self.wsize)
+
         self.get_filename(dir=dir)
         if size is None:
             size = self.filesize
 
-        self.dprint('DBG3', "Creating file [%s] %d@%d" % (self.absfile, size, offset))
-        fd = os.open(self.absfile, os.O_WRONLY|os.O_CREAT|os.O_SYNC)
+        if ftype == FTYPE_FILE:
+            sfile = None
+            self.dprint('DBG3', "Creating file [%s] %d@%d" % (self.absfile, size, offset))
+        elif ftype in (FTYPE_SP_OFFSET, FTYPE_SP_ZERO, FTYPE_SP_DEALLOC):
+            self.dprint('DBG3', "Creating sparse file [%s] of size %d" % (self.absfile, size))
+            sfile = SparseFile(self.absfile, size, hole_list, hole_size)
+        else:
+            raise Exception("Unknown file type %d" % ftype)
+
+        # Create file
+        fd = os.open(self.absfile, os.O_WRONLY|os.O_CREAT|os.O_TRUNC)
+
         try:
-            self.write_data(fd, offset, size, pattern)
+            if ftype == FTYPE_FILE:
+                self.write_data(fd, offset, size, pattern)
+            elif ftype in [FTYPE_SP_OFFSET, FTYPE_SP_ZERO]:
+                for doffset, dsize, dtype in sfile.sparse_data:
+                    # Do not write anything to a hole for FTYPE_SP_OFFSET
+                    if dtype:
+                        self.dprint('DBG4', "    Writing data segment starting at offset %d with length %d" % (doffset, dsize))
+                        self.write_data(fd, doffset, dsize, pattern)
+                    elif ftype == FTYPE_SP_ZERO:
+                        # Write zeros to create the hole
+                        self.dprint('DBG4', "    Writing hole segment starting at offset %d with length %d" % (doffset, dsize))
+                        self.write_data(fd, doffset, dsize, "\x00")
+                if sfile.endhole and ftype == FTYPE_SP_OFFSET:
+                    # Extend the file to create the last hole
+                    os.ftruncate(fd, size)
+            elif ftype == FTYPE_SP_DEALLOC:
+                # Create regular file for FTYPE_SP_DEALLOC
+                self.dprint('DBG4', "    Writing data segment starting at offset %d with length %d" % (0, size))
+                self.write_data(fd, offset, size, pattern)
+
+                for doffset in hole_list:
+                    self.dprint('DBG4', "    Create hole starting at offset %d with length %d" % (doffset, hole_size))
+                    out = self.libc.fallocate(fd, SR_DEALLOCATE, doffset, hole_size)
+                    if out == -1:
+                        err = ctypes.get_errno()
+                        raise OSError(err, os.strerror(err), self.filename)
         finally:
             os.close(fd)
+
+        if sfile:
+            self.sparse_files.append(sfile)
         if mode != None:
             os.chmod(self.absfile, mode)
         return self.filename
