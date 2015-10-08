@@ -1,0 +1,372 @@
+#!/usr/bin/env python
+#===============================================================================
+# Copyright 2014 NetApp, Inc. All Rights Reserved,
+# contribution by Jorge Mora <mora@netapp.com>
+#
+# This program is free software; you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation; either version 2 of the License, or (at your option) any later
+# version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+#===============================================================================
+import os
+import inspect
+import traceback
+import nfstest_config as c
+from nfstest.test_util import TestUtil
+
+# Module constants
+__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
+__copyright__ = "Copyright (C) 2014 NetApp, Inc."
+__license__   = "GPL v2"
+__version__   = '1.0'
+
+USAGE = """%prog --server <server> [options]
+
+NFS interoperability tests
+==========================
+Basic interoperability tests verify that a file written with different
+versions of NFS is written correctly. The contents of the file are verified
+by reading the file back using one of the NFS versions.
+
+The tests append different data from different versions of NFS one at a
+time then reads the contents of the file to verify it was written
+correctly. This is done twice for each test:
+
+   1) Mount different versions of NFS (NFSv3, NFSv4, NFSv4.1)
+   2) Create empty file
+   3) Append data using NFSv3
+   4) Append data using NFSv4
+   5) Append data using NFSv4.1
+   6) Read file and verify contents are correct
+   7) Append data using NFSv3
+   8) Append data using NFSv4
+   9) Append data using NFSv4.1
+  10) Read file and verify contents are correct"""
+
+# Test script ID
+SCRIPT_ID = "INTEROP"
+
+TESTNAMES = []
+for index in xrange(1,46):
+    TESTNAMES.append("test%02d" % index)
+
+class InteropTest(TestUtil):
+    """InteropTest object
+
+       InteropTest() -> New test object
+
+       Usage:
+           x = InteropTest(testnames=['test01'])
+
+           # Run all the tests
+           x.run_tests()
+           x.exit()
+    """
+    def __init__(self, **kwargs):
+        """Constructor
+
+           Initialize object's private data.
+        """
+        TestUtil.__init__(self, **kwargs)
+        self.opts.version = "%prog " + __version__
+        shelp="Size of data to be written by each version of NFS [default: '%default']"
+        self.opts.add_option("--datasize", type="int", default=10, help=shelp)
+        self.scan_options()
+
+    def do_read(self, absfile, version):
+        """Read contents of given file"""
+        self.dprint('DBG1', "Read contents of %s using NFS%s" % (absfile, version))
+        file = open(absfile, "r")
+        return file.read()
+
+    def do_write(self, absfile, data, version):
+        """Append data to given file"""
+        self.dprint('DBG1', "Append data to %s using NFS%s" % (absfile, version))
+        fd = os.open(absfile, os.O_WRONLY|os.O_APPEND)
+        os.write(fd, data)
+        os.close(fd)
+        self.write_data += data
+
+    def do_test(self, version, vlist):
+        """NFS interoperability tests"""
+        self.test_group(getattr(self, inspect.stack()[1][3]).__doc__)
+        ofd = None
+        # Write data for each version of NFS
+        data_map = {
+            "v3"   : {"args":{"nfsversion":3,
+                              "mtpoint":self.mtpoint+"_v30"},
+                      "data":self.data_pattern(0, self.datasize, "A")},
+            "v4"   : {"args":{"nfsversion":4, "minorversion":0,
+                              "mtpoint":self.mtpoint+"_v40"},
+                      "data":self.data_pattern(0, self.datasize, "B")},
+            "v4.1" : {"args":{"nfsversion":4, "minorversion":1,
+                              "mtpoint":self.mtpoint+"_v41"},
+                      "data":self.data_pattern(0, self.datasize, "C")},
+        }
+        # Initialize expected data to be read
+        self.write_data = ""
+
+        try:
+            # Ignore options --nfsversion and --minorversion and use the
+            # version given for the specific test instead. This mount is
+            # used for reading the file after data has been written by
+            # other NFS versions.
+            mtargs = dict(data_map[version]["args"])
+            mtargs["mtpoint"] = self.mtpoint
+            self.trace_start("/tmp/0.trc")
+            self.mount(**mtargs)
+
+            # Get a new file name
+            testfile = self.get_filename()
+
+            # Create a Host object for every version of NFS to use to append
+            # data and create a list of arguments for each write
+            darray = []
+            for ver in vlist:
+                hostobj = self.create_host("", **data_map[ver]["args"])
+                hostobj.mount()
+                absfile = os.path.join(hostobj.mtdir, testfile)
+                darray.append([absfile, data_map[ver]["data"], ver])
+
+            if version != "v3":
+                # Open a different file to make sure the a READ delegation
+                # is granted for the file under test
+                rd_absfile = self.abspath(self.files[0])
+                self.dprint('DBG1', "Opening file %s using NFS%s so owner sticks around" % (rd_absfile, version))
+                ofd = os.open(rd_absfile, os.O_RDONLY)
+
+            self.dprint('DBG1', "Create empty file %s using NFS%s" % (self.absfile, version))
+            fd = os.open(self.absfile, os.O_WRONLY|os.O_CREAT)
+            os.close(fd)
+
+            # Append data for all versions of NFS given
+            for item in darray:
+                self.do_write(*item)
+
+            # Read data from a different mount point
+            read_data = self.do_read(self.absfile, version)
+            expr = read_data == self.write_data
+            self.test(expr, "Read data using NFS%s should be correct" % version)
+            if not expr:
+                self.dprint('DBG2', "Expected data: %s" % self.write_data)
+                self.dprint('DBG2', "Read data:     %s" % read_data)
+
+            # Append data for all versions of NFS given
+            for item in darray:
+                self.do_write(*item)
+
+            # Read data from a different mount point
+            read_data = self.do_read(self.absfile, version)
+            expr = read_data == self.write_data
+            self.test(expr, "Read data using NFS%s should be correct" % version)
+            if not expr:
+                self.dprint('DBG2', "Expected data: %s" % self.write_data)
+                self.dprint('DBG2', "Read data:     %s" % read_data)
+        except Exception:
+            self.test(False, traceback.format_exc())
+        finally:
+            if ofd is not None:
+                os.close(ofd)
+            # Umount and destroy Host objects
+            while self.clients:
+                self.clients.pop()
+            self.umount()
+            self.trace_stop()
+
+    def test01_test(self):
+        """Verify appending data with NFSv3 is correctly read using NFSv3"""
+        self.do_test("v3", ["v3"])
+
+    def test02_test(self):
+        """Verify appending data with NFSv3 is correctly read using NFSv4"""
+        self.do_test("v4", ["v3"])
+
+    def test03_test(self):
+        """Verify appending data with NFSv3 is correctly read using NFSv4.1"""
+        self.do_test("v4.1", ["v3"])
+
+    def test04_test(self):
+        """Verify appending data with NFSv4 is correctly read using NFSv3"""
+        self.do_test("v3", ["v4"])
+
+    def test05_test(self):
+        """Verify appending data with NFSv4 is correctly read using NFSv4"""
+        self.do_test("v4", ["v4"])
+
+    def test06_test(self):
+        """Verify appending data with NFSv4 is correctly read using NFSv4.1"""
+        self.do_test("v4.1", ["v4"])
+
+    def test07_test(self):
+        """Verify appending data with NFSv4.1 is correctly read using NFSv3"""
+        self.do_test("v3", ["v4.1"])
+
+    def test08_test(self):
+        """Verify appending data with NFSv4.1 is correctly read using NFSv4"""
+        self.do_test("v4", ["v4.1"])
+
+    def test09_test(self):
+        """Verify appending data with NFSv4.1 is correctly read using NFSv4.1"""
+        self.do_test("v4.1", ["v4.1"])
+
+    def test10_test(self):
+        """Verify appending data with NFSv3 and NFSv4 is correctly read using NFSv3"""
+        self.do_test("v3", ["v3", "v4"])
+
+    def test11_test(self):
+        """Verify appending data with NFSv3 and NFSv4 is correctly read using NFSv4"""
+        self.do_test("v4", ["v3", "v4"])
+
+    def test12_test(self):
+        """Verify appending data with NFSv3 and NFSv4 is correctly read using NFSv4.1"""
+        self.do_test("v4.1", ["v3", "v4"])
+
+    def test13_test(self):
+        """Verify appending data with NFSv4 and NFSv3 is correctly read using NFSv3"""
+        self.do_test("v3", ["v4", "v3"])
+
+    def test14_test(self):
+        """Verify appending data with NFSv4 and NFSv3 is correctly read using NFSv4"""
+        self.do_test("v4", ["v4", "v3"])
+
+    def test15_test(self):
+        """Verify appending data with NFSv4 and NFSv3 is correctly read using NFSv4.1"""
+        self.do_test("v4.1", ["v4", "v3"])
+
+    def test16_test(self):
+        """Verify appending data with NFSv3 and NFSv4.1 is correctly read using NFSv3"""
+        self.do_test("v3", ["v3", "v4.1"])
+
+    def test17_test(self):
+        """Verify appending data with NFSv3 and NFSv4.1 is correctly read using NFSv4"""
+        self.do_test("v4", ["v3", "v4.1"])
+
+    def test18_test(self):
+        """Verify appending data with NFSv3 and NFSv4.1 is correctly read using NFSv4.1"""
+        self.do_test("v4.1", ["v3", "v4.1"])
+
+    def test19_test(self):
+        """Verify appending data with NFSv4.1 and NFSv3 is correctly read using NFSv3"""
+        self.do_test("v3", ["v4.1", "v3"])
+
+    def test20_test(self):
+        """Verify appending data with NFSv4.1 and NFSv3 is correctly read using NFSv4"""
+        self.do_test("v4", ["v4.1", "v3"])
+
+    def test21_test(self):
+        """Verify appending data with NFSv4.1 and NFSv3 is correctly read using NFSv4.1"""
+        self.do_test("v4.1", ["v4.1", "v3"])
+
+    def test22_test(self):
+        """Verify appending data with NFSv4 and NFSv4.1 is correctly read using NFSv3"""
+        self.do_test("v3", ["v4", "v4.1"])
+
+    def test23_test(self):
+        """Verify appending data with NFSv4 and NFSv4.1 is correctly read using NFSv4"""
+        self.do_test("v4", ["v4", "v4.1"])
+
+    def test24_test(self):
+        """Verify appending data with NFSv4 and NFSv4.1 is correctly read using NFSv4.1"""
+        self.do_test("v4.1", ["v4", "v4.1"])
+
+    def test25_test(self):
+        """Verify appending data with NFSv4.1 and NFSv4 is correctly read using NFSv3"""
+        self.do_test("v3", ["v4.1", "v4"])
+
+    def test26_test(self):
+        """Verify appending data with NFSv4.1 and NFSv4 is correctly read using NFSv4"""
+        self.do_test("v4", ["v4.1", "v4"])
+
+    def test27_test(self):
+        """Verify appending data with NFSv4.1 and NFSv4 is correctly read using NFSv4.1"""
+        self.do_test("v4.1", ["v4.1", "v4"])
+
+    def test28_test(self):
+        """Verify appending data with NFSv3, NFSv4 and NFSv4.1 is correctly read using NFSv3"""
+        self.do_test("v3", ["v3", "v4", "v4.1"])
+
+    def test29_test(self):
+        """Verify appending data with NFSv3, NFSv4 and NFSv4.1 is correctly read using NFSv4"""
+        self.do_test("v4", ["v3", "v4", "v4.1"])
+
+    def test30_test(self):
+        """Verify appending data with NFSv3, NFSv4 and NFSv4.1 is correctly read using NFSv4.1"""
+        self.do_test("v4.1", ["v3", "v4", "v4.1"])
+
+    def test31_test(self):
+        """Verify appending data with NFSv4, NFSv3 and NFSv4.1 is correctly read using NFSv3"""
+        self.do_test("v3", ["v4", "v3", "v4.1"])
+
+    def test32_test(self):
+        """Verify appending data with NFSv4, NFSv3 and NFSv4.1 is correctly read using NFSv4"""
+        self.do_test("v4", ["v4", "v3", "v4.1"])
+
+    def test33_test(self):
+        """Verify appending data with NFSv4, NFSv3 and NFSv4.1 is correctly read using NFSv4.1"""
+        self.do_test("v4.1", ["v4", "v3", "v4.1"])
+
+    def test34_test(self):
+        """Verify appending data with NFSv4, NFSv4.1 and NFSv3 is correctly read using NFSv3"""
+        self.do_test("v3", ["v4", "v4.1", "v3"])
+
+    def test35_test(self):
+        """Verify appending data with NFSv4, NFSv4.1 and NFSv3 is correctly read using NFSv4"""
+        self.do_test("v4", ["v4", "v4.1", "v3"])
+
+    def test36_test(self):
+        """Verify appending data with NFSv4, NFSv4.1 and NFSv3 is correctly read using NFSv4.1"""
+        self.do_test("v4.1", ["v4", "v4.1", "v3"])
+
+    def test37_test(self):
+        """Verify appending data with NFSv4.1, NFSv4 and NFSv3 is correctly read using NFSv3"""
+        self.do_test("v3", ["v4.1", "v4", "v3"])
+
+    def test38_test(self):
+        """Verify appending data with NFSv4.1, NFSv4 and NFSv3 is correctly read using NFSv4"""
+        self.do_test("v4", ["v4.1", "v4", "v3"])
+
+    def test39_test(self):
+        """Verify appending data with NFSv4.1, NFSv4 and NFSv3 is correctly read using NFSv4.1"""
+        self.do_test("v4.1", ["v4.1", "v4", "v3"])
+
+    def test40_test(self):
+        """Verify appending data with NFSv4.1, NFSv3 and NFSv4 is correctly read using NFSv3"""
+        self.do_test("v3", ["v4.1", "v3", "v4"])
+
+    def test41_test(self):
+        """Verify appending data with NFSv4.1, NFSv3 and NFSv4 is correctly read using NFSv4"""
+        self.do_test("v4", ["v4.1", "v3", "v4"])
+
+    def test42_test(self):
+        """Verify appending data with NFSv4.1, NFSv3 and NFSv4 is correctly read using NFSv4.1"""
+        self.do_test("v4.1", ["v4.1", "v3", "v4"])
+
+    def test43_test(self):
+        """Verify appending data with NFSv3, NFSv4.1 and NFSv4 is correctly read using NFSv3"""
+        self.do_test("v3", ["v3", "v4.1", "v4"])
+
+    def test44_test(self):
+        """Verify appending data with NFSv3, NFSv4.1 and NFSv4 is correctly read using NFSv4"""
+        self.do_test("v4", ["v3", "v4.1", "v4"])
+
+    def test45_test(self):
+        """Verify appending data with NFSv3, NFSv4.1 and NFSv4 is correctly read using NFSv4.1"""
+        self.do_test("v4.1", ["v3", "v4.1", "v4"])
+
+################################################################################
+# Entry point
+x = InteropTest(usage=USAGE, testnames=TESTNAMES, sid=SCRIPT_ID)
+
+try:
+    x.setup(nfiles=1)
+
+    # Run all the tests
+    x.run_tests()
+except Exception:
+    x.test(False, traceback.format_exc())
+finally:
+    x.exit()
