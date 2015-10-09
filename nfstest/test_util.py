@@ -181,6 +181,7 @@ class TestUtil(NFSUtil):
         self._reset_files()
         self._runtest = True
         self.createtraces = False
+        self._opts_done = False
         # List of sparse files
         self.sparse_files = []
 
@@ -215,19 +216,22 @@ class TestUtil(NFSUtil):
         if len(self.test_msgs) > 0:
             if getattr(self, 'logfile', None):
                 print "\nLogfile: %s" % self.logfile
-            msg = "%d tests%s" % self._total_counts(self._msg_count)
-            self.write_log("\n" + msg)
-            if self._msg_count[FAIL] > 0:
-                msg = "\033[31m" + msg + "\033[m" if _isatty else msg
-            elif self._msg_count[WARN] > 0:
-                msg = "\033[33m" + msg + "\033[m" if _isatty else msg
-            else:
-                msg = "\033[32m" + msg + "\033[m" if _isatty else msg
-            print "\n" + msg
-        self.total_time = time.time() - self.test_time[0]
-        total_str = "\nTotal time: %s" % self._print_time(self.total_time)
-        self.write_log(total_str)
-        print total_str
+            ntests, tmsg = self._total_counts(self._msg_count)
+            if ntests > 0:
+                msg = "%d tests%s" % (ntests, tmsg)
+                self.write_log("\n" + msg)
+                if self._msg_count[FAIL] > 0:
+                    msg = "\033[31m" + msg + "\033[m" if _isatty else msg
+                elif self._msg_count[WARN] > 0:
+                    msg = "\033[33m" + msg + "\033[m" if _isatty else msg
+                else:
+                    msg = "\033[32m" + msg + "\033[m" if _isatty else msg
+                print "\n" + msg
+        if self._opts_done:
+            self.total_time = time.time() - self.test_time[0]
+            total_str = "\nTotal time: %s" % self._print_time(self.total_time)
+            self.write_log(total_str)
+            print total_str
         self.close_log()
 
     def _verify_testnames(self):
@@ -585,7 +589,7 @@ class TestUtil(NFSUtil):
 
             # Make sure the network is reset
             self.network_reset()
-        return
+            self._opts_done = True
 
     def test_options(self, name=None):
         """Get options for the given test name. If the test name is not given
@@ -861,7 +865,7 @@ class TestUtil(NFSUtil):
            time and the time of the last call to this method.
         """
         self.test_time.append(time.time())
-        if len(self.test_time) > 1:
+        if self._opts_done and len(self.test_time) > 1:
             ttime = self.test_time[-1] - self.test_time[-2]
             self._test_msg(INFO, "TIME: %s" % self._print_time(ttime))
 
