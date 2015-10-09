@@ -50,17 +50,19 @@ import fcntl
 import ctypes
 import signal
 import struct
+import formatstr
 import traceback
 from random import Random
 import nfstest_config as c
 from baseobj import BaseObj
+from formatstr import str_units, int_units
 from multiprocessing import Process,JoinableQueue
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.0.1'
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = "1.1"
 
 # Default values
 P_SEED       = None
@@ -121,36 +123,6 @@ OPENMAP = {
     os.O_TRUNC:  "O_TRUNC",
     os.O_SYNC:   "O_SYNC",
 }
-
-UMAP = {
-    "k": 1024,
-    "m": 1024*1024,
-    "g": 1024*1024*1024,
-    "t": 1024*1024*1024*1024,
-}
-
-# Helper functions
-def convert_str(value):
-    """Convert string value with units to integer"""
-    if type(value) == str:
-        v, m = re.search(r"([\.\d]+)(\D*)", value).groups()
-        value = float(v) * UMAP.get(m.lower(), 1)
-    return value
-
-def convert_uint(value):
-    """Convert number to a string value with units"""
-    tlist = sorted(UMAP, key=UMAP.get, reverse=True)
-    min = UMAP[tlist[-1]]
-    if type(value) != str:
-        for k in tlist:
-            val = UMAP[k]
-            num = float(value)/float(val)
-            if num > 1.0:
-                fval = "%.2f" % num
-                fval = re.sub(r'(\.[1-9]*)0+', r'\1', fval)
-                fval = re.sub(r'\.$', '', fval)
-                return "%s %sB" % (fval, k.upper())
-    return str(value) + " B"
 
 class TermSignal(Exception):
     """Exception to be raised on SIGTERM signal"""
@@ -333,14 +305,14 @@ class FileIO(BaseObj):
             self.lockfull = kwargs.pop("lockfull", P_LOCKFULL)
 
         # Get size multiplier
-        self.sizemult  = convert_str(kwargs.pop("sizemult", P_SIZEMULT))
+        self.sizemult  = int_units(kwargs.pop("sizemult", P_SIZEMULT))
         # Convert sizes and apply multiplier
-        self.fsizeavg  = int(self.sizemult * convert_str(kwargs.pop("fsizeavg", P_FILESIZE)))
-        self.fsizedev  = int(self.sizemult * convert_str(kwargs.pop("fsizedev", P_FSIZEDEV)))
-        self.rsize     = int(self.sizemult * convert_str(kwargs.pop("rsize",    P_RSIZE)))
-        self.wsize     = int(self.sizemult * convert_str(kwargs.pop("wsize",    P_WSIZE)))
-        self.rsizedev  = int(self.sizemult * convert_str(kwargs.pop("rsizedev", P_RSIZEDEV)))
-        self.wsizedev  = int(self.sizemult * convert_str(kwargs.pop("wsizedev", P_WSIZEDEV)))
+        self.fsizeavg  = self.sizemult * int_units(kwargs.pop("fsizeavg", P_FILESIZE))
+        self.fsizedev  = self.sizemult * int_units(kwargs.pop("fsizedev", P_FSIZEDEV))
+        self.rsize     = self.sizemult * int_units(kwargs.pop("rsize",    P_RSIZE))
+        self.wsize     = self.sizemult * int_units(kwargs.pop("wsize",    P_WSIZE))
+        self.rsizedev  = self.sizemult * int_units(kwargs.pop("rsizedev", P_RSIZEDEV))
+        self.wsizedev  = self.sizemult * int_units(kwargs.pop("wsizedev", P_WSIZEDEV))
 
         if self.direct:
             # When using direct I/O, use fixed read/write block sizes
@@ -1145,13 +1117,18 @@ class FileIO(BaseObj):
         delta = time.time() - stime
 
         # Display stats
+        formatstr.UNIT_SEP = " "
+        readbytes  = str_units(self.rbytes)
+        readbps    = str_units(self.rbytes/delta)
+        writebytes = str_units(self.wbytes)
+        writebps   = str_units(self.wbytes/delta)
         self.dprint("INFO", "==================STATS===================")
         self.dprint("INFO", "OPEN:    % 7d" % self.nopen)
         self.dprint("INFO", "OPENDGR: % 7d" % self.nopendgr)
         self.dprint("INFO", "CLOSE:   % 7d" % self.nclose)
         self.dprint("INFO", "OSYNC:   % 7d" % self.nosync)
-        self.dprint("INFO", "READ:    % 7d, % 10s, % 10s/s" % (self.nread,  convert_uint(self.rbytes), convert_uint(self.rbytes/delta)))
-        self.dprint("INFO", "WRITE:   % 7d, % 10s, % 10s/s" % (self.nwrite, convert_uint(self.wbytes), convert_uint(self.wbytes/delta)))
+        self.dprint("INFO", "READ:    % 7d, % 10s, % 10s/s" % (self.nread, readbytes, readbps))
+        self.dprint("INFO", "WRITE:   % 7d, % 10s, % 10s/s" % (self.nwrite, writebytes, writebps))
         self.dprint("INFO", "FSYNC:   % 7d" % self.nfsync)
         self.dprint("INFO", "RENAME:  % 7d" % self.nrename)
         self.dprint("INFO", "REMOVE:  % 7d" % self.nremove)
