@@ -32,10 +32,10 @@ from packet.pktt import Pktt
 from packet.nfs.nfs4_const import *
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '2.0'
+__version__   = "2.0"
 
 class NFSUtil(Host):
     """NFSUtil object
@@ -377,7 +377,8 @@ class NFSUtil(Host):
            filename:
                Find open call and reply for this file [default: None]
            claimfh:
-               Find open call and reply for this file handle [default: None]
+               Find open call and reply for this file handle using CLAIM_FH
+               [default: None]
            ipaddr:
                Destination IP address [default: self.server]
            port:
@@ -386,6 +387,9 @@ class NFSUtil(Host):
                Expected delegation type on reply [default: None]
            deleg_stateid:
                Delegation stateid expected on call in delegate_cur_info [default: None]
+           fh:
+               Find open call and reply for this file handle when using
+               deleg_stateid [default: None]
            src_ipaddr:
                Source IP address [default: any IP address]
            maxindex:
@@ -398,6 +402,7 @@ class NFSUtil(Host):
         """
         filename      = kwargs.pop('filename', None)
         claimfh       = kwargs.pop('claimfh', None)
+        fh            = kwargs.pop('fh', None)
         ipaddr        = kwargs.pop('ipaddr', self.server_ipaddr)
         port          = kwargs.pop('port', self.port)
         deleg_type    = kwargs.pop('deleg_type', None)
@@ -418,11 +423,16 @@ class NFSUtil(Host):
             str_list.append(file_str)
         if claimfh is not None:
             claimfh_str = "(NFS.fh == '%s' and NFS.claim.claim == %d)" % (self.pktt.escape(claimfh), CLAIM_FH)
+            claimfh_str = "(crc32(NFS.fh) == %s and NFS.claim.claim == %d)" % (self.format("{0:crc32}", claimfh), CLAIM_FH)
             str_list.append(claimfh_str)
         if deleg_stateid is not None:
-            deleg_str = "(NFS.claim.deleg_info.name == '%s'" % filename
+            deleg_str  = "(NFS.claim.claim == %d" % CLAIM_DELEGATE_CUR
+            deleg_str += " and NFS.claim.deleg_info.name == '%s'" % filename
             deleg_str += " and NFS.claim.deleg_info.stateid == '%s')" % self.pktt.escape(deleg_stateid)
-            str_list.append(deleg_str)
+            if fh is not None:
+                deleg_str += " or (NFS.claim.claim == %d" % CLAIM_DELEG_CUR_FH
+                deleg_str += " and NFS.fh == '%s' and NFS.claim.stateid == '%s')" % (self.pktt.escape(fh), self.pktt.escape(deleg_stateid))
+            str_list.append("(" + deleg_str + ")")
 
         if anyclaim:
             file_str = " or ".join(str_list)
@@ -456,8 +466,12 @@ class NFSUtil(Host):
                     idx += 1
                 if idx >= len(resarray):
                     # Could not find GETFH
-                    return (None, None, None)
-                filehandle = pktreply.nfs.array[idx].fh
+                    if fh is None:
+                        return (None, None, None)
+                    else:
+                        filehandle = fh
+                else:
+                    filehandle = pktreply.nfs.array[idx].fh
             else:
                 # No need to find GETFH, the filehandle is already known
                 filehandle = claimfh
