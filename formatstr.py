@@ -22,9 +22,9 @@ CRC16 representation.
 """
 import re
 import time
+import binascii
 import nfstest_config as c
 from string import Formatter
-from binascii import crc32,crc_hqx
 
 # Module constants
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
@@ -105,6 +105,18 @@ def int_units(value):
         v, m = re.search(r"([-\+\.\d]+)\s*(\w?)", value).groups()
         value = int(float(v) * (1<<(10*UNIT_SUFFIXES.index(m.upper()))))
     return value
+
+def crc32(value):
+    """Convert string to its crc32 representation"""
+    return binascii.crc32(value) & 0xffffffff
+
+def crc16(value):
+    """Convert string to its crc16 representation"""
+    return binascii.crc_hqx(value, 0xa5a5) & 0xffff
+
+def hex(value):
+    """Convert string to its hex representation"""
+    return "0x" + value.encode("hex")
 
 class FormatStr(Formatter):
     """String Formatter object
@@ -223,12 +235,12 @@ class FormatStr(Formatter):
                 return xprefix + value.encode("hex")
             elif fmt == "crc32":
                 if CRC32:
-                    return "{0:#010x}".format(crc32(value) & 0xffffffff)
+                    return "{0:#010x}".format(crc32(value))
                 else:
                     return str(value)
             elif fmt == "crc16":
                 if CRC16:
-                    return "{0:#06x}".format(crc_hqx(value, 0xa5a5) & 0xffff)
+                    return "{0:#06x}".format(crc16(value))
                 else:
                     return str(value)
             elif xmod == "@":

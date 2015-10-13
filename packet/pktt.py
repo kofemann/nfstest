@@ -46,7 +46,7 @@ import token
 import struct
 import parser
 import symbol
-import binascii
+from formatstr import *
 import nfstest_config as c
 from baseobj import BaseObj
 from packet.unpack import Unpack
@@ -55,10 +55,10 @@ from packet.pkt import Pkt, PKT_layers
 from packet.link.ethernet import ETHERNET
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '2.0'
+__version__   = "2.0"
 
 BaseObj.debug_map(0x100000000, 'pkt1', "PKT1: ")
 BaseObj.debug_map(0x200000000, 'pkt2', "PKT2: ")
@@ -72,18 +72,6 @@ _token_map = dict(token.tok_name.items() + symbol.sym_name.items())
 _nfsopmap = {'status': 1, 'tag': 1}
 # Match function map
 _match_func_map = dict(zip(PKT_layers,["self._match_%s"%x for x in PKT_layers]))
-
-def crc32(value):
-    """Convert string to its crc32 representation"""
-    return binascii.crc32(value) & 0xffffffff
-
-def crc16(value):
-    """Convert string to its crc16 representation"""
-    return binascii.crc_hqx(value, 0xa5a5) & 0xffff
-
-def hex(value):
-    """Convert string to its hex representation"""
-    return "0x" + value.encode("hex")
 
 class Header(BaseObj):
     # Class attributes
