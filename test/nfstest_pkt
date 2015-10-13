@@ -196,6 +196,8 @@ pktdisp.add_option("--strsize", type="int", default=0, help=hhelp)
 opts.add_option_group(pktdisp)
 
 debug = OptionGroup(opts, "Debug")
+hhelp = "If set to True, enums are strictly enforced [default: %default]"
+debug.add_option("--enum-check", default=str(utils.ENUM_CHECK), help=hhelp)
 hhelp = "Set debug level messages"
 debug.add_option("--debug-level", default="", help=hhelp)
 opts.add_option_group(debug)
@@ -220,6 +222,7 @@ utils.RPC_ver      = eval(vopts.rpc_ver)
 utils.RPC_xid      = eval(vopts.rpc_xid)
 utils.NFS_mainop   = eval(vopts.nfs_mainop)
 utils.LOAD_body    = eval(vopts.load_body)
+utils.ENUM_CHECK   = eval(vopts.enum_check)
 formatstr.CRC16    = eval(vopts.crc16)
 formatstr.CRC32    = eval(vopts.crc32)
 

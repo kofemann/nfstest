@@ -17,6 +17,7 @@ import re
 import sys
 import time
 import formatstr
+import packet.utils as utils
 import packet.nfs.nfs3_const as nfs3
 import packet.nfs.nfs4_const as nfs4
 from packet.pktt import Pktt,crc32,crc16
@@ -133,6 +134,8 @@ pktdisp.add_option("--strsize", type="int", default=0, help=hhelp)
 opts.add_option_group(pktdisp)
 
 debug = OptionGroup(opts, "Debug")
+hhelp = "If set to True, enums are strictly enforced [default: %default]"
+debug.add_option("--enum-check", default=str(utils.ENUM_CHECK), help=hhelp)
 hhelp = "Set debug level messages"
 debug.add_option("--debug-level", default="", help=hhelp)
 opts.add_option_group(debug)
@@ -187,6 +190,7 @@ def print_pkt(pkttobj, pkt):
 
 formatstr.CRC16 = eval(vopts.crc16)
 formatstr.CRC32 = eval(vopts.crc32)
+utils.ENUM_CHECK = eval(vopts.enum_check)
 
 dirfh = None
 dirfhcrc32 = None
