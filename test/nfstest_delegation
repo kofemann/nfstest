@@ -21,10 +21,10 @@ from packet.nfs.nfs4_const import *
 from nfstest.test_util import TestUtil
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '1.0.3'
+__version__   = "1.0.3"
 
 USAGE = """%prog --server <server> [--client <client>] [options]
 
@@ -482,7 +482,8 @@ class DelegTest(TestUtil):
             src_other_client_str = self.pktt.ip_tcp_dst_expr(self.server_ipaddr, self.port) + " and IP.src == '%s' and " % self.clientobj.ipaddr
             conflict_match_str = src_other_client_str + "NFS.argop == %d" % conflict_op
             if conflict_op == OP_OPEN:
-                conflict_match_str += " and NFS.claim.file == '%s'" % self.filename
+                conflict_match_str += " and (NFS.claim.name == '%s' or" % self.filename
+                conflict_match_str += " (NFS.fh == '%s' and NFS.claim.claim == %d))" % (self.pktt.escape(fh), CLAIM_FH)
             opencall = self.pktt.match(conflict_match_str)
             if opencall is None:
                 self.test(False, "%s should be sent from second client" % conflict_str)
@@ -519,7 +520,7 @@ class DelegTest(TestUtil):
             self.test(cbcall.NFSop.stateid.other == deleg_stid, "CB_RECALL should recall %s delegation granted to client" % mode_str)
 
             # Find OPEN sent from the client right before returning the delegation
-            (fh, op_stid2, deleg_stid2) = self.find_open(filename=self.filename, deleg_stateid=deleg_stid, src_ipaddr=self.client_ipaddr)
+            (fh, op_stid2, deleg_stid2) = self.find_open(filename=self.filename, deleg_stateid=deleg_stid, src_ipaddr=self.client_ipaddr, fh=fh)
             open_index = self.pktt.index
             self.test(op_stid2 != None, "OPEN with CLAIM_DELEGATE_CUR is sent from client right before returning the %s delegation after CB_RECALL" % mode_str)
             self.test(op_stid2 == op_stid, "OPEN stateid should be the same as the original OPEN stateid")
