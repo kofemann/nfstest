@@ -69,13 +69,15 @@ Notes:
 # Test script ID
 SCRIPT_ID = "DELEGATION"
 
-TESTNAMES = [
+TESTNAMES_LOCAL = [
     'read',
     'write',
     'read_stat',
     'write_stat',
     'read_lock',
     'write_lock',
+]
+TESTNAMES_REMOTE = [
     'read_recall_write',
     'write_recall_write',
     'read_recall_write_lock',
@@ -87,6 +89,8 @@ TESTNAMES = [
     'read_recall_setattr_lock',
     'write_recall_setattr_lock',
 ]
+
+TESTNAMES = TESTNAMES_LOCAL + TESTNAMES_REMOTE
 
 PATTERN = 'FF00'
 
@@ -134,6 +138,15 @@ class DelegTest(TestUtil):
             self.create_host(self.client)
         else:
             self.clientobj = None
+
+        if self.clientobj is None:
+            # No --client was specified, so remove all tests that require
+            # a second client from the list of tests to run
+            for tname in TESTNAMES_REMOTE:
+                if tname in self.testlist:
+                    self.testlist.remove(tname)
+            if len(self.testlist) == 0:
+                self.opts.error("no test to run, specify option --client for --runtest='%s'" % self.runtest)
 
     def lock_file(self, fd, lock_type):
         """Lock file given by the file descriptor.
