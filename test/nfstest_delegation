@@ -475,6 +475,7 @@ class DelegTest(TestUtil):
             (fh, op_stid, deleg_stid) = self.find_open(filename=self.filename, deleg_type=deleg_type, src_ipaddr=self.client_ipaddr)
             self.test(deleg_stid != None, "%s delegation should be granted" % mode_str)
             save_index = self.pktt.index
+            open1_index = save_index
             if deleg_stid is None:
                 # Delegation was not granted
                 return
@@ -540,27 +541,37 @@ class DelegTest(TestUtil):
             self.test(deleg_stid2 is None, "Delegation should not be granted when re-opening the file right before returning the %s delegation after CB_RECALL" % mode_str)
 
             if deleg_type == OPEN_DELEGATE_WRITE:
-                self.pktt.rewind(cbrecall_index)
-                # Find the WRITE's before DELEGRETURN
-                nio = self.verify_io_requests(deleg_type, deleg_stid, filehandles, src_ipaddr=self.client_ipaddr, maxindex=open_index)
-                self.test(nio > 0, "Client flushes written data before returning the WRITE delegation")
+                # Find out how much data has already been flushed right
+                # before getting the CB_RECALL
+                self.pktt.rewind(open1_index)
+                nio = self.verify_io_requests(deleg_type, deleg_stid, filehandles, src_ipaddr=self.client_ipaddr, maxindex=cbrecall_index)
+                if iosize > sum(self.test_counts):
+                    # Not all data has been flushed,
+                    # so find the WRITE's before DELEGRETURN
+                    self.pktt.rewind(cbrecall_index)
+                    nio = self.verify_io_requests(deleg_type, deleg_stid, filehandles, src_ipaddr=self.client_ipaddr, maxindex=open_index)
+                    self.test(nio > 0, "Client flushes written data before returning the WRITE delegation")
+                else:
+                    self.test(True, "Client has already flushed all written data before CB_RECALL")
                 self.pktt.rewind(open_index)
 
             # Find DELEGRETURN request and reply
             (delegreturncall, delegreturnreply) = self.find_nfs_op(OP_DELEGRETURN, self.server_ipaddr, self.port, src_ipaddr=self.client_ipaddr)
-            #XXX check if delegreturn is found
-            delegreturn_index = delegreturncall.record.index
+            if delegreturncall:
+                delegreturn_index = delegreturncall.record.index
 
-            if lock:
+            if lock and delegreturncall:
                 self.pktt.rewind(open_index)
                 # Find the LOCK before DELEGRETURN
                 (lockcall, lockreply) = self.find_nfs_op(OP_LOCK, self.server_ipaddr, self.port, src_ipaddr=self.client_ipaddr, maxindex=delegreturn_index)
                 self.test(lockcall != None, "LOCK is sent to the server right before returning the %s delegation" % mode_str)
 
             self.test(delegreturncall != None, "DELEGRETURN should be sent from client right after re-opening the file")
+            if delegreturncall is None:
+                return
             self.test(delegreturncall.NFSop.stateid.other == deleg_stid, "DELEGRETURN should return the %s delegation being recalled" % mode_str)
 
-            # Make OPEN reply from the second client has not been sent with NFS4ERR_DELAY
+            # Make sure OPEN reply from the second client has not been sent with NFS4ERR_DELAY
             xid = opencall.rpc.xid
             self.pktt.rewind(conflict_index)
             reply = self.pktt.match("RPC.xid == %d and NFS.status == %d" % (xid, NFS4ERR_DELAY), maxindex=delegreturn_index)
