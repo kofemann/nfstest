@@ -141,10 +141,26 @@ class TestUtil(NFSUtil):
            usage:
                Usage string [default: '']
            testnames:
-               List of testnames [default: []]
+               List of test names [default: []]
                When this list is not empty, the --runtest option is enabled and
                test scripts should use the run_tests() method to run all the
                tests. Test script should have methods named as <testname>_test.
+           testgroups:
+                Dictionary of test groups where the key is the name of the test
+                group and its value is a dictionary having the following keys:
+                    tests:
+                        A list of tests belonging to this test group
+                    desc:
+                        Description of the test group, this is displayed
+                        in the help if the name of the test group is also
+                        included in testnames
+                    tincl:
+                        Include a comma separated list of tests belonging to
+                        this test group to the description [default: False]
+                    wrap:
+                        Reformat the description so it fits in lines no
+                        more than the width given. The description is not
+                        formatted for a value of zero [default: 72]
 
            Example:
                x = TestUtil(testnames=['basic', 'lock'])
@@ -153,9 +169,10 @@ class TestUtil(NFSUtil):
                x.basic_test()
                x.lock_test()
         """
-        self.sid       = kwargs.pop('sid', "")
-        self.usage     = kwargs.pop('usage', '')
-        self.testnames = kwargs.pop('testnames', [])
+        self.sid        = kwargs.pop('sid', "")
+        self.usage      = kwargs.pop('usage', '')
+        self.testnames  = kwargs.pop('testnames', [])
+        self.testgroups = kwargs.pop('testgroups', {})
         self.progname = os.path.basename(sys.argv[0])
         self.testname = ""
         if self.progname[-3:] == '.py':
@@ -245,14 +262,31 @@ class TestUtil(NFSUtil):
                 # List is negated tests -- do not run the tests listed
                 runtest = self.runtest.replace('^', '', 1)
                 negtestlist = self.str_list(runtest)
-                self.testlist = self.testnames
+                self.testlist = list(self.testnames)
                 for testname in negtestlist:
                     if testname in self.testlist:
                         self.testlist.remove(testname)
-                    else:
+                    elif testname in self.testgroups:
+                        # Remove all tests in the test group
+                        for tname in self.testgroups[testname].get("tests", []):
+                            if tname in self.testlist:
+                                self.testlist.remove(tname)
+                    elif testname not in self.testnames:
                         self.opts.error("invalid value given --runtest=%s" % self.runtest)
             else:
+                idx = 0
                 self.testlist = self.str_list(self.runtest)
+                # Process the test groups by including all the tests
+                # in the test group to the list of tests to run
+                for testname in self.testlist:
+                    tgroup = self.testgroups.get(testname)
+                    if tgroup is not None:
+                        # Add tests from the test group to the list
+                        self.testlist.remove(testname)
+                        for tname in tgroup.get("tests", []):
+                            self.testlist.insert(idx, tname)
+                            idx += 1
+                    idx += 1
             if self.testlist is None:
                 self.opts.error("invalid value given --runtest=%s" % self.runtest)
         msg = ''
@@ -315,17 +349,36 @@ class TestUtil(NFSUtil):
             if len(usage) == 0:
                 usage = "%prog [options]"
             usage += "\n\nAvailable tests:"
+            for tgname, item in self.testgroups.items():
+                tlist = item.get("tests", [])
+                tincl = item.get("tincl", True)
+                wrap = item.get("wrap", 72)
+                if item.get("desc", None) is not None:
+                    if tincl and tlist:
+                        # Add the list of tests for this test group
+                        # to the description
+                        item["desc"] += ", ".join(tlist)
+                    if wrap > 0:
+                        item["desc"] = "\n".join(textwrap.wrap(item["desc"], wrap))
             for tname in self.testnames:
-                desc = getattr(self, tname+'_test').__doc__
-                if desc != None:
+                tgroup = self.testgroups.get(tname)
+                desc = None
+                if tgroup is not None:
+                    desc = tgroup.get("desc")
+                if desc is None:
+                    desc = getattr(self, tname+'_test').__doc__
+                if desc is not None:
                     lines = desc.lstrip().split('\n')
                     desc = lines.pop(0)
                     if len(desc) > 0:
                         desc += '\n'
                     desc += textwrap.dedent("\n".join(lines))
-                    desc = desc.replace("\n", "\n        ")
-                usage += "\n    %s:\n        %s" % (tname, desc)
+                    desc = desc.replace("\n", "\n        ").rstrip()
+                usage += "\n    %s:\n        %s\n" % (tname, desc)
             usage = usage.rstrip()
+            # Remove test group names from the list of tests
+            for tname in self.testgroups:
+                self.testnames.remove(tname)
         if len(usage) > 0:
             self.opts.set_usage(usage)
         self._cmd_line = " ".join(sys.argv)
