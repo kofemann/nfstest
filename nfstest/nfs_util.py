@@ -955,7 +955,9 @@ class NFSUtil(Host):
         offsets = {}
         good_pattern = 0
         bad_pattern = 0
-        self.test_offsets = []
+        self.test_offsets = []  # Save the offsets sent to the server on I/O
+        self.test_counts = []   # Save the counts received from the server
+        xid_counts = {}         # Map counts on I/O calls
         if init:
             self.test_seqid   = True
             self.test_stateid = True
@@ -982,6 +984,7 @@ class NFSUtil(Host):
             xids.append(pkt.rpc.xid)
             nfsop = pkt.NFSop
             self.test_offsets.append(nfsop.offset)
+            xid_counts[pkt.rpc.xid] = nfsop.count
             if iomode == LAYOUTIOMODE4_READ:
                 offsets[pkt.rpc.xid] = nfsop.offset
 
@@ -1034,6 +1037,8 @@ class NFSUtil(Host):
                 xids.remove(xid)
                 nfsop = pkt.NFSop
 
+                self.test_counts.append(nfsop.count)
+                xid_counts.pop(xid, None)
                 if iomode == LAYOUTIOMODE4_READ:
                     offset = offsets[xid]
 
@@ -1075,6 +1080,10 @@ class NFSUtil(Host):
         # Add the number of calls with no replies
         self.test_niomiss += len(xids)
         nops = good_pattern + bad_pattern + self.test_niomiss
+
+        # Append I/O call counts for those replies which were not found
+        for count in xid_counts.values():
+            self.test_counts.append(count)
 
         if iomode == LAYOUTIOMODE4_READ:
             self.dprint('DBG7', "READ bad/good pattern %d/%d" % (bad_pattern, good_pattern))
