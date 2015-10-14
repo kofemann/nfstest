@@ -24,10 +24,10 @@ from nfstest.test_util import TestUtil
 from fcntl import fcntl,F_RDLCK,F_WRLCK,F_UNLCK,F_SETLK,F_SETLKW,F_GETLK
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.0.1'
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2013 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = "1.1"
 
 USAGE = """%prog --server <server> [--client <client>] [options]
 
@@ -60,14 +60,14 @@ SCRIPT_ID = "LOCK"
 # Basic tests
 BTESTS = ['btest01']
 
-# Non-overlapping tests using a second process
+# Non-overlapping lock tests using a second process
 NPTESTS = [
     'nptest01',
     'nptest02',
     'nptest03',
     'nptest04',
 ]
-# Non-overlapping tests using a second client
+# Non-overlapping lock tests using a second client
 NCTESTS = [
     'nctest01',
     'nctest02',
@@ -97,8 +97,37 @@ OCTESTS = [
     'octest08',
 ]
 
-# All tests
-TESTNAMES = BTESTS + NPTESTS + NCTESTS + OPTESTS + OCTESTS
+# All tests, include the test groups in the list of test names
+# so they are displayed in the help
+TESTNAMES = BTESTS + ["noverlap", "nptest"] + NPTESTS + ["nctest"] + \
+            NCTESTS + ["overlap", "optest"] + OPTESTS + ["octest"] + OCTESTS
+
+TESTGROUPS = {
+    "noverlap": {
+         "tests": NPTESTS + NCTESTS,
+         "desc": "Run all non-overlapping locking tests: ",
+    },
+    "nptest": {
+         "tests": NPTESTS,
+         "desc": "Run all non-overlapping locking tests using a second process: ",
+    },
+    "nctest": {
+         "tests": NCTESTS,
+         "desc": "Run all non-overlapping locking tests using a second client: ",
+    },
+    "overlap": {
+         "tests": OPTESTS + OCTESTS,
+         "desc": "Run all overlapping locking tests: ",
+    },
+    "optest": {
+         "tests": OPTESTS,
+         "desc": "Run all overlapping locking tests using a second process: ",
+    },
+    "octest": {
+         "tests": OCTESTS,
+         "desc": "Run all overlapping locking tests using a second client: ",
+    },
+}
 
 # Mapping dictionaries
 LOCKMAP    = {F_RDLCK:'F_RDLCK', F_WRLCK:'F_WRLCK', F_UNLCK:'F_UNLCK'}
@@ -1115,12 +1144,12 @@ class LockTest(TestUtil):
         self.otest08(self.rexecobj)
 
 ################################################################################
-#  Entry point
-x = LockTest(usage=USAGE, testnames=TESTNAMES, sid=SCRIPT_ID)
+# Entry point
+x = LockTest(usage=USAGE, testnames=TESTNAMES, testgroups=TESTGROUPS, sid=SCRIPT_ID)
 
 try:
     # Call setup
-    x.lock_setup(nfiles=2)
+    x.lock_setup(nfiles=1)
 
     # Run all the tests
     x.run_tests()
