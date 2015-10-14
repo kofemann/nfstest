@@ -24,7 +24,7 @@ from nfstest.test_util import TestUtil
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.0.4"
+__version__   = "1.1"
 
 USAGE = """%prog --server <server> [--client <client>] [options]
 
@@ -90,7 +90,20 @@ TESTNAMES_REMOTE = [
     'write_recall_setattr_lock',
 ]
 
-TESTNAMES = TESTNAMES_LOCAL + TESTNAMES_REMOTE
+# Include the test groups in the list of test names
+# so they are displayed in the help
+TESTNAMES = ["basic"] + TESTNAMES_LOCAL + ["recall"] + TESTNAMES_REMOTE
+
+TESTGROUPS = {
+    "basic": {
+         "tests": TESTNAMES_LOCAL,
+         "desc": "Run all basic delegation tests: ",
+    },
+    "recall": {
+         "tests": TESTNAMES_REMOTE,
+         "desc": "Run all recall delegation tests: ",
+    },
+}
 
 PATTERN = 'FF00'
 
@@ -669,8 +682,8 @@ class DelegTest(TestUtil):
         self.recall_deleg_test(OPEN_DELEGATE_WRITE, conflict_type=OP_SETATTR, lock=True)
 
 ################################################################################
-#  Entry point
-x = DelegTest(usage=USAGE, testnames=TESTNAMES, sid=SCRIPT_ID)
+# Entry point
+x = DelegTest(usage=USAGE, testnames=TESTNAMES, testgroups=TESTGROUPS, sid=SCRIPT_ID)
 
 try:
     x.setup(nfiles=3)
