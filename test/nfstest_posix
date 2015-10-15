@@ -13,6 +13,7 @@
 # FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 #===============================================================================
 import os
+import mmap
 import stat
 import fcntl
 import errno
@@ -21,15 +22,15 @@ import ctypes
 import random
 import itertools
 import traceback
+from time import sleep
 import nfstest_config as c
 from nfstest.test_util import TestUtil
-from time import sleep
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.0.3'
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = "1.1"
 
 USAGE = """%prog --server <server> [options]
 
@@ -54,6 +55,8 @@ SCRIPT_ID = "POSIX"
 TESTNAMES = [
     'access',
     'chdir',
+    'close',
+    'closedir',
     'creat',
     'fcntl',
     'fdatasync',
@@ -64,6 +67,8 @@ TESTNAMES = [
     'lseek',
     'lstat',
     'mkdir',
+    'mmap',
+    'munmap',
     'opendir',
     'read',
     'readdir',
@@ -81,10 +86,6 @@ TESTNAMES = [
     'write',
     'open',
     'chmod',
-    'closedir',
-    'close',
-    #'mmap',
-    #'munmap',
 ]
 
 stat_map = {
@@ -242,21 +243,22 @@ class PosixTest(TestUtil):
         self.opts.version = "%prog " + __version__
         self.scan_options()
 
-        # Load share library - used for POSIX functions not implemented
-        # in the posix module
-        try:
-            # Linux
-            self.libc = ctypes.CDLL('libc.so.6', use_errno=True)
-        except:
-            # MacOS
-            self.libc = ctypes.CDLL('libc.dylib', use_errno=True)
+        # Function prototypes for system calls in libc
         self.libc.telldir.argtypes = ctypes.c_void_p,
         self.libc.telldir.restype  = ctypes.c_long
-        self.libc.seekdir.argtypes = ctypes.c_ulong, ctypes.c_long
+        self.libc.seekdir.argtypes = ctypes.c_void_p, ctypes.c_long
+        self.libc.fcntl.restype    = ctypes.c_int
+        self.libc.mmap.argtypes    = ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_long
+        self.libc.mmap.restype     = ctypes.c_long  # Use c_long to check for errors
+        self.libc.munmap.argtypes  = ctypes.c_void_p, ctypes.c_ulong
+        self.libc.munmap.restype   = ctypes.c_int
 
         # Make sure actimeo is set
         if 'actimeo' not in self.mtopts:
             self.mtopts += ",actimeo=0"
+
+        # Get page size
+        self.PAGESIZE = os.sysconf(os.sysconf_names['SC_PAGESIZE'])
 
         # Clear umask
         os.umask(0)
@@ -388,7 +390,6 @@ class PosixTest(TestUtil):
         posix.close(fd)
         self.test(True, "close - close() on read file should succeed")
 
-        return # XXX The next test hangs
         try:
             posix.read(fd, 10)
         except OSError as e:
@@ -407,7 +408,6 @@ class PosixTest(TestUtil):
         out = self.libc.closedir(fd)
         self.test(out == 0, "closedir - closedir() should succeed")
 
-        return # XXX The next test hangs
         dirent = self.libc.readdir(fd)
         self.test(dirent == 0, "closedir - readdir after closedir should return an error")
 
@@ -484,7 +484,6 @@ class PosixTest(TestUtil):
 
         self.dprint('DBG3', "DUP file descriptor using POSIX API fcntl(fd, F_DUPFD, n)")
         self.libc.fcntl.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int]
-        self.libc.fcntl.restype = ctypes.c_int
         fd2 = self.libc.fcntl(fd, fcntl.F_DUPFD, nfd)
         self.test(fd2 >= nfd, "fcntl - DUP'ed file descriptor should be greater than or equal to the value given")
 
@@ -538,7 +537,6 @@ class PosixTest(TestUtil):
 
         flock = Flock(lock_type, 0, 0, int(self.filesize/2), 0)
         self.libc.fcntl.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.POINTER(Flock)]
-        self.libc.fcntl.restype = ctypes.c_int
         out = self.libc.fcntl(fd2, fcntl.F_SETLKW, ctypes.byref(flock))
         self.test(out != -1, "fcntl - F_SETLKW (%s) should succeed" % str_lck)
 
@@ -899,14 +897,34 @@ class PosixTest(TestUtil):
         fd = posix.open(absfile, posix.O_RDONLY)
 
         self.dprint('DBG3', "mmap file for reading")
-        self.libc.mmap.restype = ctypes.c_void_p
         addr = self.libc.mmap(0, N, mmap.PROT_READ, mmap.MAP_SHARED, fd, 0)
+        self.test(addr > 0, "%s - mmap for reading should succeed" % objtype)
         ptr = ctypes.cast(addr, ctypes.c_char_p)
         self.test(ptr.value[:N] == self.data_pattern(0,N), "%s - read data should be correct" % objtype)
         self.dprint('DBG3', "munmap file")
         out = self.libc.munmap(addr, N)
         self.test(out == 0, "%s - munmap should succeed" % objtype)
+
+        self.dprint('DBG3', "mmap file for reading using aligned offset")
+        addr = self.libc.mmap(0, N-self.PAGESIZE, mmap.PROT_READ, mmap.MAP_SHARED, fd, self.PAGESIZE)
+        self.test(addr > 0, "%s - mmap using aligned offset should succeed" % objtype)
+        ptr = ctypes.cast(addr, ctypes.c_char_p)
+        self.test(ptr.value[:N-self.PAGESIZE] == self.data_pattern(self.PAGESIZE,N-self.PAGESIZE), "%s - read data should be correct" % objtype)
+        self.dprint('DBG3', "munmap file")
+        out = self.libc.munmap(addr, N-self.PAGESIZE)
+        self.test(out == 0, "%s - munmap should succeed" % objtype)
+
+        self.dprint('DBG3', "mmap file for reading")
+        addr = self.libc.mmap(0, N, mmap.PROT_READ, mmap.MAP_SHARED, fd, 0)
+        self.test(addr > 0, "%s - mmap should succeed" % objtype)
+        ptr = ctypes.cast(addr, ctypes.c_char_p)
+        # Closing the file descriptor does not unmap the region
+        self.dprint('DBG3', "Close file")
         posix.close(fd)
+        self.test(ptr.value[:N] == self.data_pattern(0,N), "%s - read data after file descriptor has been closed should be correct" % objtype)
+        self.dprint('DBG3', "munmap file")
+        out = self.libc.munmap(addr, N)
+        self.test(out == 0, "%s - munmap after the file has been closed should succeed" % objtype)
 
         self.get_filename()
         self.dprint('DBG3', "Open file %s for reading and writing" % self.absfile)
@@ -915,19 +933,33 @@ class PosixTest(TestUtil):
         posix.lseek(fd, N-1, os.SEEK_SET)
         posix.write(fd, '\000')
 
+        if objtype == 'mmap':
+            self.dprint('DBG3', "mmap file using length of 0")
+            addr = self.libc.mmap(0, 0, mmap.PROT_READ|mmap.PROT_WRITE, mmap.MAP_SHARED, fd, 0)
+            self.test(addr == -1, "%s - mmap with length of 0 should return an error" % objtype)
+            self.dprint('DBG3', "mmap file using a non-aligned offset")
+            addr = self.libc.mmap(0, N, mmap.PROT_READ|mmap.PROT_WRITE, mmap.MAP_SHARED, fd, 1)
+            self.test(addr == -1, "%s - mmap with non-aligned offset should return an error" % objtype)
+
         self.dprint('DBG3', "mmap file for writing")
-        addr = self.libc.mmap(0, N, mmap.PROT_READ|mmap.PROT_WRITE, mmap.MAP_SHARED, fd, 0)
+        addr = self.libc.mmap(0, N, mmap.PROT_WRITE, mmap.MAP_SHARED, fd, 0)
+        self.test(addr > 0, "%s - mmap for writing should succeed" % objtype)
         ptr = ctypes.cast(addr, ctypes.c_char_p)
         self.libc.memcpy(ptr, self.data_pattern(0,N), N)
         self.dprint('DBG3', "munmap file")
+        if objtype == 'munmap':
+            self.dprint('DBG3', "munmap using length of 0")
+            out = self.libc.munmap(addr, 0)
+            self.test(out == -1, "%s - munmap with length of 0 should return an error" % objtype)
         out = self.libc.munmap(addr, N)
+        self.test(out == 0, "%s - munmap with correct length should succeed" % objtype)
         posix.close(fd)
 
+        self.dprint('DBG3', "Read data from file to verify data written using mmap region")
         fd = open(self.absfile, "r")
         data = fd.read()
         fd.close()
         self.test(data == self.data_pattern(0,N), "%s - written data should be correct" % objtype)
-        self.test(out == 0, "%s - munmap should succeed" % objtype)
 
         absfile = self.abspath(self.files[0])
         fd = posix.open(absfile, posix.O_RDONLY)
@@ -935,7 +967,6 @@ class PosixTest(TestUtil):
 
         if objtype == 'mmap':
             self.dprint('DBG3', "mmap on closed file")
-            self.libc.mmap.restype = ctypes.c_int
             addr = self.libc.mmap(0, N, mmap.PROT_READ, mmap.MAP_SHARED, fd, 0)
             self.test(addr == -1, "%s - mmap on closed file should return an error" % objtype)
 
@@ -1317,10 +1348,13 @@ class PosixTest(TestUtil):
         self.create_file()
         oldname = self.absfile
         self.dprint('DBG3', "Rename file %s to an existing symbolic link %s using POSIX API rename()" % (oldname, newname))
-        posix.rename(oldname, newname)
-        self.test(os.path.exists(newname), "rename - new file name should exist")
-        self.test(not os.path.exists(oldname), "rename - old file name should not exist")
-        self.test(os.path.isfile(newname) and not os.path.islink(newname), "rename - new name should be a regular file")
+        try:
+            posix.rename(oldname, newname)
+            self.test(os.path.exists(newname), "rename - new file name should exist")
+            self.test(not os.path.exists(oldname), "rename - old file name should not exist")
+            self.test(os.path.isfile(newname) and not os.path.islink(newname), "rename - new name should be a regular file")
+        except:
+            self.test(False, "rename - renaming file to an existing symbolic link should have succeeded")
 
     def rewinddir_test(self):
         """Verify POSIX API rewinddir() on a directory."""
