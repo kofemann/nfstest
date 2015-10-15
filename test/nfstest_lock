@@ -227,8 +227,20 @@ class LockTest(TestUtil):
         self.opts.add_option("--locktype2", default="read,write", help=hmsg)
         hmsg = "List of set lock types to test [default: %default]"
         self.opts.add_option("--setlock", default="immediate,block", help=hmsg)
+        hmsg = "Create a packet trace for each sub-test. Use it with " + \
+               "caution since it will create a lot of packet traces. " + \
+               "Use --createtraces instead unless trying to get a packet " + \
+               "trace for a specific sub-test. Best if it is used in " + \
+               "combination with the --runtest option."
+        self.opts.add_option("--subtraces", action="store_true", default=False, help=hmsg)
         self.scan_options()
         self.st_time = time.time()
+
+        if self.subtraces:
+            # Disable createtraces option since a packet trace will be created
+            # here for every sub-test when the --subtraces option is set and
+            # a packet trace should not be started by test_util.py
+            self.createtraces = False
 
         # Sanity checks
         if self.offset < 2:
@@ -641,6 +653,9 @@ class LockTest(TestUtil):
             fdl = None
             fdx = None
 
+            if self.subtraces:
+                self.trace_start()
+
             # Find if ranges overlap
             (start1, end1) = get_range(self.offset, self.length)
             (start2, end2) = get_range(offset2, length2)
@@ -721,6 +736,8 @@ class LockTest(TestUtil):
                 os.close(fdl)
             if fdx is not None:
                 execobj.run(os.close, fdx)
+            if self.subtraces:
+                self.trace_stop()
 
     def do_basic_lock(self, execobj, offset2, length2, overlap=False):
         """This is the main locking method for testing all different
@@ -733,8 +750,6 @@ class LockTest(TestUtil):
                Lock starting offset for second lock
            length2:
                Lock length for second lock
-           stype:
-               Either a blocking or non-blocking lock
            overlap:
                True if range is expected to overlap
         """
@@ -791,6 +806,8 @@ class LockTest(TestUtil):
                     fd = None
                     if self.tverbose > 1:
                         self.dprint("INFO", "Running %s test %d" % (self.testname, count))
+                    if self.subtraces:
+                        self.trace_start()
                     count += 1
                     stype  = item['stype']
                     oltype = item['oltype']
@@ -826,6 +843,8 @@ class LockTest(TestUtil):
                     # Close open file
                     if fd is not None:
                         os.close(fd)
+                    if self.subtraces:
+                        self.trace_stop()
 
     def ntest01(self, execobj):
         """Locking non-overlapping range from a second process where end2 < start1
