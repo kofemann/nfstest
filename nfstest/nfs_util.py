@@ -118,6 +118,9 @@ class NFSUtil(Host):
         self.stateid = None
         self.dsismds = False
 
+        # State id to string mapping
+        self.stid_map = {}
+
         # Call base class constructor
         super(NFSUtil, self).__init__()
 
@@ -1215,6 +1218,60 @@ class NFSUtil(Host):
             getattr_res = pkt.nfs.array[idx+1]
             self.test(getattr_res.attributes[FATTR4_SIZE] == filesize, "GETATTR should return correct file size within LAYOUTCOMMIT compound")
         return
+
+    def get_stateid(self, filename):
+        """Search the packet trace for the file name given to get the OPEN
+           so all related state ids can be searched. A couple of object
+           attributes are defined, one is the correct state id that should
+           be used by I/O operations. The second is a dictionary table
+           which maps the state id to a string identifying if the state
+           id is an open, lock or delegation state id.
+        """
+        self.stid_map = {}
+        self.lock_stateid = None
+        (self.filehandle, self.open_stateid, self.deleg_stateid) = self.find_open(filename=filename)
+        if self.open_stateid:
+            self.stid_map[self.open_stateid] = "OPEN stateid"
+        if self.deleg_stateid:
+            # Delegation stateid should be used for I/O
+            self.stateid = self.deleg_stateid
+            self.stid_map[self.deleg_stateid] = "DELEG stateid"
+        else:
+            # Look for a lock stateid
+            save_index = self.pktt.index
+            mstr = "NFS.fh == '%s'" % self.pktt.escape(self.filehandle)
+            (pktcall, pktreply) = self.find_nfs_op(OP_LOCK, self.server_ipaddr, self.port, match=mstr)
+            if pktreply:
+                self.lock_stateid = pktreply.NFSop.stateid.other
+                self.stid_map[self.lock_stateid] = "LOCK stateid"
+                self.stateid = self.lock_stateid
+            else:
+                # Open stateid should be used for I/O
+                self.stateid = self.open_stateid
+            self.pktt.rewind(save_index)
+        return self.stateid
+
+    def stid_str(self, stateid):
+        """Display the state id in CRC16 format"""
+        stid = self.format("{0:crc16}", stateid)
+        return self.stid_map.get(stateid, stid)
+
+    def get_freebytes(self, dir=None):
+        """Get the number of bytes available in the given directory.
+           It takes into account the effective user running the test.
+           The root user is allowed to use all the available disk space
+           on the device, on the other hand a regular user is allowed a
+           little bit less.
+        """
+        if dir is None:
+            dir = self.mtdir
+        statvfs = os.statvfs(dir)
+        if os.getuid() == 0:
+            # Use free blocks if root user
+            return statvfs.f_bsize * (statvfs.f_bfree-1)
+        else:
+            # Use free blocks available for a non-root user
+            return statvfs.f_bsize * (statvfs.f_bavail-1)
 
     @staticmethod
     def iomode_str(iomode):
