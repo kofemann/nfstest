@@ -138,9 +138,13 @@ class Host(BaseObj):
         ipv6 = self.proto[-1] == '6'
         self.ipaddr = self.get_ip_address(host=self.host, ipv6=ipv6)
 
-        # Load share library - used for functions not implemented
-        # in the python modules "os" or "posix"
-        self.libc = ctypes.CDLL('libc.so.6')
+        # Load share library - used for functions not exposed in python
+        try:
+            # Linux
+            self.libc = ctypes.CDLL('libc.so.6', use_errno=True)
+        except:
+            # MacOS
+            self.libc = ctypes.CDLL('libc.dylib', use_errno=True)
 
     def __del__(self):
         """Destructor
