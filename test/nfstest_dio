@@ -22,10 +22,10 @@ from packet.nfs.nfs4_const import *
 from nfstest.test_util import TestUtil
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.0.3'
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = "1.0.3"
 
 USAGE = """%prog --server <server> [options]
 
@@ -170,8 +170,7 @@ class DioTest(TestUtil):
         self.fbuffers = []
         self.PAGESIZE = os.sysconf(os.sysconf_names['SC_PAGESIZE'])
 
-        # Load share library for calling C library functions
-        self.libc = ctypes.CDLL('libc.so.6')
+        # Prototypes for libc functions
         self.libc.malloc.argtypes = [ctypes.c_long]
         self.libc.malloc.restype = ctypes.c_void_p
         self.libc.posix_memalign.argtypes = [ctypes.POINTER(ctypes.c_void_p), ctypes.c_long, ctypes.c_long]
