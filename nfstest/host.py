@@ -31,10 +31,10 @@ import nfstest_config as c
 from baseobj import BaseObj
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.0.5'
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = "1.1"
 
 class Host(BaseObj):
     """Host object
@@ -392,16 +392,21 @@ class Host(BaseObj):
             # Remove trailing '/' on export path if is not the root directory
             export = export.rstrip("/")
 
-        if mtopts[-1] != ',':
-            mtopts += ','
-
         # Using the proper version of NFS
-        minorversion_str = ""
-        if nfsversion == 4:
-            minorversion_str = "minorversion=%d," % minorversion
+        mt_list = []
+        if minorversion > 0:
+            mt_list.append("vers=%d.%d" % (nfsversion, minorversion))
+        else:
+            mt_list.append("vers=%d" % nfsversion)
+
+        if port != 2049:
+            mt_list.append("port=%d" % port)
+
+        mt_list.extend(["proto=%s"%proto, "sec=%s"%sec, mtopts])
+        mtopts = ",".join(mt_list)
 
         # Mount command
-        cmd = "mount -o vers=%d,%s%sproto=%s,sec=%s,port=%d %s:%s %s" % (nfsversion, minorversion_str, mtopts, proto, sec, port, server, export, mtpoint)
+        cmd = "mount -o %s %s:%s %s" % (mtopts, server, export, mtpoint)
         self.run_cmd(cmd, sudo=True, dlevel='DBG2', msg="Mount volume: ")
 
         self.mounted = True
