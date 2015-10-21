@@ -139,16 +139,17 @@ class DelegTest(TestUtil):
            Initialize object's private data.
         """
         TestUtil.__init__(self, **kwargs)
-        self.opts.version = "%prog " + __version__
-        hhelp = "Remote NFS client that mounts server used for multiple client tests"
-        self.opts.add_option("--client", default=None, help=hhelp)
+        self.test_opgroup.version = "%prog " + __version__
+        hhelp = "Remote NFS client used for recall tests"
+        self.test_opgroup.add_option("--client", default=None, help=hhelp)
         hhelp = "Starting offset for lock [default: %default]"
-        self.opts.add_option("--lock-offset", type="int", default=0, help=hhelp)
+        self.test_opgroup.add_option("--lock-offset", type="int", default=0, help=hhelp)
         hhelp = "Number of bytes to lock [default: %default]"
-        self.opts.add_option("--lock-len", type="int", default=0, help=hhelp)
+        self.test_opgroup.add_option("--lock-len", type="int", default=0, help=hhelp)
         hhelp = "Truncate file when writing from the second file for the recall tests"
-        self.opts.add_option("--truncate", action="store_true", default=False, help=hhelp)
+        self.test_opgroup.add_option("--truncate", action="store_true", default=False, help=hhelp)
         self.scan_options()
+
         # Disable createtraces option
         self.createtraces = False
 

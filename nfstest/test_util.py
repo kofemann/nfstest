@@ -55,13 +55,13 @@ from utils import *
 import nfstest_config as c
 from baseobj import BaseObj
 from nfs_util import NFSUtil
-from optparse import OptionParser, IndentedHelpFormatter
+from optparse import OptionParser, OptionGroup, IndentedHelpFormatter
 
 # Module constants
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.1"
+__version__   = "1.2"
 
 # Constants
 PASS = 0
@@ -303,48 +303,114 @@ class TestUtil(NFSUtil):
     def _init_options(self):
         """Initialize command line options parsing and definitions."""
         self.opts = OptionParser("%prog [options]", formatter = IndentedHelpFormatter(2, 25), version = "%prog " + __version__)
-        self.opts.add_option("-f", "--file", default="", help="Options file")
-        self.opts.add_option("-s", "--server", default=self.server, help="Server name or IP address")
-        self.opts.add_option("-p", "--port", type="int", default=self.port, help="NFS server port [default: %default]")
-        self.opts.add_option("--proto", default=self.proto, help="NFS protocol name [default: '%default']")
-        self.opts.add_option("--sec", default=self.sec, help="Security flavor [default: '%default']")
-        self.opts.add_option("--nfsversion", type="float", default=self.nfsversion, help="NFS version [default: %default]")
-        self.opts.add_option("-e", "--export", default=self.export, help="Exported file system to mount [default: '%default']")
-        self.opts.add_option("-m", "--mtpoint", default=self.mtpoint, help="Mount point [default: '%default']")
-        self.opts.add_option("--datadir", default=self.datadir, help="Data directory where files are created [default: '%default']")
-        self.opts.add_option("-o", "--mtopts", default=self.mtopts, help="Mount options [default: '%default']")
-        self.opts.add_option("-i", "--interface", default=None, help="Device interface [default: '%default']")
-        self.opts.add_option("-v", "--verbose", default="none", help="Verbose level [default: '%default']")
-        self.opts.add_option("--tag", default="", help="Informational tag [default: '%default']")
-        self.opts.add_option("--nocleanup", action="store_true", default=False, help="Do not cleanup")
-        self.opts.add_option("--rmtraces", action="store_true", default=False, help="Remove trace files [default: remove trace files if no errors]")
-        self.opts.add_option("--keeptraces", action="store_true", default=False, help="Do not remove any trace files [default: remove trace files if no errors]")
-        self.opts.add_option("--createtraces", action="store_true", default=False, help="Create a packet trace for each test [default: %default]")
-        self.opts.add_option("--createlog", action="store_true", default=False, help="Create log file")
-        self.opts.add_option("--bugmsgs", default=self.bugmsgs, help="File containing test messages to mark as bugs if they failed")
-        self.opts.add_option("--ignore", action="store_true", default=self.ignore, help="Ignore all bugs given by bugmsgs")
-        self.opts.add_option("--nomount", action="store_true", default=self.nomount, help="Do not mount server")
-        self.opts.add_option("--basename", default='', help="Base name for all files and logs [default: automatically generated]")
-        self.opts.add_option("--tverbose", default=_rtverbose_map[self.tverbose], help="Verbose level for test messages [default: '%default']")
-        self.opts.add_option("--filesize", type="int", default=65536, help="File size to use for test files [default: %default]")
-        self.opts.add_option("--nfiles", type="int", default=2, help="Number of files to create [default: %default]")
-        self.opts.add_option("--rsize", type="int", default=4096, help="Read size to use when reading files [default: %default]")
-        self.opts.add_option("--wsize", type="int", default=4096, help="Write size to use when writing files [default: %default]")
-        self.opts.add_option("--iodelay", type="float", default=0.1, help="Seconds to delay I/O operations [default: %default]")
-        self.opts.add_option("--trcdelay", type="float", default=0.0, help="Seconds to delay before stopping packet trace [default: %default]")
-        self.opts.add_option("--offset-delta", type="int", default=4096, help="Read/Write offset delta [default: %default]")
-        self.opts.add_option("--warnings", action="store_true", default=False, help="Display warnings")
-        self.opts.add_option("--nfsdebug", default=self.nfsdebug, help="Set NFS kernel debug flags and save log messages [default: '%default']")
-        self.opts.add_option("--rpcdebug", default=self.rpcdebug, help="Set RPC kernel debug flags and save log messages [default: '%default']")
-        self.opts.add_option("--sudo", default=self.sudo, help="Full path of binary for sudo [default: '%default']")
-        self.opts.add_option("--tcpdump", default=self.tcpdump, help="Full path of binary for tcpdump [default: '%default']")
-        self.opts.add_option("--tbsize", type="int", default=self.tbsize, help="Capture buffer size for tcpdump [default: '%default']")
-        self.opts.add_option("--iptables", default=self.iptables, help="Full path of binary for iptables [default: '%default']")
-        self.opts.add_option("--messages", default=self.messages, help="Full path of log messages file [default: '%default']")
-        self.opts.add_option("--tmpdir", default=self.tmpdir, help="Temporary directory [default: '%default']")
+        hmsg = "File where options are specified besides the system wide " + \
+               "file /etc/nfstest, user wide file $HOME/.nfstest or in " + \
+               "the current directory .nfstest file"
+        self.opts.add_option("-f", "--file", default="", help=hmsg)
+
+        self.nfs_opgroup = OptionGroup(self.opts, "NFS specific options")
+        hmsg = "Server name or IP address"
+        self.nfs_opgroup.add_option("-s", "--server", default=self.server, help=hmsg)
+        hmsg = "Exported file system to mount [default: '%default']"
+        self.nfs_opgroup.add_option("-e", "--export", default=self.export, help=hmsg)
+        hmsg = "NFS version, e.g., 3, 4, 4.1, etc. [default: %default]"
+        self.nfs_opgroup.add_option("--nfsversion", type="float", default=self.nfsversion, help=hmsg)
+        hmsg = "Mount point [default: '%default']"
+        self.nfs_opgroup.add_option("-m", "--mtpoint", default=self.mtpoint, help=hmsg)
+        hmsg = "NFS server port [default: %default]"
+        self.nfs_opgroup.add_option("-p", "--port", type="int", default=self.port, help=hmsg)
+        hmsg = "NFS protocol name [default: '%default']"
+        self.nfs_opgroup.add_option("--proto", default=self.proto, help=hmsg)
+        hmsg = "Security flavor [default: '%default']"
+        self.nfs_opgroup.add_option("--sec", default=self.sec, help=hmsg)
+        hmsg = "Mount options [default: '%default']"
+        self.nfs_opgroup.add_option("-o", "--mtopts", default=self.mtopts, help=hmsg)
+        hmsg = "Data directory where files are created, directory is " + \
+               "created on the mount point [default: '%default']"
+        self.nfs_opgroup.add_option("--datadir", default=self.datadir, help=hmsg)
+        self.opts.add_option_group(self.nfs_opgroup)
+
+        self.log_opgroup = OptionGroup(self.opts, "Logging options")
+        hmsg = "Verbose level for debug messages [default: '%default']"
+        self.log_opgroup.add_option("-v", "--verbose", default="none", help=hmsg)
+        hmsg = "Verbose level for test messages [default: '%default']"
+        self.log_opgroup.add_option("--tverbose", default=_rtverbose_map[self.tverbose], help=hmsg)
+        hmsg = "Create log file"
+        self.log_opgroup.add_option("--createlog", action="store_true", default=False, help=hmsg)
+        hmsg = "Display warnings"
+        self.log_opgroup.add_option("--warnings", action="store_true", default=False, help=hmsg)
+        hmsg = "Informational tag, it is displayed as an INFO message [default: '%default']"
+        self.log_opgroup.add_option("--tag", default="", help=hmsg)
+        self.opts.add_option_group(self.log_opgroup)
+
+        self.cap_opgroup = OptionGroup(self.opts, "Packet trace options")
+        hmsg = "Create a packet trace for each test"
+        self.cap_opgroup.add_option("--createtraces", action="store_true", default=False, help=hmsg)
+        hmsg = "Capture buffer size for tcpdump [default: '%default']"
+        self.cap_opgroup.add_option("--tbsize", type="int", default=self.tbsize, help=hmsg)
+        hmsg = "Seconds to delay before stopping packet trace [default: %default]"
+        self.cap_opgroup.add_option("--trcdelay", type="float", default=0.0, help=hmsg)
+        hmsg = "Do not remove any trace files [default: remove trace files if no errors]"
+        self.cap_opgroup.add_option("--keeptraces", action="store_true", default=False, help=hmsg)
+        hmsg = "Remove trace files [default: remove trace files if no errors]"
+        self.cap_opgroup.add_option("--rmtraces", action="store_true", default=False, help=hmsg)
+        hmsg = "Device interface [default: automatically selected]"
+        self.cap_opgroup.add_option("-i", "--interface", default=None, help=hmsg)
+        self.opts.add_option_group(self.cap_opgroup)
+
+        self.file_opgroup = OptionGroup(self.opts, "File options")
+        hmsg = "Number of files to create [default: %default]"
+        self.file_opgroup.add_option("--nfiles", type="int", default=2, help=hmsg)
+        hmsg = "File size to use for test files [default: %default]"
+        self.file_opgroup.add_option("--filesize", type="int", default=65536, help=hmsg)
+        hmsg = "Read size to use when reading files [default: %default]"
+        self.file_opgroup.add_option("--rsize", type="int", default=4096, help=hmsg)
+        hmsg = "Write size to use when writing files [default: %default]"
+        self.file_opgroup.add_option("--wsize", type="int", default=4096, help=hmsg)
+        hmsg = "Seconds to delay I/O operations [default: %default]"
+        self.file_opgroup.add_option("--iodelay", type="float", default=0.1, help=hmsg)
+        hmsg = "Read/Write offset delta [default: %default]"
+        self.file_opgroup.add_option("--offset-delta", type="int", default=4096, help=hmsg)
+        self.opts.add_option_group(self.file_opgroup)
+
+        self.path_opgroup = OptionGroup(self.opts, "Path options")
+        hmsg = "Full path of binary for sudo [default: '%default']"
+        self.path_opgroup.add_option("--sudo", default=self.sudo, help=hmsg)
+        hmsg = "Full path of binary for tcpdump [default: '%default']"
+        self.path_opgroup.add_option("--tcpdump", default=self.tcpdump, help=hmsg)
+        hmsg = "Full path of binary for iptables [default: '%default']"
+        self.path_opgroup.add_option("--iptables", default=self.iptables, help=hmsg)
+        hmsg = "Full path of log messages file [default: '%default']"
+        self.path_opgroup.add_option("--messages", default=self.messages, help=hmsg)
+        hmsg = "Temporary directory [default: '%default']"
+        self.path_opgroup.add_option("--tmpdir", default=self.tmpdir, help=hmsg)
+        self.opts.add_option_group(self.path_opgroup)
+
+        self.dbg_opgroup = OptionGroup(self.opts, "Debug options")
+        hmsg = "Do not cleanup created files"
+        self.dbg_opgroup.add_option("--nocleanup", action="store_true", default=False, help=hmsg)
+        hmsg = "File containing test messages to mark as bugs if they failed"
+        self.dbg_opgroup.add_option("--bugmsgs", default=self.bugmsgs, help=hmsg)
+        hmsg = "Ignore all bugs given by bugmsgs"
+        self.dbg_opgroup.add_option("--ignore", action="store_true", default=self.ignore, help=hmsg)
+        hmsg = "Do not mount server and run the tests on local disk space"
+        self.dbg_opgroup.add_option("--nomount", action="store_true", default=self.nomount, help=hmsg)
+        hmsg = "Base name for all files and logs [default: automatically generated]"
+        self.dbg_opgroup.add_option("--basename", default='', help=hmsg)
+        hmsg = "Set NFS kernel debug flags and save log messages [default: '%default']"
+        self.dbg_opgroup.add_option("--nfsdebug", default=self.nfsdebug, help=hmsg)
+        hmsg = "Set RPC kernel debug flags and save log messages [default: '%default']"
+        self.dbg_opgroup.add_option("--rpcdebug", default=self.rpcdebug, help=hmsg)
+        self.opts.add_option_group(self.dbg_opgroup)
+
         usage = self.usage
         if len(self.testnames) > 0:
-            self.opts.add_option("--runtest", default='all', help="Comma separated list of tests to run [default: '%default']")
+            self.test_opgroup = OptionGroup(self.opts, "Test options")
+            hmsg = "Comma separated list of tests to run, if list starts " + \
+                   "with a '^' then all tests are run except the ones " + \
+                   "listed [default: '%default']"
+            self.test_opgroup.add_option("--runtest", default='all', help=hmsg)
+            self.opts.add_option_group(self.test_opgroup)
             if len(usage) == 0:
                 usage = "%prog [options]"
             usage += "\n\nAvailable tests:"

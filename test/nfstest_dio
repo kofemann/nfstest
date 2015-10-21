@@ -137,10 +137,14 @@ class DioTest(TestUtil):
         self.opts.version = "%prog " + __version__
         self.opts.set_defaults(filesize=262144)
         self.opts.set_defaults(mtopts="hard,intr")
-        self.opts.add_option("--iotype", default='read,write', help="List of I/O types to test [default: '%default']")
-        self.opts.add_option("--biotype", default='none,read,write', help="List of buffered I/O types to test [default: '%default']")
-        self.opts.add_option("--withdeleg", default='false,true', help="Use delegation on tests [default: both without and with delegation]")
+        hmsg = "List of I/O types to test [default: '%default']"
+        self.test_opgroup.add_option("--iotype", default='read,write', help=hmsg)
+        hmsg = "List of buffered I/O types to test [default: '%default']"
+        self.test_opgroup.add_option("--biotype", default='none,read,write', help=hmsg)
+        hmsg = "Use delegation on tests [default: both without and with delegation]"
+        self.test_opgroup.add_option("--withdeleg", default='false,true', help=hmsg)
         self.scan_options()
+
         # Disable createtraces option
         self.createtraces = False
 

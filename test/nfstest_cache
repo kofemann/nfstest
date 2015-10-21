@@ -85,18 +85,22 @@ class CacheTest(TestUtil):
         TestUtil.__init__(self, **kwargs)
         self.opts.version = "%prog " + __version__
         self.opts.set_defaults(filesize=32)
-        self.opts.add_option("--client", help="Remote NFS client that mounts server used for multiple client tests")
-        self.opts.add_option("--client-port", type="int", default=333, help="NFS server port for client to mount [default: value given in 'port' option]")
-        self.opts.add_option("--justbefore", type="int", default=2, help="Time in seconds to test a condition just before it is expected to come true [default: %default]")
-        self.opts.add_option("--acmin", default='10', help="Comma separated values to use for acregmin/acdirmin/actimeo [default: %default]")
-        self.opts.add_option("--acmax", default='20', help="Comma separated values to use for acregmax/acdirmax, first value of acmin will be used as acregmin/acdirmin [default: %default]")
+        hmsg = "Remote NFS client"
+        self.test_opgroup.add_option("--client", help=hmsg)
+        hmsg = "Time in seconds to test a condition just before it is " + \
+               "expected to come true [default: %default]"
+        self.test_opgroup.add_option("--justbefore", type="int", default=2, help=hmsg)
+        hmsg = "Comma separated values to use for " + \
+               "acregmin/acdirmin/actimeo [default: %default]"
+        self.test_opgroup.add_option("--acmin", default='10', help=hmsg)
+        hmsg = "Comma separated values to use for acregmax/acdirmax, " + \
+               "first value of acmin will be used as acregmin/acdirmin " + \
+               "[default: %default]"
+        self.test_opgroup.add_option("--acmax", default='20', help=hmsg)
         self.scan_options()
 
         if not self.client:
             self.opts.error("client option is required")
-
-        if not self.client_port:
-            self.client_port = self.port
 
         self.create_host(self.client)
 

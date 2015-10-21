@@ -73,8 +73,8 @@ class InteropTest(TestUtil):
         """
         TestUtil.__init__(self, **kwargs)
         self.opts.version = "%prog " + __version__
-        shelp="Size of data to be written by each version of NFS [default: '%default']"
-        self.opts.add_option("--datasize", type="int", default=10, help=shelp)
+        hmsg = "Size of data to be written by each version of NFS [default: '%default']"
+        self.test_opgroup.add_option("--datasize", type="int", default=10, help=hmsg)
         self.scan_options()
 
     def do_read(self, absfile, version):
