@@ -34,7 +34,7 @@ from baseobj import BaseObj
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.1"
+__version__   = "1.2"
 
 class Host(BaseObj):
     """Host object
@@ -80,9 +80,7 @@ class Host(BaseObj):
            server:
                NFS server name or IP address [default: None]
            nfsversion:
-               NFS version [default: 4]
-           minorversion:
-               NFS minor version [default: 1]
+               NFS version [default: 4.1]
            proto:
                NFS protocol name [default: 'tcp']
            port:
@@ -111,7 +109,6 @@ class Host(BaseObj):
         self.user         = kwargs.pop("user",         '')
         self.server       = kwargs.pop("server",       '')
         self.nfsversion   = kwargs.pop("nfsversion",   c.NFSTEST_NFSVERSION)
-        self.minorversion = kwargs.pop("minorversion", c.NFSTEST_MINORVERSION)
         self.proto        = kwargs.pop("proto",        c.NFSTEST_NFSPROTO)
         self.port         = kwargs.pop("port",         c.NFSTEST_NFSPORT)
         self.sec          = kwargs.pop("sec",          c.NFSTEST_NFSSEC)
@@ -161,6 +158,30 @@ class Host(BaseObj):
                 self.run_cmd(cmd, sudo=True, dlevel='DBG3', msg="Removing mount point directory: ")
             except:
                 pass
+
+    def nfsvers(self, version=None):
+        """Return major and minor version for the given NFS version
+
+           version:
+               NFS version, default is the object attribute nfsversion
+        """
+        if version is None:
+            version = self.nfsversion
+        major = int(version)
+        minor = int(round(10*(version-major)))
+        return (major, minor)
+
+    def nfsstr(self, version=None):
+        """Return the NFS string for the given NFS version
+
+           version:
+               NFS version, default is the object attribute nfsversion
+        """
+        nver, mver = self.nfsvers(version)
+        if mver == 0:
+            return "NFSv%d" % nver
+        else:
+            return "NFSv%d.%d" % (nver, mver)
 
     def sudo_cmd(self, cmd):
         """Prefix the SUDO command if effective user is not root."""
@@ -345,8 +366,6 @@ class Host(BaseObj):
                NFS server name or IP address [default: self.server]
            nfsversion:
                NFS version [default: self.nfsversion]
-           minorversion:
-               NFS minor version [default: self.minorversion]
            proto:
                NFS protocol name [default: self.proto]
            port:
@@ -367,7 +386,6 @@ class Host(BaseObj):
         # Get options
         server       = kwargs.pop("server",       self.server)
         nfsversion   = kwargs.pop("nfsversion",   self.nfsversion)
-        minorversion = kwargs.pop("minorversion", self.minorversion)
         proto        = kwargs.pop("proto",        self.proto)
         port         = kwargs.pop("port",         self.port)
         sec          = kwargs.pop("sec",          self.sec)
@@ -394,10 +412,11 @@ class Host(BaseObj):
 
         # Using the proper version of NFS
         mt_list = []
-        if minorversion > 0:
-            mt_list.append("vers=%d.%d" % (nfsversion, minorversion))
+        nver, mver = self.nfsvers(nfsversion)
+        if mver > 0:
+            mt_list.append("vers=%d.%d" % (nver, mver))
         else:
-            mt_list.append("vers=%d" % nfsversion)
+            mt_list.append("vers=%d" % nver)
 
         if port != 2049:
             mt_list.append("port=%d" % port)

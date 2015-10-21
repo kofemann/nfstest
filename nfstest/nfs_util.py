@@ -161,7 +161,6 @@ class NFSUtil(Host):
             user         = kwargs.pop("user", ""),
             server       = kwargs.pop("server",       self.server),
             nfsversion   = kwargs.pop("nfsversion",   self.nfsversion),
-            minorversion = kwargs.pop("minorversion", self.minorversion),
             proto        = kwargs.pop("proto",        self.proto),
             port         = kwargs.pop("port",         self.port),
             sec          = kwargs.pop("sec",          self.sec),

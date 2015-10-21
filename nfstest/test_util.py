@@ -308,8 +308,7 @@ class TestUtil(NFSUtil):
         self.opts.add_option("-p", "--port", type="int", default=self.port, help="NFS server port [default: %default]")
         self.opts.add_option("--proto", default=self.proto, help="NFS protocol name [default: '%default']")
         self.opts.add_option("--sec", default=self.sec, help="Security flavor [default: '%default']")
-        self.opts.add_option("--nfsversion", type="int", default=self.nfsversion, help="NFS version [default: %default]")
-        self.opts.add_option("--minorversion", type="int", default=self.minorversion, help="Minor version [default: %default]")
+        self.opts.add_option("--nfsversion", type="float", default=self.nfsversion, help="NFS version [default: %default]")
         self.opts.add_option("-e", "--export", default=self.export, help="Exported file system to mount [default: '%default']")
         self.opts.add_option("-m", "--mtpoint", default=self.mtpoint, help="Mount point [default: '%default']")
         self.opts.add_option("--datadir", default=self.datadir, help="Data directory where files are created [default: '%default']")
@@ -422,18 +421,6 @@ class TestUtil(NFSUtil):
             else:
                 return
         return rlist
-
-    def str_nfs(self, **kwargs):
-        """Return the NFS string according to the given version and minorversion.
-
-           version:
-               NFS version [default: --nfsversion option]
-           minorversion:
-               NFS minor version [default: --minorversion option]
-        """
-        nfsversion   = kwargs.pop("version",      self.nfsversion)
-        minorversion = kwargs.pop("minorversion", self.minorversion)
-        return "NFSv%d%s" % (nfsversion, ".%d" % minorversion if minorversion else "")
 
     def scan_options(self):
         """Process command line options.
@@ -615,8 +602,6 @@ class TestUtil(NFSUtil):
                 else:
                     self.interface = c.NFSTEST_INTERFACE
             self.ipaddr = self.client_ipaddr
-            if self.nfsversion < 4:
-                self.minorversion = 0
 
             self.tverbose = _tverbose_map.get(self.tverbose)
             if self.tverbose is None:

@@ -19,10 +19,10 @@ import nfstest_config as c
 from nfstest.test_util import TestUtil
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '1.0'
+__version__   = "1.0"
 
 USAGE = """%prog --server <server> [options]
 
@@ -97,24 +97,20 @@ class InteropTest(TestUtil):
         ofd = None
         # Write data for each version of NFS
         data_map = {
-            "v3"   : {"args":{"nfsversion":3,
-                              "mtpoint":self.mtpoint+"_v30"},
+            "v3"   : {"args":{"nfsversion":3, "mtpoint":self.mtpoint+"_v30"},
                       "data":self.data_pattern(0, self.datasize, "A")},
-            "v4"   : {"args":{"nfsversion":4, "minorversion":0,
-                              "mtpoint":self.mtpoint+"_v40"},
+            "v4"   : {"args":{"nfsversion":4, "mtpoint":self.mtpoint+"_v40"},
                       "data":self.data_pattern(0, self.datasize, "B")},
-            "v4.1" : {"args":{"nfsversion":4, "minorversion":1,
-                              "mtpoint":self.mtpoint+"_v41"},
+            "v4.1" : {"args":{"nfsversion":4.1, "mtpoint":self.mtpoint+"_v41"},
                       "data":self.data_pattern(0, self.datasize, "C")},
         }
         # Initialize expected data to be read
         self.write_data = ""
 
         try:
-            # Ignore options --nfsversion and --minorversion and use the
-            # version given for the specific test instead. This mount is
-            # used for reading the file after data has been written by
-            # other NFS versions.
+            # Ignore option --nfsversion and use the version given for the
+            # specific test instead. This mount is used for reading the file
+            # after data has been written by other NFS versions.
             mtargs = dict(data_map[version]["args"])
             mtargs["mtpoint"] = self.mtpoint
             self.trace_start("/tmp/0.trc")

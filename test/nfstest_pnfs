@@ -22,10 +22,10 @@ from packet.nfs.nfs4_const import *
 from nfstest.test_util import TestUtil
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '1.0.3'
+__version__   = "1.0.3"
 
 USAGE = """%prog --server <server> [options]
 
@@ -100,12 +100,14 @@ class pNFSTest(TestUtil):
         TestUtil.__init__(self, **kwargs)
         self.opts.version = "%prog " + __version__
         self.scan_options()
+
         # Disable createtraces option
         self.createtraces = False
+
         self.deviceids = {}
         self.stripe_size = None
-        if self.nfsversion != 4 or self.minorversion == 0:
-            self.config("Cannot use %s for pNFS testing" % self.str_nfs())
+        if self.nfsversion < 4.1:
+            self.config("Cannot use %s for pNFS testing" % self.nfsstr())
 
     def verify_stateid(self, openfh, sent_stateid):
         """Return expected stateid of I/O and verify it with stateid sent
@@ -687,15 +689,15 @@ class pNFSTest(TestUtil):
             orig_data = self.data_pattern(0, self.filesize)
             files = []
             vers = []
-            for version in (4, 3, 2):
+            for version in (4, 3):
                 try:
                     self.umount()
-                    self.mount(nfsversion=version, minorversion=0)
+                    self.mount(nfsversion=version)
                 except Exception as e:
                     self.warning(str(e))
                     continue
 
-                ver = self.str_nfs(version=version, minorversion=0)
+                ver = self.nfsstr(version)
                 vers.append(ver)
 
                 fstat = os.stat(testfile)
@@ -717,7 +719,7 @@ class pNFSTest(TestUtil):
 
         self.test_group("Verify files created with different versions of NFS are read correctly from pNFS")
         try:
-            self.mount(nfsversion=4, minorversion=1)
+            self.mount()
             index = 0
             for testfile in files:
                 fstat = os.stat(testfile)

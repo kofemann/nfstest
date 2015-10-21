@@ -281,7 +281,7 @@ class PosixTest(TestUtil):
 
     def access_test(self):
         """Verify POSIX API access() on files with different modes."""
-        self.test_group("Verify POSIX API access() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API access() on %s" % self.nfsstr())
         perms = [0777, 0666, 0555, 0333, 0444, 0222, 0111, 000]
         cperms = [07, 06, 05, 03]
 
@@ -301,7 +301,7 @@ class PosixTest(TestUtil):
         """Verify POSIX API chdir() by changing to a newly created directory
            and then by changing back to the original directory.
         """
-        self.test_group("Verify POSIX API chdir() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API chdir() on %s" % self.nfsstr())
 
         cwd_orig = os.getcwd()
         self.create_dir()
@@ -324,7 +324,7 @@ class PosixTest(TestUtil):
            combinations of modes. Verify that the st_ctime files is updated
            for both the file and directory.
         """
-        self.test_group("Verify POSIX API chmod() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API chmod() on %s" % self.nfsstr())
 
         for objtype in ['file', 'directory']:
             if objtype == 'file':
@@ -372,7 +372,7 @@ class PosixTest(TestUtil):
         """Verify POSIX API close() works and that writing to a closed file
            descriptor returns an error.
         """
-        self.test_group("Verify POSIX API close() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API close() on %s" % self.nfsstr())
 
         self.get_filename()
         self.dprint('DBG3', "Open file %s for writing" % self.absfile)
@@ -400,7 +400,7 @@ class PosixTest(TestUtil):
         """Verify POSIX API closedir() works and that reading to a closed file
            descriptor returns an error.
         """
-        self.test_group("Verify POSIX API closedir() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API closedir() on %s" % self.nfsstr())
 
         self.create_dir()
 
@@ -417,7 +417,7 @@ class PosixTest(TestUtil):
            that does not exist to verify the file was created and then test
            with a path that does exist to verify that the file is truncated.
         """
-        self.test_group("Verify POSIX API creat() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API creat() on %s" % self.nfsstr())
 
         mode = 0754
         self.get_filename()
@@ -573,7 +573,7 @@ class PosixTest(TestUtil):
            flag and making sure it gets set.
            Run the test for both 'read' and 'write'.
         """
-        self.test_group("Verify POSIX API fcntl() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API fcntl() on %s" % self.nfsstr())
 
         self._fcntl_test('read')
         self._fcntl_test('write')
@@ -625,7 +625,7 @@ class PosixTest(TestUtil):
         """Verify POSIX API fstatvfs() by making sure all the members of the
            structure are returned.
         """
-        self.test_group("Verify POSIX API fstatvfs() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API fstatvfs() on %s" % self.nfsstr())
 
         self.create_file()
         self.dprint('DBG3', "Open file %s for reading" % self.absfile)
@@ -649,7 +649,7 @@ class PosixTest(TestUtil):
            st_ctime and st_mtime for the directory. Verify st_link count
            incremented by 1 for the file.
         """
-        self.test_group("Verify POSIX API link() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API link() on %s" % self.nfsstr())
 
         # Get info of source file
         srcfile = self.abspath(self.files[0])
@@ -673,7 +673,7 @@ class PosixTest(TestUtil):
         """Verify POSIX API lseek() with different offsets and whence
            values including seeking past the end of the file.
         """
-        self.test_group("Verify POSIX API lseek() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API lseek() on %s" % self.nfsstr())
 
         data = "AAAAAAAAAAAAAAAAAAAA"
         self.get_filename()
@@ -801,7 +801,7 @@ class PosixTest(TestUtil):
            and symbolic link to a directory.
         """
         op_str = stat_map[stat_mode]
-        self.test_group("Verify POSIX API %s() on %s" % (op_str, self.str_nfs()))
+        self.test_group("Verify POSIX API %s() on %s" % (op_str, self.nfsstr()))
 
         self.test_info("Regular file")
         self.create_file(mode=0754)
@@ -840,7 +840,7 @@ class PosixTest(TestUtil):
            link fails. Verify that the st_ctime and st_mtime fields of the
            parent directory are updated.
         """
-        self.test_group("Verify POSIX API mkdir() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API mkdir() on %s" % self.nfsstr())
 
         topdir = self.create_dir()
         abstopdir = self.absdir
@@ -889,7 +889,7 @@ class PosixTest(TestUtil):
            Verify POSIX API munmap() by mapping a file and then unmapping
            the file.
         """
-        self.test_group("Verify POSIX API %s() on %s" % (objtype, self.str_nfs()))
+        self.test_group("Verify POSIX API %s() on %s" % (objtype, self.nfsstr()))
         N = self.filesize
 
         absfile = self.abspath(self.files[0])
@@ -1010,7 +1010,7 @@ class PosixTest(TestUtil):
            Verify file open with O_CREAT and O_TRUNC set will truncate an
            existing file. Verify that it updates the file st_ctime and st_mtime.
         """
-        self.test_group("Verify POSIX API open() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API open() on %s" % self.nfsstr())
 
         flist = []
         flag_list = list(open_flag_list)
@@ -1230,7 +1230,7 @@ class PosixTest(TestUtil):
 
     def opendir_test(self):
         """Verify POSIX API opendir() on a directory."""
-        self.test_group("Verify POSIX API opendir() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API opendir() on %s" % self.nfsstr())
 
         self.create_dir()
         fd = self.libc.opendir(self.absdir)
@@ -1244,7 +1244,7 @@ class PosixTest(TestUtil):
            the st_atime of the file is updated after the read. Verify a read
            of 0 bytes returns 0.
         """
-        self.test_group("Verify POSIX API read() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API read() on %s" % self.nfsstr())
         #self.umount()
         #self.mount()
 
@@ -1265,7 +1265,7 @@ class PosixTest(TestUtil):
 
     def readdir_test(self):
         """Verify POSIX API readdir() on a directory."""
-        self.test_group("Verify POSIX API readdir() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API readdir() on %s" % self.nfsstr())
 
         self.create_dir()
         self.create_file(dir=self.dirname)
@@ -1287,7 +1287,7 @@ class PosixTest(TestUtil):
 
     def readlink_test(self):
         """Verify Test POSIX API readlink() by reading a symbolic link."""
-        self.test_group("Verify POSIX API readlink() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API readlink() on %s" % self.nfsstr())
 
         self.create_file()
         srcfile = self.absfile
@@ -1310,7 +1310,7 @@ class PosixTest(TestUtil):
            symbolic link. Verify that a rename from a file to a symbolic
            link will cause the symbolic link to be removed.
         """
-        self.test_group("Verify POSIX API rename() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API rename() on %s" % self.nfsstr())
 
         self.test_info("Rename file")
         self.create_file()
@@ -1364,7 +1364,7 @@ class PosixTest(TestUtil):
         """Verify POSIX API rmdir() by removing a directory. Verify that the
            parent's st_ctime and st_mtime are updated.
         """
-        self.test_group("Verify POSIX API rmdir() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API rmdir() on %s" % self.nfsstr())
 
         dir = self.create_dir()
         topdir = self.absdir
@@ -1408,7 +1408,7 @@ class PosixTest(TestUtil):
         """Verify POSIX API statvfs() by making sure all the members of the
            structure are returned.
         """
-        self.test_group("Verify POSIX API statvfs() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API statvfs() on %s" % self.nfsstr())
 
         self.create_file()
         self._statvfs_test(path=self.absfile)
@@ -1420,7 +1420,7 @@ class PosixTest(TestUtil):
         """Verify POSIX API symlink() by creating a symbolic link and verify
            that the file type is slnk.
         """
-        self.test_group("Verify POSIX API symlink() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API symlink() on %s" % self.nfsstr())
 
         srcfile = self.abspath(self.files[0])
         self.get_filename()
@@ -1435,7 +1435,7 @@ class PosixTest(TestUtil):
 
     def _sync(self, objtype):
         """Verify POSIX API sync(), fdatasync() or fsync()."""
-        self.test_group("Verify POSIX API %s() on %s" % (objtype, self.str_nfs()))
+        self.test_group("Verify POSIX API %s() on %s" % (objtype, self.nfsstr()))
 
         self.get_filename()
         self.dprint('DBG3', "Open file %s for writing" % self.absfile)
@@ -1490,7 +1490,7 @@ class PosixTest(TestUtil):
 
     def _tell_seek_dir_test(self, objtype):
         """Verify POSIX API telldir(), seekdir() or rewinddir() on a directory."""
-        self.test_group("Verify POSIX API %s() on %s" % (objtype, self.str_nfs()))
+        self.test_group("Verify POSIX API %s() on %s" % (objtype, self.nfsstr()))
 
         self.create_dir()
         N = 5
@@ -1547,7 +1547,7 @@ class PosixTest(TestUtil):
            link count is greater than 1. Unlink the hard file and verify that
            st_ctime field is updated.
         """
-        self.test_group("Verify POSIX API unlink() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API unlink() on %s" % self.nfsstr())
 
         self.create_file()
         dstat_b = os.stat(self.mtdir)
@@ -1608,7 +1608,7 @@ class PosixTest(TestUtil):
            written patterns and verify that it is the correct pattern.
            Read in the data from the hole in the file and verify that it is 0.
         """
-        self.test_group("Verify POSIX API write() on %s" % self.str_nfs())
+        self.test_group("Verify POSIX API write() on %s" % self.nfsstr())
 
         self.get_filename()
         self.dprint('DBG3', "Open file %s for writing" % self.absfile)

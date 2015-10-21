@@ -138,9 +138,11 @@ OPENMAP    = {os.O_RDONLY:'O_RDONLY', os.O_WRONLY:'O_WRONLY', os.O_RDWR:'O_RDWR'
 OPENMAP_R  = {'read':os.O_RDONLY, 'write':os.O_WRONLY, 'rdwr':os.O_RDWR}
 
 # Client option list of arguments separated by ":"
-CLOPTS = ["client", "server", "export", "nfsversion", "minorversion", "port", "proto", "sec"]
+CLOPTS = ["client", "server", "export", "nfsversion", "port", "proto", "sec"]
+# Client option list of arguments that should be converted to floating point
+FLOATOPTS = ["nfsversion"]
 # Client option list of arguments that should be converted to integers
-INTOPTS = ["nfsversion", "minorversion", "port"]
+INTOPTS = ["port"]
 
 # Locking and helper functions
 def getlock(fd, lock_type, offset=0, length=0, stype=F_SETLK, timeout=30):
@@ -279,14 +281,14 @@ class LockTest(TestUtil):
 
            Clients are separated by a "," and each client definition can have
            the following options separated by ":":
-               client:server:export:nfsversion:minorversion:port:proto:sec
+               client:server:export:nfsversion:port:proto:sec
 
            Examples:
                LOCK = {
-                   # Using positional options for minorversion=1
-                   client = client1::::1,client2
+                   # Using positional options for nfsversion=4.1
+                   client = client1:::4.1,client2
                    # Using named options
-                   client = client1:minorversion=1,client2
+                   client = client1:nfsversion=4.1,client2
                }
         """
         if self.client is None:
@@ -318,6 +320,8 @@ class LockTest(TestUtil):
                         val = dlist[1].replace(" ", "")
                     if arg in INTOPTS:
                         val = int(val)
+                    elif arg in FLOATOPTS:
+                        val = float(val)
                     cldict[arg] = val
             self.client_list.append(cldict)
 
