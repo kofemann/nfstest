@@ -1541,7 +1541,7 @@ class PosixTest(TestUtil):
            was removed. Verify that the st_ctime and st_mtime fields of the
            parent directory were updated. Then unlink a symbolic link and
            verify that the symbolic link was removed but not the referenced
-           file. Then remove an open file and verify that I/O still occurs
+           file. Then remove an opened file and verify that I/O still occurs
            to the file after the unlink and that the file gets removed when
            the file is closed. Create a file and then hard link to it so the
            link count is greater than 1. Unlink the hard file and verify that
@@ -1571,18 +1571,18 @@ class PosixTest(TestUtil):
         self.test(not os.path.exists(self.absfile), "unlink - symbolic link should be removed")
         self.test(os.path.exists(srcfile), "unlink - symbolic link source file should not be removed")
 
-        self.test_info("Unlink open file")
+        self.test_info("Unlink opened file")
         self.get_filename()
         self.dprint('DBG3', "Open file %s for writing" % self.absfile)
         fd = posix.open(self.absfile, posix.O_WRONLY|posix.O_CREAT)
         self.dprint('DBG3', "Remove file %s using POSIX API unlink()" % self.absfile)
         posix.unlink(self.absfile)
-        self.test(not os.path.exists(self.absfile), "unlink - open file should be removed")
+        self.test(not os.path.exists(self.absfile), "unlink - opened file should be removed")
         self.dprint('DBG3', "Write file %s %s@0" % (self.absfile, self.filesize))
         count = posix.write(fd, self.data_pattern(0, self.filesize))
         self.test(count > 0, "unlink - write should succeed after unlink()")
         posix.close(fd)
-        self.test(not os.path.exists(self.absfile), "unlink - open file should be removed after close()")
+        self.test(not os.path.exists(self.absfile), "unlink - opened file should be removed after close()")
 
         self.test_info("Unlink file after hard link is created")
         self.create_file()
