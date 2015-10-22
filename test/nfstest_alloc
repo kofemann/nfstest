@@ -1,0 +1,1213 @@
+#!/usr/bin/env python
+#===============================================================================
+# Copyright 2015 NetApp, Inc. All Rights Reserved,
+# contribution by Jorge Mora <mora@netapp.com>
+#
+# This program is free software; you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation; either version 2 of the License, or (at your option) any later
+# version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+#===============================================================================
+import os
+import time
+import errno
+import ctypes
+import struct
+import formatstr
+import traceback
+import nfstest_config as c
+from nfstest.utils import *
+from packet.nfs.nfs4_const import *
+from nfstest.test_util import TestUtil
+from fcntl import fcntl,F_WRLCK,F_SETLK
+
+# Module constants
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
+__copyright__ = "Copyright (C) 2015 NetApp, Inc."
+__license__   = "GPL v2"
+__version__   = "1.0"
+
+USAGE = """%prog --server <server> [options]
+
+Space reservation tests
+=======================
+Verify correct functionality of space reservations so applications are
+able to reserve or unreserve space for a file. The system call fallocate
+is used to manipulate the allocated disk space for a file, either to
+preallocate or deallocate it. For filesystems which support the fallocate
+system call, preallocation is done quickly by allocating blocks and
+marking them as uninitialized, requiring no I/O to the data blocks.
+This is much faster than creating a file and filling it with zeros.
+
+Basic allocate tests verify the disk space is actually preallocated or
+reserved for the given range by filling up the device after the allocation
+and make sure data can be written to the allocated range without any
+problems. Also, any data written outside the allocated range will fail
+with NFS4ERR_NOSPC when there is no more space left on the device.
+On the other hand, deallocating space will give the disk space back
+so it can be used by either the same file on regions not already
+preallocated or by different files without the risk of getting
+a no space error.
+
+Performance testing using ALLOCATE versus initializing a file to all
+zeros is also included. The performance comparison is done with different
+file sizes.
+
+Some tests include testing at the protocol level by taking a packet trace
+and inspecting the actual packets sent to the server or servers.
+
+Negative testing is included whenever possible since some testing cannot
+be done at the protocol level because the fallocate system call does some
+error checking of its own and the NFS client won't even send an ALLOCATE
+or DEALLOCATE operation to the server letting the server deal with the
+error. Negative tests include trying to allocate an invalid range, having
+an invalid value for either the offset or the length, trying to allocate
+or deallocate a region on a file opened as read only or the file is a
+non-regular file type.
+
+Examples:
+    The only required option is --server
+    $ %prog --server 192.168.0.11
+
+Notes:
+    The user id in the local host must have access to run commands as root
+    using the 'sudo' command without the need for a password.
+
+    Tests which require filling up all the disk space on the mounted device
+    should have exclusive access to the device.
+
+    Valid only for NFS version 4.2 and above."""
+
+# Test script ID
+SCRIPT_ID = "ALLOC"
+
+ALLOC_TESTS = [
+    "alloc01",
+    "alloc02",
+    "alloc03",
+    "alloc04",
+    "alloc05",
+    "alloc06",
+]
+DEALLOC_TESTS = [
+    "dealloc01",
+    "dealloc02",
+    "dealloc03",
+    "dealloc04",
+    "dealloc05",
+    "dealloc06",
+]
+PERF_TESTS = [
+    "perf01",
+]
+
+# Include the test groups in the list of test names
+# so they are displayed in the help
+TESTNAMES = ["alloc"] + ALLOC_TESTS + ["dealloc"] + DEALLOC_TESTS + PERF_TESTS
+
+TESTGROUPS = {
+    "alloc": {
+         "tests": ALLOC_TESTS,
+         "desc": "Run all ALLOCATE tests: ",
+    },
+    "dealloc": {
+         "tests": DEALLOC_TESTS,
+         "desc": "Run all DEALLOCATE tests: ",
+    },
+}
+
+def getlock(fd, lock_type, offset=0, length=0):
+    """Get byte range lock on file given by file descriptor"""
+    lockdata = struct.pack('hhllhh', lock_type, 0, offset, length, 0, 0)
+    out = fcntl(fd, F_SETLK, lockdata)
+    return struct.unpack('hhllhh', out)
+
+class AllocTest(TestUtil):
+    """AllocTest object
+
+       AllocTest() -> New test object
+
+       Usage:
+           x = AllocTest(testnames=['alloc01', 'alloc02', 'alloc03', ...])
+
+           # Run all the tests
+           x.run_tests()
+           x.exit()
+    """
+    def __init__(self, **kwargs):
+        """Constructor
+
+           Initialize object's private data.
+        """
+        TestUtil.__init__(self, **kwargs)
+        self.opts.version = "%prog " + __version__
+        # Tests are valid for NFSv4.2 and beyond
+        self.opts.set_defaults(nfsversion=4.2)
+        # Option self.perf_fsize
+        hmsg = "Starting file size for the perf01 test [default: %default]"
+        self.test_opgroup.add_option("--perf-fsize", default="1MB", help=hmsg)
+        # Option self.perf_mult
+        hmsg = "File size multiplier for the perf01 test, the tests are " + \
+               "performed for a file size which is a multiple of the " + \
+               "previous test file size [default: %default]"
+        self.test_opgroup.add_option("--perf-mult", type="int", default=4, help=hmsg)
+        # Option self.perf_time
+        hmsg = "Run the performance test perf01 until the sub-test for " + \
+               "the current file size executes for more than this time " + \
+               "[default: %default]"
+        self.test_opgroup.add_option("--perf-time", type="int", default=15, help=hmsg)
+        self.scan_options()
+
+        # Convert units
+        self.perf_fsize = formatstr.int_units(self.perf_fsize)
+
+        # Disable createtraces option but save it first for tests that do not
+        # check the NFS packets to verify the assertion
+        self._createtraces = self.createtraces
+        self.createtraces = False
+
+    def setup(self, **kwargs):
+        """Setup test environment"""
+        self.umount()
+        self.mount()
+        # Get block size for mounted volume
+        self.statvfs = os.statvfs(self.mtdir)
+        super(AllocTest, self).setup(**kwargs)
+        self.umount()
+
+    def alloc01(self, open_mode, offset=0, size=None, msg="", lock=False, dealloc=False):
+        """Main test to verify ALLOCATE/DEALLOCATE succeeds on files opened as
+           write only or read and write.
+
+           open_mode:
+               Open mode, either O_WRONLY or O_RDWR
+           offset:
+               Starting offset where the allocation or deallocation will take
+               place [default: 0]
+           size:
+               Length of region in file to allocate or deallocate.
+               [default: --filesize option]
+           msg:
+               String to identify the specific test running and it is appended
+               to the main assertion message [default: ""]
+           lock:
+               Lock file before doing the allocate/deallocate [default: False]
+           dealloc:
+               Run the DEALLOCATE test when set to True [default: False]
+        """
+        try:
+            fd = None
+            if size is None:
+                # Default size to allocate or deallocate
+                size = self.filesize
+
+            if dealloc:
+                tname = "dealloc01"
+            else:
+                tname = "alloc01"
+            self.test_info("====  %s test %02d%s" % (tname, self.testidx, msg))
+            self.testidx += 1
+            self.umount()
+
+            if open_mode == os.O_RDWR or dealloc:
+                # Mount device to create a new file, this file should already
+                # exist for the test
+                self.mount()
+
+            if open_mode == os.O_WRONLY:
+                open_str = "writing"
+                o_str = "write only"
+                if dealloc:
+                    # Create a new file for deallocate tests
+                    self.create_file()
+                else:
+                    # Get a new file name
+                    self.get_filename()
+                filesize = offset + size
+                drange = [0, 0]
+                zrange = [offset, size]
+            else:
+                open_str = "read and write"
+                o_str = open_str
+                # Create a new file to have an existing file for the test
+                self.create_file()
+                filesize = max(self.filesize, offset + size)
+                # No change on current data should be expected on allocate
+                drange = [0, self.filesize]
+                if offset+size > self.filesize:
+                    # Allocate range is beyond the end of the file so zero data
+                    # should be expected beyond the end of the current file size
+                    zrange = [self.filesize, offset+size-self.filesize]
+                else:
+                    # Allocate range is fully inside the current file size thus
+                    # all data should remained intact -- no zeros
+                    zrange = [0, 0]
+
+            if dealloc:
+                filesize = self.filesize
+                nfsop = OP_DEALLOCATE
+                mode = SR_DEALLOCATE
+                opstr = "Deallocate"
+                prefix = "de"
+
+                if offset >= self.filesize:
+                    # Deallocate range is fully outside the current file size
+                    # so all data should remained intact -- no zeros
+                    drange = [0, self.filesize]
+                    zrange = [0, 0]
+                elif offset+size > self.filesize:
+                    # Deallocate range is partially outside the current file
+                    # size thus data should remain intact from the start of
+                    # the file to the start of the deallocated range and
+                    # zero data should be expected starting from offset to
+                    # the end of the file -- file size should not change
+                    drange = [0, offset]
+                    zrange = [offset, self.filesize-offset]
+                else:
+                    # Deallocate range is fully inside the current file size
+                    # thus zero data should be expected on the entire
+                    # deallocated range and all data outside this range should
+                    # be left intact
+                    drange = [0, offset]
+                    if offset+size < self.filesize:
+                        drange += [offset+size, self.filesize-offset-size]
+                    zrange = [offset, size]
+            else:
+                nfsop = OP_ALLOCATE
+                mode = SR_ALLOCATE
+                opstr = "Allocate"
+                prefix = ""
+
+            self.umount()
+            self.trace_start()
+            self.mount()
+
+            self.dprint('DBG3', "Open file %s for %s" % (self.absfile, open_str))
+            fd = os.open(self.absfile, open_mode|os.O_CREAT)
+
+            if lock:
+                self.dprint('DBG3', "Lock file %s starting at offset %d with length %d" % (self.absfile, offset, size))
+                out = getlock(fd, F_WRLCK, offset, size)
+
+            # Allocate or deallocate test range
+            self.dprint('DBG3', "%s file %s starting at offset %d with length %d" % (opstr, self.absfile, offset, size))
+            out = self.libc.fallocate(fd, mode, offset, size)
+            if out == -1:
+                # The fallocate call was not expected to fail
+                err = ctypes.get_errno()
+                self.test(False, "%s [%s] %s" % (opstr, errno.errorcode.get(err,err), os.strerror(err)))
+                return
+
+            self.test(out == 0, "%s should succeed when the file is opened as %s" % (opstr.upper(), o_str))
+            fstat = os.fstat(fd)
+            os.close(fd)
+            fd = None
+            if dealloc:
+                tmsg = "File size should not change after deallocation"
+            else:
+                tmsg = "File size should be correct after allocation"
+            fmsg = ", expecting file size %d and got %d" % (filesize, fstat.st_size)
+            self.test(fstat.st_size == filesize, tmsg + msg, failmsg=fmsg)
+
+            # Verify the contents of the file are correct, data and zero regions
+            self.dprint('DBG3', "Open file %s for reading" % self.absfile)
+            fd = os.open(self.absfile, os.O_RDONLY)
+
+            if drange[1] > 0:
+                # Read from range where previous file data is expected
+                self.dprint('DBG4', "Read file %s %d @ %d" % (self.absfile, drange[1], drange[0]))
+                os.lseek(fd, drange[0], 0)
+                rdata = os.read(fd, drange[1])
+                wdata = self.data_pattern(drange[0], drange[1])
+                if dealloc:
+                    tmsg = "Read from file before deallocated range should return the file data"
+                else:
+                    tmsg = "Read from allocated range within the previous file size should return the file data"
+                self.test(rdata == wdata, tmsg)
+            if len(drange) > 2 and drange[3] > 0:
+                # Read from second range where previous file data is expected
+                self.dprint('DBG4', "Read file %s %d @ %d" % (self.absfile, drange[3], drange[2]))
+                os.lseek(fd, drange[2], 0)
+                rdata = os.read(fd, drange[3])
+                wdata = self.data_pattern(drange[2], drange[3])
+                self.test(rdata == wdata, "Read from file after deallocated range should return the file data")
+
+            if zrange[1] > 0:
+                # Read from range where zero data is expected
+                self.dprint('DBG4', "Read file %s %d @ %d" % (self.absfile, zrange[1], zrange[0]))
+                os.lseek(fd, zrange[0], 0)
+                rdata = os.read(fd, zrange[1])
+                wdata = "\x00" * zrange[1]
+                if dealloc:
+                    tmsg = "Read from deallocated range inside the previous file size should return zeros"
+                else:
+                    tmsg = "Read from allocated range outside the previous file size should return zeros"
+                self.test(rdata == wdata, tmsg)
+        except Exception:
+            self.test(False, traceback.format_exc())
+        finally:
+            if fd:
+                os.close(fd)
+            self.umount()
+            self.trace_stop()
+
+        try:
+            # Process the packet trace to inspect the NFS packets
+            self.trace_open()
+            # Get the correct state id for the ALLOCATE/DEALLOCATE operation
+            self.get_stateid(self.filename)
+
+            # Find the ALLOCATE/DEALLOCATE packet call and reply
+            (pktcall, pktreply) = self.find_nfs_op(nfsop, self.server_ipaddr, self.port, status=None)
+            if pktcall:
+                self.dprint('DBG7', str(pktcall))
+                self.dprint('DBG7', str(pktreply))
+            self.test(pktcall, "%s should be sent to the server" % opstr.upper())
+
+            if pktcall:
+                allocobj = pktcall.NFSop
+                fmsg = ", expecting %s but got %s" % (self.stid_str(self.stateid), self.stid_str(allocobj.stateid.other))
+                self.test(allocobj.stateid == self.stateid, "%s should be sent with correct stateid" % opstr.upper(), failmsg=fmsg)
+                fmsg = ", expecting %d but got %d" % (offset, allocobj.offset)
+                self.test(allocobj.offset == offset, "%s should be sent with correct offset" % opstr.upper(), failmsg=fmsg)
+                fmsg = ", expecting %d but got %d" % (size, allocobj.length)
+                self.test(allocobj.length == size, "%s should be sent with corrent length" % opstr.upper(), failmsg=fmsg)
+                self.test(pktreply.nfs.status == 0, "%s should return NFS4_OK" % opstr.upper())
+        except Exception:
+            self.test(False, traceback.format_exc())
+
+    def alloc01_test(self):
+        """Verify ALLOCATE succeeds on files opened as write only"""
+        self.test_group("Verify ALLOCATE succeeds on files opened as write only")
+        blocksize = self.statvfs.f_bsize
+        self.testidx = 1
+
+        self.alloc01(os.O_WRONLY)
+        msg1 = " for a range not starting at the beginning of the file"
+        self.alloc01(os.O_WRONLY, offset=blocksize, size=self.filesize, msg=msg1)
+        msg2 = " for a range starting at a non-aligned block size boundary"
+        self.alloc01(os.O_WRONLY, offset=blocksize/2, size=blocksize+blocksize/2, msg=msg2)
+        msg3 = " for a range ending at a non-aligned block size boundary"
+        self.alloc01(os.O_WRONLY, offset=0, size=blocksize+blocksize/2, msg=msg3)
+        msg4 = " for a range starting and ending at a non-aligned block size boundary"
+        self.alloc01(os.O_WRONLY, offset=blocksize/2, size=blocksize, msg=msg4)
+
+        if self.deleg_stateid is None:
+            # Run tests with byte range locking
+            msg = " (locking file)"
+            self.alloc01(os.O_WRONLY, msg=msg, lock=True)
+            self.alloc01(os.O_WRONLY, offset=blocksize, size=self.filesize, msg=msg1+msg, lock=True)
+            self.alloc01(os.O_WRONLY, offset=blocksize/2, size=blocksize+blocksize/2, msg=msg2+msg, lock=True)
+            self.alloc01(os.O_WRONLY, offset=0, size=blocksize+blocksize/2, msg=msg3+msg, lock=True)
+            self.alloc01(os.O_WRONLY, offset=blocksize/2, size=blocksize, msg=msg4+msg, lock=True)
+
+    def alloc02_test(self):
+        """Verify ALLOCATE succeeds on files opened as read and write"""
+        self.test_group("Verify ALLOCATE succeeds on files opened as read and write")
+        blocksize = self.statvfs.f_bsize
+        self.testidx = 1
+
+        self.alloc01(os.O_RDWR)
+        msg1 = " for a range not starting at the beginning of the file"
+        self.alloc01(os.O_RDWR, offset=blocksize, size=self.filesize, msg=msg1)
+        msg2 = " for a range starting at a non-aligned block size boundary"
+        self.alloc01(os.O_RDWR, offset=blocksize/2, size=blocksize+blocksize/2, msg=msg2)
+        msg3 = " for a range ending at a non-aligned block size boundary"
+        self.alloc01(os.O_RDWR, offset=0, size=blocksize+blocksize/2, msg=msg3)
+        msg4 = " for a range starting and ending at a non-aligned block size boundary"
+        self.alloc01(os.O_RDWR, offset=blocksize/2, size=blocksize, msg=msg4)
+        msg5 = " when range is fully inside the current file size"
+        self.alloc01(os.O_RDWR, offset=self.filesize/4, size=self.filesize/2, msg=msg5)
+        msg6 = " when range is partially outside the current file size"
+        self.alloc01(os.O_RDWR, offset=self.filesize/2, size=self.filesize, msg=msg6)
+        msg7 = " when range is fully outside the current file size"
+        self.alloc01(os.O_RDWR, offset=self.filesize, size=self.filesize, msg=msg7)
+
+        if self.deleg_stateid is None:
+            # Run tests with byte range locking
+            msg = " (locking file)"
+            self.alloc01(os.O_RDWR, msg=msg, lock=True)
+            self.alloc01(os.O_RDWR, offset=blocksize, size=self.filesize, msg=msg1+msg, lock=True)
+            self.alloc01(os.O_RDWR, offset=blocksize/2, size=blocksize+blocksize/2, msg=msg2+msg, lock=True)
+            self.alloc01(os.O_RDWR, offset=0, size=blocksize+blocksize/2, msg=msg3+msg, lock=True)
+            self.alloc01(os.O_RDWR, offset=blocksize/2, size=blocksize, msg=msg4+msg, lock=True)
+            self.alloc01(os.O_RDWR, offset=self.filesize/4, size=self.filesize/2, msg=msg5+msg, lock=True)
+            self.alloc01(os.O_RDWR, offset=self.filesize/2, size=self.filesize, msg=msg6+msg, lock=True)
+            self.alloc01(os.O_RDWR, offset=self.filesize, size=self.filesize, msg=msg7+msg, lock=True)
+
+    def alloc03(self, dealloc=False):
+        """Main test to verify ALLOCATE/DEALLOCATE fails on files opened
+           as read only
+
+           dealloc:
+               Run the DEALLOCATE test when set to True [default: False]
+        """
+        try:
+            fd = None
+            self.umount()
+            if self._createtraces:
+                # Just capture the packet trace when --createtraces is set
+                self.trace_start()
+            self.mount()
+
+            if dealloc:
+                mode = SR_DEALLOCATE
+                opstr = "Deallocate"
+                prefix = "de"
+            else:
+                mode = SR_ALLOCATE
+                opstr = "Allocate"
+                prefix = ""
+
+            # Use an existing file
+            absfile = self.abspath(self.files[0])
+            self.dprint('DBG3', "Open file %s for reading" % absfile)
+            fd = os.open(absfile, os.O_RDONLY)
+
+            # Allocate or deallocate test range
+            self.dprint('DBG3', "%s file %s starting at offset %d with length %d" % (opstr, self.absfile, 0, self.filesize))
+            out = self.libc.fallocate(fd, mode, 0, self.filesize)
+            err = 0
+            if out == -1:
+                err = ctypes.get_errno()
+            self.test(out == -1, "%s should fail when the file is opened as read only" % opstr.upper())
+            if out == -1:
+                fmsg = ", expecting EBADF but got %s" % errno.errorcode.get(err,err)
+                self.test(err == errno.EBADF, "%s should fail with EBADF" % opstr.upper(), failmsg=fmsg)
+            fstat = os.fstat(fd)
+            self.test(fstat.st_size == self.filesize, "File size should not change after a failed %sallocation" % prefix)
+        except Exception:
+            self.test(False, traceback.format_exc())
+        finally:
+            if fd:
+                os.close(fd)
+            self.umount()
+            self.trace_stop()
+
+    def alloc03_test(self):
+        """Verify ALLOCATE fails on files opened as read only"""
+        self.test_group("Verify ALLOCATE fails on files opened as read only")
+        self.alloc03()
+
+    def alloc04(self, dealloc=False):
+        """Verify DE/ALLOCATE fails with EINVAL for invalid offset or length
+
+           dealloc:
+               Run the DEALLOCATE test when set to True [default: False]
+        """
+        try:
+            fd = None
+            self.umount()
+            if self._createtraces:
+                # Just capture the packet trace when --createtraces is set
+                self.trace_start()
+            self.mount()
+
+            if dealloc:
+                mode = SR_DEALLOCATE
+                opstr = "Deallocate"
+                prefix = "de"
+                # Create a new file
+                self.create_file()
+                filesize = self.filesize
+            else:
+                mode = SR_ALLOCATE
+                opstr = "Allocate"
+                prefix = ""
+                # Get a new file name
+                self.get_filename()
+                filesize = 0
+
+            self.dprint('DBG3', "Open file %s for writing" % self.absfile)
+            fd = os.open(self.absfile, os.O_WRONLY|os.O_CREAT)
+
+            # Use an invalid offset
+            self.dprint('DBG3', "%s file %s with invalid offset of %d" % (opstr, self.absfile, -1))
+            out = self.libc.fallocate(fd, mode, -1, self.filesize)
+            err = 0
+            if out == -1:
+                err = ctypes.get_errno()
+                fmsg = ", expecting EINVAL but got %s" % errno.errorcode.get(err,err)
+            elif out == 0:
+                fmsg = ", expecting EINVAL but it succeeded"
+            self.test(out == -1 and err == errno.EINVAL, "%s should fail with EINVAL when the offset is not a valid value" % opstr.upper(), failmsg=fmsg)
+            fstat = os.fstat(fd)
+            self.test(fstat.st_size == filesize, "File size should not change after a failed %sallocation" % prefix)
+
+            # Use an invalid length
+            self.dprint('DBG3', "%s file %s with invalid length of %d" % (opstr, self.absfile, 0))
+            out = self.libc.fallocate(fd, mode, 0, 0)
+            err = 0
+            if out == -1:
+                err = ctypes.get_errno()
+                fmsg = ", expecting EINVAL but got %s" % errno.errorcode.get(err,err)
+            elif out == 0:
+                fmsg = ", expecting EINVAL but it succeeded"
+            self.test(out == -1 and err == errno.EINVAL, "%s should fail with EINVAL when the length is not a valid value" % opstr.upper(), failmsg=fmsg)
+            fstat = os.fstat(fd)
+            self.test(fstat.st_size == filesize, "File size should not change after a failed %sallocation" % prefix)
+        except Exception:
+            self.test(False, traceback.format_exc())
+        finally:
+            if fd:
+                os.close(fd)
+            self.umount()
+            self.trace_stop()
+
+    def alloc04_test(self):
+        """Verify ALLOCATE fails with EINVAL for invalid offset or length"""
+        self.test_group("Verify ALLOCATE fails EINVAL for invalid offset or length")
+        self.alloc04()
+
+    def alloc05(self, dealloc=False):
+        """Verify DE/ALLOCATE fails with ESPIPE when using a named pipe file handle
+
+           dealloc:
+               Run the DEALLOCATE test when set to True [default: False]
+        """
+        try:
+            fd = None
+            self.umount()
+            if self._createtraces:
+                # Just capture the packet trace when --createtraces is set
+                self.trace_start()
+            self.mount()
+            # Get a new file name
+            self.get_filename()
+
+            if dealloc:
+                mode = SR_DEALLOCATE
+                opstr = "Deallocate"
+            else:
+                mode = SR_ALLOCATE
+                opstr = "Allocate"
+
+            self.dprint('DBG3', "Create named pipe %s" % self.absfile)
+            os.mkfifo(self.absfile)
+
+            # Create another process for reading the named pipe
+            pid = os.fork()
+            if pid == 0:
+                try:
+                    fd = os.open(self.absfile, os.O_RDONLY)
+                    os.read(fd)
+                    os.close(fd)
+                finally:
+                    os._exit(0)
+
+            self.dprint('DBG3', "Open named pipe %s for writing" % self.absfile)
+            fd = os.open(self.absfile, os.O_WRONLY)
+
+            self.dprint('DBG3', "%s named pipe %s starting at offset %d with length %d" % (opstr, self.absfile, 0, self.filesize))
+            out = self.libc.fallocate(fd, mode, 0, self.filesize)
+            err = 0
+            if out == -1:
+                err = ctypes.get_errno()
+                fmsg = ", expecting ESPIPE but got %s" % errno.errorcode.get(err,err)
+            elif out == 0:
+                fmsg = ", expecting ESPIPE but it succeeded"
+            expr = out == -1 and err == errno.ESPIPE
+            self.test(expr, "%s should fail with ESPIPE when using a named pipe file handle" % opstr.upper(), failmsg=fmsg)
+
+            os.close(fd)
+            fd = None
+
+            # Reap the background reading process
+            (pid, out) = os.waitpid(pid, 0)
+        except Exception:
+            self.test(False, traceback.format_exc())
+        finally:
+            if fd:
+                os.close(fd)
+            self.umount()
+            self.trace_stop()
+
+    def alloc05_test(self):
+        """Verify ALLOCATE fails with ESPIPE when using a named pipe file handle"""
+        self.test_group("Verify ALLOCATE fails ESPIPE when using a named pipe file handle")
+        self.alloc05()
+
+    def alloc06(self, msg="", lock=False):
+        """Verify ALLOCATE reserves the disk space
+
+           msg:
+               String to identify the specific test running and it is appended
+               to the main assertion message [default: ""]
+           lock:
+               Lock file before doing the allocate/deallocate [default: False]
+        """
+        try:
+            fd = None
+            fd1 = None
+            rmfile = None
+            offset = 0
+            size = self.filesize
+
+            self.test_info("====  alloc06 test %02d%s" % (self.testidx, msg))
+            self.testidx += 1
+
+            self.umount()
+            self.trace_start()
+            self.mount()
+            strsize = formatstr.str_units(self.filesize)
+
+            # Get a new file name
+            self.get_filename()
+            filename = self.filename
+            self.dprint('DBG3', "Open file %s for writing" % self.absfile)
+            fd = os.open(self.absfile, os.O_WRONLY|os.O_CREAT)
+
+            if lock:
+                self.dprint('DBG3', "Lock file %s starting at offset %d with length %d" % (self.absfile, offset, size))
+                out = getlock(fd, F_WRLCK, offset, size)
+
+            self.dprint('DBG3', "Allocate %s file" % strsize)
+            out = self.libc.fallocate(fd, SR_ALLOCATE, offset, size)
+            if out == -1:
+                err = ctypes.get_errno()
+                self.test(False, "Allocate [%s] %s" % (errno.errorcode.get(err,err), os.strerror(err)))
+                return
+            self.test(out == 0, "ALLOCATE should succeed when the file is opened as write only")
+
+            # Get a new file name
+            self.get_filename()
+            self.dprint('DBG3', "Open file %s for writing" % self.absfile)
+            fd1 = os.open(self.absfile, os.O_WRONLY|os.O_CREAT)
+            rmfile = self.absfile
+
+            maxsize = self.get_freebytes()
+            strsize = formatstr.str_units(maxsize)
+            self.dprint('DBG3', "Allocate %s file (rest of the available disk space)" % strsize)
+            out = self.libc.fallocate(fd1, SR_ALLOCATE, 0, maxsize)
+            if out == -1:
+                err = ctypes.get_errno()
+                self.test(False, "Allocate [%s] %s" % (errno.errorcode.get(err,err), os.strerror(err)))
+                return
+            self.test(out == 0, "ALLOCATE should allocate the maximum number of blocks left on the device")
+
+            try:
+                fmsg = ", expecting ENOSPC but it succeeded"
+                werror = None
+                self.create_file()
+            except OSError as werror:
+                fmsg = ", expecting ENOSPC but got %s" % errno.errorcode.get(werror.errno,werror.errno)
+            expr = werror and werror.errno == errno.ENOSPC
+            self.test(expr, "Write to a different file should fail with ENOSPC when no space is left on the device", failmsg=fmsg)
+
+            self.dprint('DBG3', "Allocate %s file" % strsize)
+            out = self.libc.fallocate(fd, SR_ALLOCATE, self.filesize, self.filesize)
+            err = 0
+            if out == -1:
+                err = ctypes.get_errno()
+                fmsg = ", expecting ENOSPC but got %s" % errno.errorcode.get(err,err)
+            elif out == 0:
+                fmsg = ", expecting ENOSPC but it succeeded"
+            self.test(out == -1 and err == errno.ENOSPC, "ALLOCATE should fail with ENOSPC when whole range cannot be guaranteed", failmsg=fmsg)
+
+            try:
+                fmsg = ", expecting ENOSPC but it succeeded"
+                werror = None
+                os.lseek(fd, size, 0)
+                data = self.data_pattern(size, self.filesize)
+                count = os.write(fd, data)
+                os.fsync(fd)
+            except OSError as werror:
+                fmsg = ", expecting ENOSPC but got %s" % errno.errorcode.get(werror.errno,werror.errno)
+            expr = werror and werror.errno == errno.ENOSPC
+            self.test(expr, "Write outside the allocated region should fail with ENOSPC when no space is left on the device", failmsg=fmsg)
+
+            os.lseek(fd, 0, 0)
+            data = self.data_pattern(0, self.filesize, pattern="\x55\xaa")
+            count = os.write(fd, data)
+            os.fsync(fd)
+            self.test(count > 0, "Write within the allocated region should succeed when no space is left on the device"+msg)
+        except Exception:
+            self.test(False, traceback.format_exc())
+        finally:
+            if fd:
+                try:
+                    os.close(fd)
+                except:
+                    pass
+            if fd1:
+                os.close(fd1)
+            if rmfile:
+                os.unlink(rmfile)
+            self.umount()
+            self.trace_stop()
+
+        try:
+            self.trace_open()
+            # Find OPEN and correct stateid to use
+            self.get_stateid(filename)
+            save_index = self.pktt.index
+
+            # Find ALLOCATE for file
+            (pktcall, pktreply) = self.find_nfs_op(OP_ALLOCATE, self.server_ipaddr, self.port)
+            self.dprint('DBG7', str(pktcall))
+            self.dprint('DBG7', str(pktreply))
+            self.test(pktcall, "ALLOCATE should be sent to the server")
+            allocobj = pktcall.NFSop
+            fmsg = ", expecting %s but got %s" % (self.stid_str(self.stateid), self.stid_str(allocobj.stateid.other))
+            self.test(allocobj.stateid == self.stateid, "ALLOCATE should be sent with correct stateid", failmsg=fmsg)
+            fmsg = ", expecting %d but got %d" % (offset, allocobj.offset)
+            self.test(allocobj.offset == offset, "ALLOCATE should be sent with correct offset", failmsg=fmsg)
+            fmsg = ", expecting %d but got %d" % (size, allocobj.length)
+            self.test(allocobj.length == size, "ALLOCATE should be sent with corrent length", failmsg=fmsg)
+            self.test(pktreply and pktreply.nfs.status == 0, "ALLOCATE should return NFS4_OK")
+
+            # Find ALLOCATE which allocates the rest of the disk space
+            (pktcall, pktreply) = self.find_nfs_op(OP_ALLOCATE, self.server_ipaddr, self.port)
+            self.dprint('DBG7', str(pktcall))
+            self.dprint('DBG7', str(pktreply))
+            self.test(pktcall, "ALLOCATE should be sent to the server to fill all disk space")
+
+            # Find second ALLOCATE for file
+            (pktcall, pktreply) = self.find_nfs_op(OP_ALLOCATE, self.server_ipaddr, self.port, status=None)
+            self.dprint('DBG7', str(pktcall))
+            self.dprint('DBG7', str(pktreply))
+            self.test(pktcall, "ALLOCATE should be sent to the server")
+            allocobj = pktcall.NFSop
+            fmsg = ", expecting %s but got %s" % (self.stid_str(self.stateid), self.stid_str(allocobj.stateid.other))
+            self.test(allocobj.stateid == self.stateid, "ALLOCATE should be sent with correct stateid", failmsg=fmsg)
+            fmsg = ", expecting %d but got %d" % (self.filesize, allocobj.offset)
+            self.test(allocobj.offset == self.filesize, "ALLOCATE should be sent with correct offset", failmsg=fmsg)
+            fmsg = ", expecting %d but got %d" % (self.filesize, allocobj.length)
+            self.test(allocobj.length == self.filesize, "ALLOCATE should be sent with corrent length", failmsg=fmsg)
+            if pktreply:
+                status = pktreply.nfs.status
+                fmsg = ", expecting NFS4ERR_NOSPC but got %s" % nfsstat4.get(status, status)
+                self.test(status == NFS4ERR_NOSPC, "ALLOCATE should fail with NFS4ERR_NOSPC when whole range cannot be guaranteed", failmsg=fmsg)
+
+            # Rewind packet trace to search for WRITEs
+            in_alloc  = True
+            out_alloc = True
+            non_alloc = True
+            in_alloc_cnt  = 0
+            out_alloc_cnt = 0
+            non_alloc_cnt = 0
+            while True:
+                self.pktt.rewind(save_index)
+                (pktcall, pktreply) = self.find_nfs_op(OP_WRITE, self.server_ipaddr, self.port, status=None)
+                if not pktcall:
+                    break
+                save_index = pktcall.record.index + 1
+                writeobj = pktcall.NFSop
+                if writeobj.stateid == self.stateid:
+                    # WRITE sent to allocated file
+                    if writeobj.offset < offset+size:
+                        # WRITE sent to allocated region
+                        in_alloc_cnt += 1
+                        if pktreply.nfs.status != NFS4_OK:
+                            in_alloc = False
+                    else:
+                        # WRITE sent to non-allocated region
+                        out_alloc_cnt += 1
+                        if pktreply.nfs.status != NFS4ERR_NOSPC:
+                            out_alloc = False
+                else:
+                    # WRITE sent to non-allocated file
+                    non_alloc_cnt += 1
+                    if pktreply.nfs.status != NFS4ERR_NOSPC:
+                        non_alloc = False
+            if in_alloc_cnt > 0:
+                self.test(in_alloc, "WRITE within the allocated region should succeed when no space is left on the device")
+            else:
+                self.test(False, "WRITE within the allocated region should be sent")
+            if out_alloc_cnt > 0:
+                self.test(out_alloc, "WRITE outside the allocated region should fail with NFS4ERR_NOSPC when no space is left on the device")
+            else:
+                self.test(False, "WRITE outside the allocated region should be sent")
+            if non_alloc_cnt > 0:
+                self.test(non_alloc, "WRITE sent to non-allocated file should return NFS4ERR_NOSPC when no space is left on the device")
+            else:
+                self.test(False, "WRITE sent to non-allocated file should be sent")
+        except Exception:
+            self.test(False, traceback.format_exc())
+
+    def alloc06_test(self):
+        """Verify ALLOCATE reserves the disk space"""
+        self.test_group("Verify ALLOCATE reserves the disk space")
+        self.testidx = 1
+        self.alloc06()
+
+        if self.deleg_stateid is None:
+            # Run tests with byte range locking
+            msg = " (locking file)"
+            self.alloc06(msg=msg, lock=True)
+
+    def dealloc01_test(self):
+        """Verify DEALLOCATE succeeds on files opened as write only"""
+        self.test_group("Verify DEALLOCATE succeeds on files opened as write only")
+        blocksize = self.statvfs.f_bsize
+        self.testidx = 1
+
+        self.alloc01(os.O_WRONLY, dealloc=True)
+        msg1 = " for a range not starting at the beginning of the file"
+        self.alloc01(os.O_WRONLY, offset=blocksize, size=self.filesize, msg=msg1, dealloc=True)
+        msg2 = " for a range starting at a non-aligned block size boundary"
+        self.alloc01(os.O_WRONLY, offset=blocksize/2, size=blocksize+blocksize/2, msg=msg2, dealloc=True)
+        msg3 = " for a range ending at a non-aligned block size boundary"
+        self.alloc01(os.O_WRONLY, offset=0, size=blocksize+blocksize/2, msg=msg3, dealloc=True)
+        msg4 = " for a range starting and ending at a non-aligned block size boundary"
+        self.alloc01(os.O_WRONLY, offset=blocksize/2, size=blocksize, msg=msg4, dealloc=True)
+        msg5 = " when range is fully inside the current file size"
+        self.alloc01(os.O_WRONLY, offset=self.filesize/4, size=self.filesize/2, msg=msg5, dealloc=True)
+        msg6 = " when range is partially outside the current file size"
+        self.alloc01(os.O_WRONLY, offset=self.filesize/2, size=self.filesize, msg=msg6, dealloc=True)
+        msg7 = " when range is fully outside the current file size"
+        self.alloc01(os.O_WRONLY, offset=self.filesize, size=self.filesize, msg=msg7, dealloc=True)
+
+        if self.deleg_stateid is None:
+            # Run tests with byte range locking
+            msg = " (locking file)"
+            self.alloc01(os.O_WRONLY, msg=msg, lock=True, dealloc=True)
+            self.alloc01(os.O_WRONLY, offset=blocksize, size=self.filesize, msg=msg1+msg, lock=True, dealloc=True)
+            self.alloc01(os.O_WRONLY, offset=blocksize/2, size=blocksize+blocksize/2, msg=msg2+msg, lock=True, dealloc=True)
+            self.alloc01(os.O_WRONLY, offset=0, size=blocksize+blocksize/2, msg=msg3+msg, lock=True, dealloc=True)
+            self.alloc01(os.O_WRONLY, offset=blocksize/2, size=blocksize, msg=msg4+msg, lock=True, dealloc=True)
+            self.alloc01(os.O_WRONLY, offset=self.filesize/4, size=self.filesize/2, msg=msg5+msg, lock=True, dealloc=True)
+            self.alloc01(os.O_WRONLY, offset=self.filesize/2, size=self.filesize, msg=msg6+msg, lock=True, dealloc=True)
+            self.alloc01(os.O_WRONLY, offset=self.filesize, size=self.filesize, msg=msg7+msg, lock=True, dealloc=True)
+
+    def dealloc02_test(self):
+        """Verify DEALLOCATE succeeds on files opened as read and write"""
+        self.test_group("Verify DEALLOCATE succeeds on files opened as read and write")
+        blocksize = self.statvfs.f_bsize
+        self.testidx = 1
+
+        self.alloc01(os.O_RDWR, dealloc=True)
+        msg1 = " for a range not starting at the beginning of the file"
+        self.alloc01(os.O_RDWR, offset=blocksize, size=self.filesize, msg=msg1, dealloc=True)
+        msg2 = " for a range starting at a non-aligned block size boundary"
+        self.alloc01(os.O_RDWR, offset=blocksize/2, size=blocksize+blocksize/2, msg=msg2, dealloc=True)
+        msg3 = " for a range ending at a non-aligned block size boundary"
+        self.alloc01(os.O_RDWR, offset=0, size=blocksize+blocksize/2, msg=msg3, dealloc=True)
+        msg4 = " for a range starting and ending at a non-aligned block size boundary"
+        self.alloc01(os.O_RDWR, offset=blocksize/2, size=blocksize, msg=msg4, dealloc=True)
+        msg5 = " when range is fully inside the current file size"
+        self.alloc01(os.O_RDWR, offset=self.filesize/4, size=self.filesize/2, msg=msg5, dealloc=True)
+        msg6 = " when range is partially outside the current file size"
+        self.alloc01(os.O_RDWR, offset=self.filesize/2, size=self.filesize, msg=msg6, dealloc=True)
+        msg7 = " when range is fully outside the current file size"
+        self.alloc01(os.O_RDWR, offset=self.filesize, size=self.filesize, msg=msg7, dealloc=True)
+
+        if self.deleg_stateid is None:
+            # Run tests with byte range locking
+            msg = " (locking file)"
+            self.alloc01(os.O_RDWR, msg=msg, lock=True, dealloc=True)
+            self.alloc01(os.O_RDWR, offset=blocksize, size=self.filesize, msg=msg1+msg, lock=True, dealloc=True)
+            self.alloc01(os.O_RDWR, offset=blocksize/2, size=blocksize+blocksize/2, msg=msg2+msg, lock=True, dealloc=True)
+            self.alloc01(os.O_RDWR, offset=0, size=blocksize+blocksize/2, msg=msg3+msg, lock=True, dealloc=True)
+            self.alloc01(os.O_RDWR, offset=blocksize/2, size=blocksize, msg=msg4+msg, lock=True, dealloc=True)
+            self.alloc01(os.O_RDWR, offset=self.filesize/4, size=self.filesize/2, msg=msg5+msg, lock=True, dealloc=True)
+            self.alloc01(os.O_RDWR, offset=self.filesize/2, size=self.filesize, msg=msg6+msg, lock=True, dealloc=True)
+            self.alloc01(os.O_RDWR, offset=self.filesize, size=self.filesize, msg=msg7+msg, lock=True, dealloc=True)
+
+    def dealloc03_test(self):
+        """Verify DEALLOCATE fails on files opened as read only"""
+        self.test_group("Verify DEALLOCATE fails on files opened as read only")
+        self.alloc03(dealloc=True)
+
+    def dealloc04_test(self):
+        """Verify DEALLOCATE fails with EINVAL for invalid offset or length"""
+        self.test_group("Verify DEALLOCATE fails EINVAL for invalid offset or length")
+        self.alloc04(dealloc=True)
+
+    def dealloc05_test(self):
+        """Verify DEALLOCATE fails with ESPIPE when using a named pipe file handle"""
+        self.test_group("Verify DEALLOCATE fails ESPIPE when using a named pipe file handle")
+        self.alloc05(dealloc=True)
+
+    def dealloc06(self, msg="", lock=False):
+        """Verify DEALLOCATE unreserves the disk space
+
+           msg:
+               String to identify the specific test running and it is appended
+               to the main assertion message [default: ""]
+           lock:
+               Lock file before doing the allocate/deallocate [default: False]
+        """
+        try:
+            fd = None
+            rmfile = None
+
+            self.test_info("====  dealloc06 test %02d%s" % (self.testidx, msg))
+            self.testidx += 1
+
+            self.umount()
+            self.trace_start()
+            self.mount()
+
+            # Get a new file name
+            self.get_filename()
+            filename = self.filename
+            self.dprint('DBG3', "Open file %s for writing" % self.absfile)
+            fd = os.open(self.absfile, os.O_WRONLY|os.O_CREAT)
+            rmfile = self.absfile
+
+            maxsize = self.get_freebytes()
+            strsize = formatstr.str_units(maxsize)
+            self.dprint('DBG3', "Allocate %s file (rest of the available disk space)" % strsize)
+            out = self.libc.fallocate(fd, SR_ALLOCATE, 0, maxsize)
+            if out == -1:
+                err = ctypes.get_errno()
+                self.test(False, "Allocate [%s] %s" % (errno.errorcode.get(err,err), os.strerror(err)))
+                return
+            self.test(out == 0, "ALLOCATE should allocate the maximum number of blocks left on the device")
+
+            # Try creating a file to make sure there is no more disk space
+            try:
+                fmsg = ", expecting ENOSPC but it succeeded"
+                werror = None
+                self.create_file()
+            except OSError as werror:
+                fmsg = ", expecting ENOSPC but got %s" % errno.errorcode.get(werror.errno,werror.errno)
+            expr = werror and werror.errno == errno.ENOSPC
+            self.test(expr, "Write to a different file should fail with ENOSPC when no space is left on the device", failmsg=fmsg)
+
+            offset = 0
+            size = 2*self.filesize
+            # Free space after deallocate
+            free_space = size - offset
+            strsize = formatstr.str_units(size)
+
+            if lock:
+                self.dprint('DBG3', "Lock file %s starting at offset %d with length %d" % (self.absfile, offset, size))
+                out = getlock(fd, F_WRLCK, offset, size)
+
+            self.dprint('DBG3', "Deallocate %s from file" % strsize)
+            out = self.libc.fallocate(fd, SR_DEALLOCATE, offset, size)
+            if out == -1:
+                err = ctypes.get_errno()
+                self.test(False, "Deallocate [%s] %s" % (errno.errorcode.get(err,err), os.strerror(err)))
+                return
+            self.test(out == 0, "DEALLOCATE should succeed when no space is left on the device")
+
+            try:
+                fmsg = ""
+                werror = None
+                os.lseek(fd, offset, 0)
+                data = self.data_pattern(offset, self.filesize)
+                count = os.write(fd, data)
+                os.fsync(fd)
+            except OSError as werror:
+                err = werror.errno
+                fmsg = ", got error [%s] %s" % (errno.errorcode.get(err,err), os.strerror(err))
+            self.test(werror is None, "Write within the deallocated region should succeed", failmsg=fmsg)
+
+            try:
+                fmsg = ""
+                werror = None
+                self.create_file()
+            except OSError as werror:
+                err = werror.errno
+                fmsg = ", got error [%s] %s" % (errno.errorcode.get(err,err), os.strerror(err))
+            self.test(werror is None, "Write to another file should succeed when no space is left on the device after a successful DEALLOCATE"+msg, failmsg=fmsg)
+
+            try:
+                fmsg = ", expecting ENOSPC but it succeeded"
+                werror = None
+                os.lseek(fd, offset+self.filesize, 0)
+                data = self.data_pattern(offset+self.filesize, self.filesize)
+                count = os.write(fd, data)
+                os.fsync(fd)
+            except OSError as werror:
+                fmsg = ", expecting ENOSPC but got %s" % errno.errorcode.get(werror.errno,werror.errno)
+            expr = werror and werror.errno == errno.ENOSPC
+            self.test(expr, "Write within the deallocated region should fail with ENOSPC when no space is left on the device", failmsg=fmsg)
+        except Exception:
+            self.test(False, traceback.format_exc())
+        finally:
+            if fd:
+                try:
+                    os.close(fd)
+                except:
+                    pass
+            if rmfile:
+                os.unlink(rmfile)
+            self.umount()
+            self.trace_stop()
+
+        try:
+            self.trace_open()
+            # Find OPEN and correct stateid to use
+            self.get_stateid(filename)
+
+            # Find DEALLOCATE for file
+            (pktcall, pktreply) = self.find_nfs_op(OP_DEALLOCATE, self.server_ipaddr, self.port)
+            self.dprint('DBG7', str(pktcall))
+            self.dprint('DBG7', str(pktreply))
+            self.test(pktcall, "DEALLOCATE should be sent to the server")
+            allocobj = pktcall.NFSop
+            fmsg = ", expecting %s but got %s" % (self.stid_str(self.stateid), self.stid_str(allocobj.stateid.other))
+            self.test(allocobj.stateid == self.stateid, "DEALLOCATE should be sent with correct stateid", failmsg=fmsg)
+            fmsg = ", expecting %d but got %d" % (offset, allocobj.offset)
+            self.test(allocobj.offset == offset, "DEALLOCATE should be sent with correct offset", failmsg=fmsg)
+            fmsg = ", expecting %d but got %d" % (size, allocobj.length)
+            self.test(allocobj.length == size, "DEALLOCATE should be sent with corrent length", failmsg=fmsg)
+            self.test(pktreply and pktreply.nfs.status == 0, "DEALLOCATE should return NFS4_OK")
+
+            in_dealloc  = True
+            out_dealloc = True
+            non_dealloc = True
+            in_dealloc_cnt  = 0
+            out_dealloc_cnt = 0
+            non_dealloc_cnt = 0
+            save_index = self.pktt.index
+            while True:
+                self.pktt.rewind(save_index)
+                (pktcall, pktreply) = self.find_nfs_op(OP_WRITE, self.server_ipaddr, self.port, status=None)
+                if not pktcall:
+                    break
+                save_index = pktcall.record.index + 1
+                writeobj = pktcall.NFSop
+                free_space -= writeobj.count
+                if writeobj.stateid == self.stateid:
+                    # WRITE sent to deallocated file
+                    if writeobj.offset < offset+self.filesize:
+                        # WRITE sent to deallocated region when space is available
+                        in_dealloc_cnt += 1
+                        if pktreply.nfs.status != NFS4_OK:
+                            in_dealloc = False
+                    else:
+                        # WRITE sent to deallocated region when space is no longer available
+                        out_dealloc_cnt += 1
+                        if pktreply.nfs.status != NFS4ERR_NOSPC:
+                            out_dealloc = False
+                else:
+                    # WRITE sent to different file
+                    non_dealloc_cnt += 1
+                    if pktreply.nfs.status != NFS4_OK:
+                        non_dealloc = False
+            if in_dealloc_cnt > 0:
+                self.test(in_dealloc, "WRITE within the deallocated region should succeed")
+            else:
+                self.test(False, "WRITE within the deallocated region should be sent")
+            if non_dealloc_cnt > 0:
+                self.test(non_dealloc, "WRITE sent to another file should succeed when no space is left on the device after a succesful DEALLOCATE")
+            else:
+                self.test(False, "WRITE shoud be sent to another file when no space is left on the device after a succesful DEALLOCATE")
+            if out_dealloc_cnt > 0:
+                self.test(out_dealloc, "WRITE within the deallocated region should fail with NFS4ERR_NOSPC when no space is left on the device")
+            else:
+                self.test(False, "WRITE within the deallocated region should be sent")
+        except Exception:
+            self.test(False, traceback.format_exc())
+
+    def dealloc06_test(self):
+        """Verify DEALLOCATE unreserves the disk space"""
+        self.test_group("Verify DEALLOCATE unreserves the disk space")
+        self.testidx = 1
+        self.dealloc06()
+
+        if self.deleg_stateid is None:
+            # Run tests with byte range locking
+            msg = " (locking file)"
+            self.dealloc06(msg=msg, lock=True)
+
+    def perftest(self, filesize):
+        try:
+            fd = None
+            block_size = 16 * self.statvfs.f_bsize
+            strsize = formatstr.str_units(filesize)
+            filelist = []
+
+            # Get a new file name
+            self.get_filename()
+            filelist.append(self.absfile)
+            self.dprint('DBG3', "Open file %s for writing" % self.absfile)
+            fd = os.open(self.absfile, os.O_WRONLY|os.O_CREAT)
+
+            self.dprint('DBG3', "Allocate %s file" % strsize)
+            tstart = time.time()
+            out = self.libc.fallocate(fd, SR_ALLOCATE, 0, filesize)
+            if out == -1:
+                err = ctypes.get_errno()
+                self.test(False, "Allocate [%s] %s" % (errno.errorcode.get(err,err), os.strerror(err)))
+                return
+            os.close(fd)
+            fd = None
+            t1delta = time.time() - tstart
+            self.test(out == 0, "ALLOCATE should succeed when the file is opened as write only")
+            fstat = os.stat(self.absfile)
+            self.test(fstat.st_size == filesize, "File size should be correct after allocation")
+            self.dprint('INFO', "ALLOCATE took %f seconds" % t1delta)
+
+            # Get a new file name
+            self.get_filename()
+            filelist.append(self.absfile)
+            self.dprint('DBG3', "Open file %s for writing" % self.absfile)
+            fd = os.open(self.absfile, os.O_WRONLY|os.O_CREAT)
+            self.dprint('DBG3', "Initialize file %s with zeros" % self.absfile)
+            size = filesize
+            data = "\x00" * block_size
+            tstart = time.time()
+            while size > 0:
+                if block_size > size:
+                    data = data[:size]
+                count = os.write(fd, data)
+                size -= count
+            os.close(fd)
+            fd = None
+            t2delta = time.time() - tstart
+            fstat = os.stat(self.absfile)
+            self.test(fstat.st_size == filesize, "File size should be correct after initialization")
+            self.dprint('INFO', "Initialization took %f seconds" % t2delta)
+            if t1delta > 0:
+                perf = int(100.0*(t2delta-t1delta) / t1delta)
+                msg = ", performance improvement for a %s file: %s%%" % (strsize, "{:,}".format(perf))
+            else:
+                msg = ""
+            self.test(t1delta < t2delta, "ALLOCATE should outperform initializing the file to all zeros" + msg)
+
+        except Exception:
+            self.test(False, traceback.format_exc())
+        finally:
+            if fd:
+                os.close(fd)
+            for absfile in filelist:
+                try:
+                    if os.path.exists(absfile):
+                        self.dprint('DBG5', "Removing file %s" % absfile)
+                        os.unlink(absfile)
+                except:
+                    pass
+
+    def perf01_test(self):
+        """Verify ALLOCATE outperforms initializing the file to all zeros"""
+        self.test_group("Verify ALLOCATE outperforms initializing the file to all zeros")
+        # Starting file size
+        filesize = self.perf_fsize
+        self.umount()
+        self.mount()
+        self.testidx = 1
+        while True:
+            self.test_info("====  perf01 test %02d" % (self.testidx))
+            self.testidx += 1
+            tstart = time.time()
+            self.perftest(filesize)
+            tdelta = time.time() - tstart
+            if tdelta > self.perf_time:
+                break
+            filesize = self.perf_mult*filesize
+        self.umount()
+
+################################################################################
+# Entry point
+x = AllocTest(usage=USAGE, testnames=TESTNAMES, testgroups=TESTGROUPS, sid=SCRIPT_ID)
+
+try:
+    x.setup(nfiles=1)
+
+    # Run all the tests
+    x.run_tests()
+except Exception:
+    x.test(False, traceback.format_exc())
+finally:
+    x.cleanup()
+    x.exit()
