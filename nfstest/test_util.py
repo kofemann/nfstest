@@ -72,6 +72,10 @@ WARN = -2
 BUG  = -3
 IGNR = -4
 
+VT_NORM = "\033[m"
+VT_BOLD = "\033[1m"
+VT_UL   = "\033[4m"
+
 _isatty = os.isatty(1)
 
 _test_map = {
@@ -825,8 +829,15 @@ class TestUtil(NFSUtil):
     def _print_msg(self, msg, tid=None):
         """Display message to the screen and to the log file."""
         tidmsg_l = '' if tid is None else _test_map[tid]
-        tidmsg_s = _test_map_c.get(tid, tidmsg_l) if _isatty else tidmsg_l
         self.write_log(tidmsg_l + msg)
+        if _isatty:
+            tidmsg_s = _test_map_c.get(tid, tidmsg_l)
+            if tid == HEAD:
+                msg = VT_UL + VT_BOLD + msg + VT_NORM
+            elif tid == INFO:
+                msg = VT_BOLD + msg + VT_NORM
+        else:
+            tidmsg_s = tidmsg_l
         print tidmsg_s + msg
         sys.stdout.flush()
 
@@ -968,7 +979,7 @@ class TestUtil(NFSUtil):
 
         if tid == HEAD:
             if self._runtest:
-                self.dprint('INFO', "Running test '%s'" % self.testname)
+                self.test_info("TEST: Running test '%s'" % self.testname)
             self._runtest = False
             if self.createtraces:
                 self.trace_start()
