@@ -867,7 +867,13 @@ class TestUtil(NFSUtil):
             for tid in _test_map:
                 gcounts[tid] = 0
             for item in self.test_msgs[-1]:
-                gcounts[item[0]] += 1
+                if len(item[2]) > 0:
+                    # Include all subtest results on the counts
+                    for subitem in item[2]:
+                        gcounts[subitem[0]] += 1
+                else:
+                    # No subtests, include just the test results
+                    gcounts[item[0]] += 1
             (total, tmsg) = self._total_counts(gcounts)
             # Fail the current test group if at least one of the tests within
             # this group fails
@@ -909,21 +915,24 @@ class TestUtil(NFSUtil):
             self.trace_stop()
         self._test_time()
 
-    def _subgroup_id(self, subgroup, tid):
+    def _subgroup_id(self, subgroup, tid, subtest):
         """Internal method to return the index of the sub-group message"""
         index = 0
         grpid = None
         # Search the given message in all the sub-group messages
         # within the current group
         group = self.test_msgs[-1]
-        for item in group:
-            if subgroup == item[1]:
-                # Sub-group message found
-                grpid = index
-                break
-            index += 1
+        if subtest is not None:
+            # Look for sub-group message only if this test has subtests
+            for item in group:
+                if subgroup == item[1]:
+                    # Sub-group message found
+                    grpid = index
+                    break
+                index += 1
         if grpid is None:
             # Sub-group not found, add it
+            # [tid, test-message, list-of-subtest-results]
             grpid = len(group)
             group.append([tid, subgroup, []])
         return grpid
@@ -938,7 +947,7 @@ class TestUtil(NFSUtil):
                 self._tverbose()
             self.test_msgs.append([])
         # Match the given message to a sub-group or add it if no match
-        grpid = self._subgroup_id(msg, tid)
+        grpid = self._subgroup_id(msg, tid, subtest)
         if subtest is not None:
             # A subtest is given so added to the proper sub-group
             subgroup = self.test_msgs[-1][grpid]
