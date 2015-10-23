@@ -1,0 +1,454 @@
+#!/usr/bin/env python
+#===============================================================================
+# Copyright 2015 NetApp, Inc. All Rights Reserved,
+# contribution by Jorge Mora <mora@netapp.com>
+#
+# This program is free software; you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation; either version 2 of the License, or (at your option) any later
+# version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+#===============================================================================
+import os
+import errno
+import struct
+import traceback
+import nfstest_config as c
+from nfstest.utils import *
+from packet.nfs.nfs4_const import *
+from nfstest.test_util import TestUtil
+from fcntl import fcntl,F_RDLCK,F_SETLK
+
+# Module constants
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
+__copyright__ = "Copyright (C) 2015 NetApp, Inc."
+__license__   = "GPL v2"
+__version__   = "1.0"
+
+USAGE = """%prog --server <server> [options]
+
+Sparse file tests
+=================
+Verify correct functionality of sparse files. These are files which
+have unallocated or uninitialized data blocks as holes. The new NFSv4.2
+operation SEEK is used to search for the next hole or data segment
+in a file.
+
+Basic tests verify the SEEK operation returns the correct offset of the
+next hole or data with respect to the starting offset given to the seek
+system call. Verify the SEEK operation is sent to the server with the
+correct stateid as a READ call. All files have a virtual hole at the
+end of the file so when searching for the next hole, even if the file
+does not have a hole, it returns the size of the file.
+
+Some tests include testing at the protocol level by taking a packet
+trace and inspecting the actual packets sent to the server.
+
+Negative tests include trying to SEEK starting from an offset beyond
+the end of the file.
+
+Examples:
+    The only required option is --server
+    $ %prog --server 192.168.0.11
+
+Notes:
+    The user id in the local host must have access to run commands as root
+    using the 'sudo' command without the need for a password.
+
+    Valid only for NFS version 4.2 and above."""
+
+# Test script ID
+SCRIPT_ID = "SPARSE"
+
+SEEK_TESTS = [
+    "seek01",
+    "seek02",
+    "seek03",
+    "seek04",
+]
+
+# Include the test groups in the list of test names
+# so they are displayed in the help
+TESTNAMES = ["seek"] + SEEK_TESTS
+
+TESTGROUPS = {
+    "seek": {
+         "tests": SEEK_TESTS,
+         "desc": "Run all SEEK tests: ",
+    },
+}
+
+def getlock(fd, lock_type, offset=0, length=0):
+    """Get byte range lock on file given by file descriptor"""
+    lockdata = struct.pack('hhllhh', lock_type, 0, offset, length, 0, 0)
+    out = fcntl(fd, F_SETLK, lockdata)
+    return struct.unpack('hhllhh', out)
+
+class SparseTest(TestUtil):
+    """SparseTest object
+
+       SparseTest() -> New test object
+
+       Usage:
+           x = SparseTest(testnames=['seek01', 'seek02', ...])
+
+           # Run all the tests
+           x.run_tests()
+           x.exit()
+    """
+    def __init__(self, **kwargs):
+        """Constructor
+
+           Initialize object's private data.
+        """
+        TestUtil.__init__(self, **kwargs)
+        self.opts.version = "%prog " + __version__
+        # Tests are valid for NFSv4.2 and beyond
+        self.opts.set_defaults(nfsversion=4.2)
+        self.scan_options()
+
+    def setup(self, **kwargs):
+        """Setup test environment"""
+        self.umount()
+        self.mount()
+        # Get block size for mounted volume
+        self.statvfs = os.statvfs(self.mtdir)
+        super(SparseTest, self).setup(**kwargs)
+
+        # Sparse file definition
+        self.sparsesize = 5 * self.filesize
+        uargs = {
+            "size"      : self.sparsesize,
+            "hole_list" : [self.filesize, 3*self.filesize],
+            "hole_size" : self.filesize,
+            "ftype"     : FTYPE_SP_DEALLOC,
+        }
+
+        # Create sparse file where it starts and ends with data
+        self.create_file(**uargs)
+        # Create sparse file where it starts and ends with a hole
+        uargs["hole_list"] = [0, 2*self.filesize, 4*self.filesize]
+        self.create_file(**uargs)
+        self.umount()
+
+    def test_seek(self, fd, whence, tname, msg=""):
+        """Verify SEEK succeeds searching for the next data or hole
+
+           fd:
+               File descriptor for opened file
+           whence:
+               Search for data when using SEEK_DATA or a hole using SEEK_HOLE
+           tname:
+               Test name
+           msg:
+               String to identify the specific test running and it is appended
+               to the main assertion message [default: ""]
+        """
+        file_size = self.sfile.filesize
+
+        if whence == SEEK_DATA:
+            segstr = "data"
+            what = NFS4_CONTENT_DATA
+            # Append offset for last byte on file to test limit condition
+            offset_list = self.sfile.data_offsets + [file_size-1]
+        else:
+            segstr = "hole"
+            what = NFS4_CONTENT_HOLE
+            offset_list = self.sfile.hole_offsets
+            if self.sfile.endhole:
+                # Append offset so the last byte offset is used
+                offset_list += [file_size-1]
+            else:
+                # Append offset so the last byte offset is used
+                # but expecting the implicit hole at the end of the file
+                offset_list += [file_size]
+
+        eof = 0
+        offset = 0
+        for doffset in offset_list:
+            try:
+                self.test_info("====  %s test %02d %s%s" % (tname, self.testidx, SEEKmap[whence], msg))
+                self.testidx += 1
+                self.trace_start()
+                fmsg = ""
+                werror = None
+                seek_offset = offset
+                self.dprint('DBG3', "SEEK using %s on file %s starting at offset %d" % (SEEKmap[whence], self.absfile, offset))
+                offset = os.lseek(fd, offset, whence)
+                self.dprint('INFO', "SEEK returned offset %d" % offset)
+                if offset == file_size:
+                    # Hole was not found
+                    eof = 1
+            except OSError as werror:
+                err = werror.errno
+                fmsg = ", got error [%s] %s" % (errno.errorcode.get(err,err), os.strerror(err))
+            finally:
+                self.trace_stop()
+
+            if whence == SEEK_DATA and self.sfile.endhole and doffset == offset_list[-1]:
+                # Looking for data starting on a hole which is the end of the file
+                fmsg = ", expecting ENXIO but it succeeded"
+                expr = werror and werror.errno == errno.ENXIO
+                tmsg = "SEEK should fail with ENXIO searching for the next %s when file ends in a hole" % segstr
+                self.test(expr, tmsg+msg, failmsg=fmsg)
+            else:
+                tmsg = "SEEK should succeed searching for the next %s" % segstr
+                self.test(werror is None, tmsg+msg, failmsg=fmsg)
+
+            if not werror:
+                fmsg = ", expecting offset %d but got %d" % (doffset, offset)
+                if whence == SEEK_HOLE and offset == file_size:
+                    # Found the implicit hole at the end of the file
+                    tmsg = "SEEK should return the size of the file when the next hole is not found"
+                else:
+                    tmsg = "SEEK should return correct offset when the next %s is found" % segstr
+                self.test(offset == doffset, tmsg+msg, failmsg=fmsg)
+            offset += self.filesize
+            if offset >= file_size:
+                # Use the offset exactly on the last byte of the file
+                offset = file_size - 1
+
+            self.trace_open()
+            (pktcall, pktreply) = self.find_nfs_op(OP_SEEK, self.server_ipaddr, self.port, status=None)
+            self.dprint('DBG7', str(pktcall))
+            self.dprint('DBG7', str(pktreply))
+            self.test(pktcall, "SEEK should be sent to the server")
+            seekobj = pktcall.NFSop
+            fmsg = ", expecting %s but got %s" % (self.stid_str(self.stateid), self.stid_str(seekobj.stateid.other))
+            self.test(seekobj.stateid == self.stateid, "SEEK should be sent with correct stateid", failmsg=fmsg)
+            fmsg = ", expecting %d but got %d" % (seek_offset, seekobj.offset)
+            self.test(seekobj.offset == seek_offset, "SEEK should be sent with correct offset", failmsg=fmsg)
+            fmsg = ", expecting %s but got %s" % (data_content4.get(what,what), seekobj.offset)
+            self.test(seekobj.what == what, "SEEK should be sent with %s" % seekobj.what, failmsg=fmsg)
+
+            if whence == SEEK_DATA and self.sfile.endhole and doffset == offset_list[-1]:
+                fmsg = ", expecting NFS4ERR_NXIO but got %s" % pktreply.nfs.status
+                self.test(pktreply and pktreply.nfs.status == NFS4ERR_NXIO, "SEEK should return NFS4ERR_NXIO", failmsg=fmsg)
+            else:
+                self.test(pktreply and pktreply.nfs.status == 0, "SEEK should return NFS4_OK")
+                if pktreply:
+                    idx = pktcall.NFSidx
+                    rseekobj = pktreply.nfs.array[idx]
+                    fmsg = ", expecting %d but got %d" % (doffset, rseekobj.offset)
+                    self.test(rseekobj.offset == doffset, "SEEK should return the correct offset", failmsg=fmsg)
+                    fmsg = ", but got %s" % rseekobj.eof
+                    self.test(rseekobj.eof == eof, "SEEK should return eof as %s" % nfs_bool[eof], failmsg=fmsg)
+
+    def seek01(self, whence, tname, lock=False):
+        """Verify SEEK succeeds searching for the next data or hole
+
+           whence:
+               Search for data when using SEEK_DATA or a hole using SEEK_HOLE
+           tname:
+               Test name
+           lock:
+               Lock file before seeking for the data or hole [default: False]
+        """
+        for sparseidx in [0,1]:
+            try:
+                fd = None
+                msg = ""
+                if lock:
+                    msg = " (locking file)"
+                if sparseidx == 0:
+                    self.test_info("<<<<<<<<<< Using sparse file starting and ending with data%s >>>>>>>>>>" % msg)
+                else:
+                    self.test_info("<<<<<<<<<< Using sparse file starting and ending with hole%s >>>>>>>>>>" % msg)
+
+                self.umount()
+                self.trace_start()
+                self.mount()
+
+                self.sfile = self.sparse_files[sparseidx]
+                self.absfile = self.sfile.absfile
+                self.filename = self.sfile.filename
+                self.dprint('DBG3', "Open file %s for reading" % self.absfile)
+                fd = os.open(self.absfile, os.O_RDONLY)
+
+                if lock:
+                    self.dprint('DBG3', "Lock file %s" % self.absfile)
+                    out = getlock(fd, F_RDLCK)
+
+                self.trace_stop()
+                self.trace_open()
+                self.get_stateid(self.filename)
+                if self.deleg_stateid is not None:
+                    self._deleg_granted = True
+
+                # Search for the data/hole segments
+                self.test_seek(fd, whence, tname, msg)
+            except Exception:
+                self.test(False, traceback.format_exc())
+            finally:
+                if fd:
+                    os.close(fd)
+                self.umount()
+
+    def seek01_test(self):
+        """Verify SEEK succeeds searching for the next data"""
+        self.test_group("Verify SEEK succeeds searching for the next data")
+        self.testidx = 1
+        self._deleg_granted = False
+        self.seek01(SEEK_DATA, "seek01")
+
+        if not self._deleg_granted:
+            # Run tests with byte range locking
+            self.seek01(SEEK_DATA, "seek01", lock=True)
+
+    def seek02_test(self):
+        """Verify SEEK succeeds searching for the next hole"""
+        self.test_group("Verify SEEK succeeds searching for the next hole")
+        self.testidx = 1
+        self._deleg_granted = False
+        self.seek01(SEEK_HOLE, "seek02")
+
+        if not self._deleg_granted:
+            # Run tests with byte range locking
+            self.seek01(SEEK_HOLE, "seek02", lock=True)
+
+    def seek03(self, whence, offset, tname, sparseidx=0, lock=False, msg=""):
+        """Verify SEEK fails with ENXIO when offset is beyond the end of the file
+
+           whence:
+               Search for data when using SEEK_DATA or a hole using SEEK_HOLE
+           offset:
+               Search for data or hole starting from this offset
+           tname:
+               Test name
+           sparseidx:
+               Index of the sparse file to use for the testing [default: 0]
+           lock:
+               Lock file before seeking for the data or hole [default: False]
+           msg:
+               String to identify the specific test running and it is appended
+               to the main assertion message [default: ""]
+        """
+        try:
+            fd = None
+            self.test_info("====  %s test %02d %s%s" % (tname, self.testidx, SEEKmap[whence], msg))
+            self.testidx += 1
+
+            self.umount()
+            self.trace_start()
+            self.mount()
+
+            # Use sparse file given by the index
+            sfile = self.sparse_files[sparseidx]
+            absfile = sfile.absfile
+            filesize = sfile.filesize
+
+            if whence == SEEK_DATA:
+                segstr = "data segment"
+                smsg = "using SEEK_DATA"
+                what = NFS4_CONTENT_DATA
+            else:
+                segstr = "hole"
+                smsg = "using SEEK_HOLE"
+                what = NFS4_CONTENT_HOLE
+
+            if offset < filesize:
+                smsg += " when offset is in the middle of last hole"
+            elif offset == filesize:
+                smsg += " when offset equals to the file size"
+            else:
+                smsg += " when offset is beyond the end of the file"
+
+            self.dprint('DBG3', "Open file %s for reading" % absfile)
+            fd = os.open(absfile, os.O_RDONLY)
+
+            if lock:
+                self.dprint('DBG3', "Lock file %s" % self.absfile)
+                out = getlock(fd, F_RDLCK)
+
+            self.dprint('DBG3', "Search for the next %s on file %s starting at offset %d" % (segstr, absfile, offset))
+            try:
+                werror = None
+                fmsg = ", expecting ENXIO but it succeeded"
+                o_offset = os.lseek(fd, offset, whence)
+                self.dprint('DBG5', "SEEK returned offset %d" % o_offset)
+            except OSError as werror:
+                fmsg = ", expecting ENXIO but got %s" % errno.errorcode.get(werror.errno,werror.errno)
+            expr = werror and werror.errno == errno.ENXIO
+            tmsg = "SEEK system call should fail with ENXIO %s" % smsg
+            self.test(expr, tmsg+msg, failmsg=fmsg)
+        except Exception:
+            self.test(False, traceback.format_exc())
+        finally:
+            if fd:
+                os.close(fd)
+            self.umount()
+            self.trace_stop()
+
+        try:
+            self.trace_open()
+            self.get_stateid(sfile.filename)
+            (pktcall, pktreply) = self.find_nfs_op(OP_SEEK, self.server_ipaddr, self.port, status=None)
+            self.dprint('DBG7', str(pktcall))
+            self.dprint('DBG7', str(pktreply))
+            if pktcall:
+                seekobj = pktcall.NFSop
+                fmsg = ", expecting %s but got %s" % (self.stid_str(self.stateid), self.stid_str(seekobj.stateid.other))
+                self.test(seekobj.stateid == self.stateid, "SEEK should be sent with correct stateid", failmsg=fmsg)
+                fmsg = ", expecting %d but got %d" % (offset, seekobj.offset)
+                self.test(seekobj.offset == offset, "SEEK should be sent with correct offset", failmsg=fmsg)
+                fmsg = ", expecting %s but got %s" % (data_content4.get(what,what), seekobj.offset)
+                self.test(seekobj.what == what, "SEEK should be sent with %s" % seekobj.what, failmsg=fmsg)
+            else:
+                self.test(False, "SEEK packet call was not found")
+            if not pktreply:
+                self.test(False, "SEEK packet reply was not found")
+            if pktcall and pktreply:
+                idx = pktcall.NFSidx
+                status = pktreply.nfs.array[idx].status
+                expr = status == NFS4ERR_NXIO
+                fmsg = ", expecting NFS4ERR_NXIO but got %s" % nfsstat4.get(status, status)
+                tmsg = "SEEK should fail with NFS4ERR_NXIO %s" % smsg
+                self.test(expr, tmsg+msg, failmsg=fmsg)
+        except Exception:
+            self.test(False, traceback.format_exc())
+
+    def seek03_test(self):
+        """Verify SEEK searching for next data fails with ENXIO when offset is beyond the end of the file"""
+        self.test_group("Verify SEEK searching for next data fails with ENXIO when offset is beyond the end of the file")
+        self.testidx = 1
+        self.seek03(SEEK_DATA,   self.sparsesize-2, "seek03", 1)
+        self.seek03(SEEK_DATA,   self.sparsesize,   "seek03", 1)
+        self.seek03(SEEK_DATA, 2*self.sparsesize,   "seek03", 1)
+
+        if self.deleg_stateid is None:
+            # Run tests with byte range locking
+            msg = " (locking file)"
+            self.seek03(SEEK_DATA,   self.sparsesize-2, "seek03", 1, lock=True, msg=msg)
+            self.seek03(SEEK_DATA,   self.sparsesize,   "seek03", 1, lock=True, msg=msg)
+            self.seek03(SEEK_DATA, 2*self.sparsesize,   "seek03", 1, lock=True, msg=msg)
+
+    def seek04_test(self):
+        """Verify SEEK searching for next hole fails with ENXIO when offset is beyond the end of the file"""
+        self.test_group("Verify SEEK searching for next hole fails with ENXIO when offset is beyond the end of the file")
+        self.testidx = 1
+        self.seek03(SEEK_HOLE,   self.sparsesize, "seek04", 1)
+        self.seek03(SEEK_HOLE, 2*self.sparsesize, "seek04", 1)
+
+        if self.deleg_stateid is None:
+            # Run tests with byte range locking
+            msg = " (locking file)"
+            self.seek03(SEEK_HOLE,   self.sparsesize, "seek04", 1, lock=True, msg=msg)
+            self.seek03(SEEK_HOLE, 2*self.sparsesize, "seek04", 1, lock=True, msg=msg)
+
+################################################################################
+# Entry point
+x = SparseTest(usage=USAGE, testnames=TESTNAMES, testgroups=TESTGROUPS, sid=SCRIPT_ID)
+
+try:
+    x.setup(nfiles=1)
+
+    # Run all the tests
+    x.run_tests()
+except Exception:
+    x.test(False, traceback.format_exc())
+finally:
+    x.cleanup()
+    x.exit()
