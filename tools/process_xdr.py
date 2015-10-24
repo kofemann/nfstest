@@ -64,6 +64,8 @@ using the following syntax:
 
     COPYRIGHT: year
         Add copyright information to the python modules created
+    VERSION: version
+        Add version information to the python modules created
     INHERIT: name
         Create class inheriting from the given base class name. The name is
         is given as a full path including the package and class name, e.g.:
@@ -202,6 +204,7 @@ string_list = ["opaque", "string"]
 
 valid_tags = {
     "COPYRIGHT" : 1,
+    "VERSION"   : 1,
     "XARG"      : 1,
     "CLASSATTR" : 1,
     "FLATATTR"  : 1,
@@ -257,7 +260,7 @@ modconst_str = """
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) __COPYRIGHT__ NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.0"
+__version__   = __VERSION__
 """
 
 # Variable definition regex
@@ -287,8 +290,8 @@ class XDRobject:
         self.inherit_names = {}
 
         # Copyright and module info constants
-        self.copyright = None
-        self.modconst  = None
+        self.copyright   = None
+        self.modversion  = None
         self.description = None
         self.desc_const  = None
 
@@ -914,6 +917,23 @@ class XDRobject:
                 raise Exception, "BITDICT tag is used incorrectly in definition for '%s'" % defname
         return isbitdict
 
+    def set_copyright(self, fd):
+        """Write copyright information"""
+        if self.copyright is not None:
+            copyright = copyright_str.lstrip().replace("__COPYRIGHT__", self.copyright)
+            fd.write(copyright)
+
+    def set_modconst(self, fd):
+        """Write module constants"""
+        if self.modversion is not None:
+            if self.copyright:
+                year = self.copyright
+            else:
+                year = time.strftime("%Y", time.localtime())
+            modconst = modconst_str.replace("__COPYRIGHT__", year)
+            modconst = modconst.replace("__VERSION__", self.modversion)
+            fd.write(modconst)
+
     def set_original_definition(self, fd, deftype, defname):
         """Write original XDR definition to the output file
 
@@ -1326,9 +1346,9 @@ class XDRobject:
         enumlist = []
         constlist = []
         self.tags = {}
-        self.copyright = None
-        self.modconst  = None
-        self.incomment = False
+        self.copyright   = None
+        self.modversion  = None
+        self.incomment   = False
         self.description = None
         self.desc_const  = None
         for line in open(self.xfile, "r"):
@@ -1350,9 +1370,11 @@ class XDRobject:
                     for bclass in [x.strip() for x in inherit.split(",")]:
                         self.inherit_names[bclass] = 1
                 copyright = deftags.get("COPYRIGHT")
-                if copyright:
-                    self.copyright = copyright_str.lstrip().replace("__COPYRIGHT__", copyright)
-                    self.modconst  = modconst_str.replace("__COPYRIGHT__", copyright)
+                if copyright is not None:
+                    self.copyright = copyright
+                modversion = deftags.get("VERSION")
+                if modversion is not None:
+                    self.modversion = modversion
                 if deftype is None:
                     regex = re.search(r"^\s*const\s+(\w+)(\s*)=(\s*)(\w+)", line)
                     if regex:
@@ -1397,17 +1419,17 @@ class XDRobject:
         if self.enum_data:
             print "  Creating file %s" % self.cfile
             fd = open(self.cfile, "w")
-            if self.copyright:
-                fd.write(self.copyright)
+            self.set_copyright(fd)
             fd.write(self.genstr)
             if self.desc_const:
                 fd.write(self.desc_const)
             else:
                 sname = re.sub(r"(\d)", r"v\1", self.bname.upper())
                 fd.write('"""\n%s constants module\n"""\n' % sname)
-            if self.modconst:
+
+            if self.modversion is not None:
                 fd.write("import nfstest_config as c\n")
-                fd.write(self.modconst)
+                self.set_modconst(fd)
 
             # Save enums
             for enum_item in self.enum_data:
@@ -1478,8 +1500,7 @@ class XDRobject:
         """Process XDR definitions"""
         print "  Creating file %s" % self.pfile
         fd = open(self.pfile, "w")
-        if self.copyright:
-            fd.write(self.copyright)
+        self.set_copyright(fd)
         fd.write(self.genstr)
         if self.description:
             fd.write(self.description)
@@ -1502,7 +1523,7 @@ class XDRobject:
                     import_dict[objpath] = []
                 import_dict[objpath].append(objdef)
 
-        if self.modconst:
+        if self.modversion is not None:
             import_list.append("import nfstest_config as c\n")
         if self.enum_data:
             import_list.append("import %s_const as const\n" % self.bname)
@@ -1514,8 +1535,7 @@ class XDRobject:
         for line in sorted(import_list, key=len):
             fd.write(line)
 
-        if self.modconst:
-            fd.write(self.modconst)
+        self.set_modconst(fd)
 
         self.item_dlist = []
         self.linkedlist = {}
