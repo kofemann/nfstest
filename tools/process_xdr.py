@@ -68,6 +68,8 @@ using the following syntax:
         Add version information to the python modules created
     INCLUDE: file
         Include the file and add it in-line to be processed
+    COMMENT: comment
+        Include the comment in both the decoding and constants modules
     INHERIT: name
         Create class inheriting from the given base class name. The name is
         is given as a full path including the package and class name, e.g.:
@@ -208,6 +210,7 @@ valid_tags = {
     "COPYRIGHT" : 1,
     "VERSION"   : 1,
     "INCLUDE"   : 1,
+    "COMMENT"   : 1,
     "XARG"      : 1,
     "CLASSATTR" : 1,
     "FLATATTR"  : 1,
@@ -1362,6 +1365,7 @@ class XDRobject:
         buffer = ""
         deftype = None
         defname = None
+        tagcomm = None
         enumlist = []
         constlist = []
         self.tags = {}
@@ -1372,6 +1376,8 @@ class XDRobject:
         self.desc_const  = None
         for line in self.xdr_lines:
             line = self.process_comments(line)
+            if tagcomm is None:
+                tagcomm = self.tags.pop("COMMENT", None)
             if len(line) == 0:
                 if deftype in [ENUM, BITMAP] and self.inline_comment is not None and len(self.inline_comment):
                     # Save comment
@@ -1415,12 +1421,14 @@ class XDRobject:
                     # Add to list of enum definitions
                     self.enumdef_list.append(defname)
                 if deftype is not None and len(constlist):
-                    self.enum_data.append({"deftype":CONSTANT, "defname":None, "deftags":deftags, "defcomm":defcomments, "enumlist":constlist})
+                    self.enum_data.append({"deftype":CONSTANT, "defname":None, "deftags":deftags, "defcomm":tagcomm, "enumlist":constlist})
                     self.old_comment = []
+                    tagcomm = None
             elif re.search(r"^\s*};", line):
                 # End of definition
                 if deftype in [ENUM, BITMAP]:
-                    self.enum_data.append({"deftype":deftype, "defname":defname, "deftags":deftags, "defcomm":defcomments, "enumlist":enumlist})
+                    self.enum_data.append({"deftype":deftype, "defname":defname, "deftags":deftags, "defcomm":tagcomm, "enumlist":enumlist})
+                    tagcomm = None
                 deftype = None
                 constlist = []
                 self.old_comment = []
@@ -1463,6 +1471,9 @@ class XDRobject:
                 if defname == "bool":
                     # Rename "bool" definition
                     defname = "nfs_bool"
+
+                if defcomm is not None:
+                    fd.write("\n# %s\n" % defcomm)
 
                 name_maxlen  = len(max([x[0] for x in enumlist], key=len))
                 value_maxlen = len(max([x[1] for x in enumlist], key=len))
@@ -1570,6 +1581,12 @@ class XDRobject:
         self.desc_const  = None
         for line in self.xdr_lines:
             line = self.process_comments(line)
+
+            tagcomm = self.tags.pop("COMMENT", None)
+            if tagcomm is not None:
+                fd.write("\n# %s\n" % tagcomm)
+                continue
+
             if len(line) == 0:
                 continue
 
