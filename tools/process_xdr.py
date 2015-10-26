@@ -97,9 +97,11 @@ using the following syntax:
         self.fh = self.nfs4_fh
         self.id = "123"
         If argop and nfs4_fh is an attribute for the object.
-    GLOBAL: name=value[,...]
+    GLOBAL: name[=value][,...]
         Set global attribute using set_global(). The value is processed the
         same as OBJATTR.
+        If no value is given, the name given is a global defined somewhere
+        else so it should not be defined -- this is a reference to a global
     FLATATTR: 1
         Make the object attributes of the given attribute part of the
         attributes of the current object, e.g.:
@@ -760,7 +762,7 @@ class XDRobject:
             self.tags = {}
         return (deftype, defname, deftags, defcomments)
 
-    def set_vars(self, fd, tags, dnames, indent, pre=False, post=False, noop=False):
+    def set_vars(self, fd, tags, dnames, indent, pre=False, post=False, vname=None, noop=False):
         """Set GLOBAL variables
 
            fd:
@@ -778,6 +780,8 @@ class XDRobject:
                Global variable is defined before any other attributes
            post:
                Global variable is defined after all other attributes
+           vname:
+               Set global variable for the given name only
            noop:
                No operation, do not write the global definition to the file
                just return the length of the global definition. This is used
@@ -790,7 +794,13 @@ class XDRobject:
         globalvars = tags.get(tag)
         if globalvars is not None:
             for item in globalvars.split(","):
-                name,var = item.split("=")
+                data = item.split("=")
+                if len(data) == 2:
+                    name,var = data
+                else:
+                    continue
+                if vname is not None and vname != var:
+                    continue
                 if pre:
                     # If global is set before any other attributes are set
                     # then it should not be in the dnames list
@@ -804,7 +814,7 @@ class XDRobject:
                         # duplicates when the same global is processed with
                         # pre as well
                         out += '%sself.set_%s("%s", %s)\n' % (indent, tag.lower(), name, var)
-        if not noop:
+        if not noop and len(out) > 0:
             fd.write(out)
         return len(out)
 
@@ -1183,6 +1193,15 @@ class XDRobject:
             tindent = " " * nindent
             istry = True
 
+        # Get list of global names (not initialized)
+        global_list = []
+        globalvars = deftags.get("GLOBAL")
+        if globalvars is not None:
+            for item in globalvars.split(","):
+                data = item.split("=")
+                if len(data) == 1:
+                    global_list.append(data[0])
+
         # Process the OBJATTR tag and just get a list of names only
         # to include these into the calculation for maxlen
         oattrlist = self.set_objattr(fd, deftags, dnames, "", namesonly=True)
@@ -1252,6 +1271,9 @@ class XDRobject:
                 swstr = ""  # Don't use True argument for switch variable
                 switch_var = vname
             if vname in xarg_set_names+xarg_nodisp_names:
+                continue
+            if vname in global_list:
+                # This is a global reference
                 continue
 
             # Use option usetypedef to return the same definition name except
@@ -1346,6 +1368,7 @@ class XDRobject:
                     dname = "nfs_bool"
                 fd.write("%s%s(unpack)%s\n" % (setattr_str, dname, swstr))
 
+            self.set_vars(fd, deftags, dnames, indent+tindent, post=True, vname=vname)
             self.set_objattr(fd, tag, dnames, indent+tindent+cindent)
             self.set_strfmt(fd, tag, indent+tindent+cindent)
             # End of for loop }
@@ -1353,7 +1376,6 @@ class XDRobject:
         if deftype == UNION:
             maxlen = omaxlen
         self.set_objattr(fd, deftags, dnames, indent+tindent, maxlen=maxlen)
-        self.set_vars(fd, deftags, dnames, indent+tindent, post=True)
 
         if deftags.get("TRY"):
             # End try block
