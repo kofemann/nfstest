@@ -77,6 +77,29 @@ the iptables rules to their original state.
 
 Tests
 =====
+    nfstest_alloc - Space reservation tests
+    =======================================
+    Verify correct functionality of space reservations so applications are
+    able to reserve or unreserve space for a file. The system call fallocate
+    is used to manipulate the allocated disk space for a file, either to
+    preallocate or deallocate it. For filesystems which support the fallocate
+    system call, preallocation is done quickly by allocating blocks and
+    marking them as uninitialized, requiring no I/O to the data blocks.
+    This is much faster than creating a file and filling it with zeros.
+
+    Basic allocate tests verify the disk space is actually preallocated or
+    reserved for the given range by filling up the device after the allocation
+    and make sure data can be written to the allocated range without any
+    problems. Also, any data written outside the allocated range will fail
+    with NFS4ERR_NOSPC when there is no more space left on the device.
+    On the other hand, deallocating space will give the disk space back
+    so it can be used by either the same file on regions not already
+    preallocated or by different files without the risk of getting
+    a no space error.
+
+    Valid for NFSv4.2 and beyond
+
+
     nfstest_cache - NFS client side caching tests
     =============================================
     Verify consistency of attribute caching by varying acregmin, acregmax,
@@ -192,6 +215,23 @@ Tests
     positive and negative testing.
 
     Valid for any version of NFS
+
+
+    nfstest_sparse - Sparse file tests
+    ==================================
+    Verify correct functionality of sparse files. These are files which
+    have unallocated or uninitialized data blocks as holes. The new NFSv4.2
+    operation SEEK is used to search for the next hole or data segment
+    in a file.
+
+    Basic tests verify the SEEK operation returns the correct offset of the
+    next hole or data with respect to the starting offset given to the seek
+    system call. Verify the SEEK operation is sent to the server with the
+    correct stateid as a READ call. All files have a virtual hole at the
+    end of the file so when searching for the next hole, even if the file
+    does not have a hole, it returns the size of the file.
+
+    Valid for NFSv4.2 and beyond
 
 
 Tools
@@ -318,6 +358,12 @@ Run the tests
 
    The only required option is --server
    $ nfstest_posix --server 192.168.0.11
+
+   The only required option is --server
+   $ nfstest_alloc --server 192.168.0.11
+
+   The only required option is --server
+   $ nfstest_sparse --server 192.168.0.11
 
    The only required option is --datadir (-d)
    $ nfstest_io -d /mnt/t/data -v all -n 10 -r 3600
