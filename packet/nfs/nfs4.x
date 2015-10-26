@@ -53,6 +53,7 @@
  */
 
 /* COPYRIGHT: 2014 */
+/* VERSION: "4.2" */
 
 /*
  * Constants
@@ -527,7 +528,8 @@ struct mode_masked4 {
 enum layouttype4 {
     LAYOUT4_NFSV4_1_FILES   = 0x1,
     LAYOUT4_OSD2_OBJECTS    = 0x2,
-    LAYOUT4_BLOCK_VOLUME    = 0x3
+    LAYOUT4_BLOCK_VOLUME    = 0x3,
+    LAYOUT4_FLEX_FILES      = 0x4
 };
 
 const NFL4_UFLG_MASK                  = 0x0000003F;
@@ -573,6 +575,10 @@ struct nfsv4_1_file_layout4 {
     nfs_fh4        fh_list<>;
 };
 
+/* COMMENT: NFSv4.x flex files layout definitions (BEGIN) ================================ */
+/* INCLUDE: nfs4flex.x */
+/* COMMENT: NFSv4.x flex files layout definitions (END) ================================== */
+
 /*
  * Original definition
  * struct layout_content4 {
@@ -584,6 +590,8 @@ struct nfsv4_1_file_layout4 {
 union layout_content4 switch (layouttype4 type) {
     case LAYOUT4_NFSV4_1_FILES:
         nfsv4_1_file_layout4 body;
+    case LAYOUT4_FLEX_FILES:
+        ff_layout4 body;
     default:
         /* All other types are not supported yet */
         /* STRFMT1: "" */
@@ -600,6 +608,8 @@ union layout_content4 switch (layouttype4 type) {
 union layouthint4 switch (layouttype4 type) {
     case LAYOUT4_NFSV4_1_FILES:
         nfsv4_1_file_layouthint4 body;
+    case LAYOUT4_FLEX_FILES:
+        ff_layouthint4 body;
     default:
         /* All other types are not supported yet */
         opaque body<>;
@@ -630,6 +640,8 @@ struct layout4 {
 union device_addr4 switch (layouttype4 type) {
     case LAYOUT4_NFSV4_1_FILES:
         nfsv4_1_file_layout_ds_addr4 body;
+    case LAYOUT4_FLEX_FILES:
+        ff_device_addr4 body;
     default:
         /* All other types are not supported yet */
         /* STRFMT1: "" */
@@ -655,13 +667,22 @@ enum layoutreturn_type4 {
     LAYOUTRETURN4_ALL  = LAYOUT4_RET_REC_ALL
 };
 
+/* GLOBAL: nfs4_layouttype */
+union layoutreturn_file_body4 switch (layouttype4 nfs4_layouttype) {
+    case LAYOUT4_FLEX_FILES:
+        ff_layoutreturn4 body;
+    default:
+        /* All other types are not supported yet or not used */
+        opaque body<>;
+};
+
 /* STRFMT1: off:{0:umax64} len:{1:umax64} stid:{2} */
 struct layoutreturn_file4 {
     offset4   offset;
     length4   length;
     stateid4  stateid;
     /* layouttype4 specific data */
-    opaque    body<>;
+    layoutreturn_file_body4 data; /* FLATATTR:1 */
 };
 
 /* STRFMT1: {1} */
@@ -2817,6 +2838,7 @@ union LAYOUTGET4res switch (nfsstat4 status) {
  * ======================================================================
  */
 /* OBJATTR: fh=self.nfs4_fh */
+/* GLOBAL: nfs4_layouttype=type */
 /* STRFMT1: FH:{fh:crc32} {2:@14} {3} */
 struct LAYOUTRETURN4args {
     /* CURRENT_FH: file */
