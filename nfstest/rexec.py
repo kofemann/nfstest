@@ -224,7 +224,7 @@ class Rexec(BaseObj):
                    out = x.results()
                    break
     """
-    def __init__(self, servername="", logfile=None):
+    def __init__(self, servername="", logfile=None, sync_timeout=0.1):
         """Constructor
 
            Initialize object's private data.
@@ -234,11 +234,15 @@ class Rexec(BaseObj):
            logfile:
                Pathname of log file to be created on remote host
                [Default: "/dev/null"]
+           sync_timeout:
+               Timeout used for synchronizing the connection stream
+               [Default: 0.1]
         """
         global PORT
         self.pid     = None
         self.conn    = None
         self.process = None
+        self.sync_timeout = sync_timeout
         if logfile is None:
             # Default log file
             logfile = "/dev/null"
@@ -325,10 +329,15 @@ class Rexec(BaseObj):
 
     def results(self):
         """Return pending results"""
-        out = self.conn.recv()
-        if isinstance(out, Exception):
-            raise out
-        return out
+        while True:
+            out = self.conn.recv()
+            if isinstance(out, Exception):
+                raise out
+            elif out is None and self.poll(self.sync_timeout):
+                # Try to re-sync when recv() returns None and there is
+                # still data in the buffer
+                continue
+            return out
 
     def rexec(self, expr):
         """Execute statement on remote server"""
