@@ -415,7 +415,7 @@ def create_manpage(src, dst):
                 elif in_methods and re.search(r'^\w+(\s+=\s+\w+)?\(', line):
                     body += _process_func(method_desc)
                     method_desc = []
-                    body.append('.B %s' % line)
+                    body.append('.P\n.B %s' % line)
                 elif in_methods:
                     method_desc.append(line)
                 elif in_resolution:
