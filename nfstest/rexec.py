@@ -26,6 +26,7 @@ remote host without the need for a password.
 """
 import os
 import re
+import time
 import inspect
 import nfstest_config as c
 from baseobj import BaseObj
@@ -33,10 +34,10 @@ from subprocess import Popen, PIPE
 from multiprocessing.connection import Client
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.0.1'
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2013 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = "1.1"
 
 # Constants
 PORT = 9900
@@ -62,6 +63,14 @@ def bare_server(port, logfile):
     fd.close()
     listener.close()
 
+def write_log(fd, msg, nl="\n"):
+    """Return timestamp"""
+    tt = time.time()
+    msec = "%06d" % (1000000 * (tt - int(tt)))
+    tstamp = time.strftime("%H:%M:%S.", time.localtime(tt)) + msec
+    fd.write(tstamp + " - " + msg + nl)
+    fd.flush()
+
 def proc_requests(fd, conn):
     """Main remote procedure server
 
@@ -71,10 +80,10 @@ def proc_requests(fd, conn):
            Connection object
     """
     import types
-    fd.write("Running proc_requests\n")
+    write_log(fd, "Running proc_requests")
     while True:
         msg = conn.recv()
-        fd.write("Received %r\n" % msg)
+        write_log(fd, "Received %r" % msg)
         if type(msg) is dict:
             try:
                 # Get command
@@ -86,13 +95,13 @@ def proc_requests(fd, conn):
                 # Get named arguments
                 kwds = msg.get('kwds', {})
             except Exception as e:
-                fd.write("\nERROR: %r\n" % e)
+                write_log(fd, "ERROR: %r" % e)
                 conn.send(e)
             if cmd == 'run':
                 # Call function
                 try:
                     # Find if function is defined
-                    fd.write("Run '%s'" % fstr)
+                    write_log(fd, "RUN: '%s'" % fstr)
                     if type(fstr) in [types.FunctionType, types.BuiltinFunctionType, types.MethodType]:
                         # This is a function
                         func = fstr
@@ -104,34 +113,35 @@ def proc_requests(fd, conn):
                     if func is None:
                         raise Exception("function not found")
                     # Run function with all its arguments
-                    conn.send(func(*kwts, **kwds))
-                    fd.write("...done\n")
+                    out = func(*kwts, **kwds)
+                    write_log(fd, "RESULT: " + repr(out))
+                    conn.send(out)
                 except Exception as e:
-                    fd.write("\nERROR: %r\n" % e)
+                    write_log(fd, "ERROR: %r" % e)
                     conn.send(e)
             elif cmd == 'eval':
                 # Evaluate expression
                 try:
-                    fd.write("Evaluate '%s'" % fstr)
+                    write_log(fd, "EVAL: '%s'" % fstr)
                     out = eval(fstr)
-                    fd.write("...done\n")
+                    write_log(fd, "RESULT: " + repr(out))
                     conn.send(out)
                 except Exception as e:
-                    fd.write("\nERROR: %r\n" % e)
+                    write_log(fd, "ERROR: %r" % e)
                     conn.send(e)
             elif cmd == 'exec':
                 # Execute statement
                 try:
-                    fd.write("Execute '%s'" % fstr)
+                    write_log(fd, "EXEC:\n%s" % fstr)
                     exec(fstr)
-                    fd.write("...done\n")
+                    write_log(fd, "EXEC done")
                     conn.send(None)
                 except Exception as e:
-                    fd.write("\nERROR: %r\n" % e)
+                    write_log(fd, "ERROR: %r" % e)
                     conn.send(e)
             else:
                 emsg = "Unknown procedure"
-                fd.write("ERROR: %s\n" % emsg)
+                write_log(fd, "ERROR: %s" % emsg)
                 conn.send(Exception(emsg))
         if msg == 'close':
             # Request to close the connection,
@@ -255,7 +265,8 @@ class Rexec(BaseObj):
         PORT += 1
 
         # Execute main server on remote host
-        proc_code = "".join(inspect.getsourcelines(proc_requests)[0])
+        proc_code  = "".join(inspect.getsourcelines(write_log)[0])
+        proc_code += "".join(inspect.getsourcelines(proc_requests)[0])
         proc_code += "proc_requests(fd, conn)"
         self.conn.send(proc_code)
 
