@@ -1341,6 +1341,7 @@ struct DELEGPURGE4args {
     clientid4       clientid;
 };
 
+/* STRFMT1: "" */
 struct DELEGPURGE4res {
     nfsstat4        status;
 };
@@ -1573,6 +1574,7 @@ struct LOOKUP4res {
  * LOOKUPP: Lookup Parent Directory
  * ======================================================================
  */
+/* STRFMT1: "" */
 struct LOOKUPP4res {
     /* new CURRENT_FH: parent directory */
     nfsstat4        status;
@@ -1583,11 +1585,13 @@ struct LOOKUPP4res {
  * ======================================================================
  */
 /* OBJATTR: fh=self.nfs4_fh */
+/* STRFMT1: "" */
 struct NVERIFY4args {
     /* CURRENT_FH: object */
     fattr4          attributes;
 };
 
+/* STRFMT1: "" */
 struct NVERIFY4res {
     nfsstat4        status;
 };
@@ -1904,11 +1908,13 @@ union OPEN4res switch (nfsstat4 status) {
  * ======================================================================
  */
 /* OBJATTR: fh=self.nfs4_fh */
+/* STRFMT1: createdir:{0} */
 struct OPENATTR4args {
     /* CURRENT_FH: object */
     bool    createdir;
 };
 
+/* STRFMT1: "" */
 struct OPENATTR4res {
     /*
      * If status is NFS4_OK,
@@ -1923,16 +1929,19 @@ struct OPENATTR4res {
  * Obsolete in NFSv4.1
  */
 /* OBJATTR: fh=self.nfs4_fh */
+/* STRFMT1: stid:{0} seqid:{1} */
 struct OPEN_CONFIRM4args {
     /* CURRENT_FH: opened file */
     stateid4        stateid;
     seqid4          seqid;
 };
 
+/* STRFMT1: stid:{0} */
 struct OPEN_CONFIRM4resok {
     stateid4        stateid;
 };
 
+/* STRFMT1: {1} */
 union OPEN_CONFIRM4res switch (nfsstat4 status) {
     case NFS4_OK:
         OPEN_CONFIRM4resok     resok;
@@ -1972,10 +1981,12 @@ union OPEN_DOWNGRADE4res switch(nfsstat4 status) {
  * ======================================================================
  */
 /* GLOBAL: nfs4_fh=fh */
+/* STRFMT1: FH:{0:crc32} */
 struct PUTFH4args {
     nfs_fh4         fh;
 };
 
+/* STRFMT1: "" */
 struct PUTFH4res {
     /*
      * If status is NFS4_OK,
@@ -2133,13 +2144,12 @@ struct RENAME4args {
     component4      newname;
 };
 
-/* STRFMT1: "" */
 struct RENAME4resok {
     change_info4    source;
     change_info4    target;
 };
 
-/* STRFMT1: {1} */
+/* STRFMT1: "" */
 union RENAME4res switch (nfsstat4 status) {
     case NFS4_OK:
         RENAME4resok    resok;
@@ -2157,6 +2167,7 @@ struct RENEW4args {
     clientid4       clientid;
 };
 
+/* STRFMT1: "" */
 struct RENEW4res {
     nfsstat4        status;
 };
@@ -2165,6 +2176,7 @@ struct RENEW4res {
  * RESTOREFH: Restore Saved Filehandle
  * ======================================================================
  */
+/* STRFMT1: "" */
 struct RESTOREFH4res {
     /*
      * If status is NFS4_OK,
@@ -2177,6 +2189,7 @@ struct RESTOREFH4res {
  * SAVEFH: Save Current Filehandle
  * ======================================================================
  */
+/* STRFMT1: "" */
 struct SAVEFH4res {
     /*
      * If status is NFS4_OK,
@@ -2211,6 +2224,7 @@ enum rpc_gss_svc_t {
     RPC_GSS_SVC_PRIVACY     = 3
 };
 
+/* STRFMT1: {2} */
 struct rpcsec_gss_info {
     sec_oid4        oid;
     qop4            qop;
@@ -2221,6 +2235,7 @@ struct rpcsec_gss_info {
 /* STRFMT1: {0} */
 union secinfo4 switch (nfs_secflavor4 flavor) {
     case RPCSEC_GSS:
+        /* STRFMT1: {1} */
         rpcsec_gss_info  info;
     default:
         void;
@@ -2311,6 +2326,7 @@ struct SETCLIENTID_CONFIRM4args {
     verifier4       verifier;
 };
 
+/* STRFMT1: "" */
 struct SETCLIENTID_CONFIRM4res {
     nfsstat4        status;
 };
@@ -2320,11 +2336,13 @@ struct SETCLIENTID_CONFIRM4res {
  * ======================================================================
  */
 /* OBJATTR: fh=self.nfs4_fh */
+/* STRFMT1: "" */
 struct VERIFY4args {
     /* CURRENT_FH: object */
     fattr4          attributes;
 };
 
+/* STRFMT1: "" */
 struct VERIFY4res {
     nfsstat4        status;
 };
@@ -2363,10 +2381,12 @@ union WRITE4res switch (nfsstat4 status) {
  * ======================================================================
  * Obsolete in NFSv4.1
  */
+/* STRFMT1: "" */
 struct RELEASE_LOCKOWNER4args {
     lock_owner4     owner;
 };
 
+/* STRFMT1: "" */
 struct RELEASE_LOCKOWNER4res {
     nfsstat4        status;
 };
@@ -2375,6 +2395,7 @@ struct RELEASE_LOCKOWNER4res {
  * ILLEGAL: Response for Illegal Operation Numbers
  * ======================================================================
  */
+/* STRFMT1: "" */
 struct ILLEGAL4res {
     nfsstat4        status;
 };
@@ -2411,11 +2432,13 @@ union callback_sec_parms4 switch (nfs_secflavor4 flavor) {
         gss_cb_handles4 gss_handles;
 };
 
+/* STRFMT1: "" */
 struct BACKCHANNEL_CTL4args {
     uint32_t                cb_program;
     callback_sec_parms4     sec_parms<>;
 };
 
+/* STRFMT1: "" */
 struct BACKCHANNEL_CTL4res {
     nfsstat4 status;
 };
@@ -2431,6 +2454,7 @@ enum channel_dir_from_client4 {
     CDFC4_BACK_OR_BOTH     = 0x7
 };
 
+/* STRFMT1: "" */
 struct BIND_CONN_TO_SESSION4args {
     sessionid4     sessionid;
     channel_dir_from_client4 dir;
@@ -2449,6 +2473,7 @@ struct BIND_CONN_TO_SESSION4resok {
     bool           rdma_mode;
 };
 
+/* STRFMT1: "" */
 union BIND_CONN_TO_SESSION4res switch (nfsstat4 status) {
     case NFS4_OK:
         BIND_CONN_TO_SESSION4resok resok;
@@ -2652,6 +2677,7 @@ struct FREE_STATEID4res {
 typedef nfstime4 attr_notice4;
 
 /* OBJATTR: fh=self.nfs4_fh */
+/* STRFMT1: "" */
 struct GET_DIR_DELEGATION4args {
     /* CURRENT_FH: delegated directory */
     bool            deleg_avail;
@@ -2684,6 +2710,7 @@ union GET_DIR_DELEGATION4res_non_fatal switch (gddrnf4_status status) {
         bool  signal;
 };
 
+/* STRFMT1: "" */
 union GET_DIR_DELEGATION4res switch (nfsstat4 status) {
     case NFS4_OK:
         GET_DIR_DELEGATION4res_non_fatal  resok;
@@ -2726,6 +2753,7 @@ union GETDEVICEINFO4res switch (nfsstat4 status) {
  * Obsolete in NFSv4.2
  */
 /* OBJATTR: fh=self.nfs4_fh */
+/* STRFMT1: "" */
 struct GETDEVICELIST4args {
     /* CURRENT_FH: object belonging to the file system */
     layouttype4     type;
@@ -2742,6 +2770,7 @@ struct GETDEVICELIST4resok {
     bool            eof;
 };
 
+/* STRFMT1: "" */
 union GETDEVICELIST4res switch (nfsstat4 status) {
     case NFS4_OK:
         GETDEVICELIST4resok     resok;
@@ -2768,6 +2797,7 @@ union newoffset4 switch (bool newoffset) {
 };
 
 /* OBJATTR: fh=self.nfs4_fh */
+/* STRFMT1: FH:{fh:crc32} off:{0:umax64} len:{1:umax64} stid:{3} */
 struct LAYOUTCOMMIT4args {
     /* CURRENT_FH: file */
     offset4                 offset;
@@ -2778,17 +2808,22 @@ struct LAYOUTCOMMIT4args {
     newtime4                time_modify;
     layoutupdate4           layoutupdate;
 };
+
+/* STRFMT1: size:{1:umax64} */
 union newsize4 switch (bool sizechanged) {
     case TRUE:
         length4  size;
     case FALSE:
+        /* STRFMT1: "" */
         void;
 };
 
+/* STRFMT1: {0} */
 struct LAYOUTCOMMIT4resok {
     newsize4  newsize;
 };
 
+/* STRFMT1: {1} */
 union LAYOUTCOMMIT4res switch (nfsstat4 status) {
     case NFS4_OK:
         LAYOUTCOMMIT4resok  resok;
@@ -2837,8 +2872,8 @@ union LAYOUTGET4res switch (nfsstat4 status) {
  * LAYOUTRETURN: Release Layout Information
  * ======================================================================
  */
-/* OBJATTR: fh=self.nfs4_fh */
 /* GLOBAL: nfs4_layouttype=type */
+/* OBJATTR: fh=self.nfs4_fh */
 /* STRFMT1: FH:{fh:crc32} {2:@14} {3} */
 struct LAYOUTRETURN4args {
     /* CURRENT_FH: file */
@@ -2874,8 +2909,16 @@ enum secinfo_style4 {
     SECINFO_STYLE4_PARENT           = 1
 };
 
-/* CURRENT_FH: object or child directory */
-typedef secinfo_style4 SECINFO_NO_NAME4args;
+/*
+ * Original definition
+ * typedef secinfo_style4 SECINFO_NO_NAME4args;
+ */
+/* OBJATTR: fh=self.nfs4_fh */
+/* STRFMT1: FH:{fh:crc32} {0} */
+struct SECINFO_NO_NAME4args {
+    /* CURRENT_FH: object or child directory */
+    secinfo_style4  style;
+};
 
 /* CURRENTFH: consumed if status is NFS4_OK */
 typedef SECINFO4res SECINFO_NO_NAME4res;
@@ -2884,6 +2927,7 @@ typedef SECINFO4res SECINFO_NO_NAME4res;
  * SEQUENCE: Supply Per-Procedure Sequencing and Control
  * ======================================================================
  */
+/* STRFMT1: "" */
 struct SEQUENCE4args {
     sessionid4     sessionid;
     sequenceid4    sequenceid;
@@ -2915,6 +2959,7 @@ struct SEQUENCE4resok {
     uint32_t        status_flags;
 };
 
+/* STRFMT1: "" */
 union SEQUENCE4res switch (nfsstat4 status) {
     case NFS4_OK:
         SEQUENCE4resok  resok;
@@ -2930,6 +2975,7 @@ struct ssa_digest_input4 {
     SEQUENCE4args seqargs;
 };
 
+/* STRFMT1: "" */
 struct SET_SSV4args {
     opaque          ssv<>;
     opaque          digest<>;
@@ -2943,6 +2989,7 @@ struct SET_SSV4resok {
     opaque          digest<>;
 };
 
+/* STRFMT1: "" */
 union SET_SSV4res switch (nfsstat4 status) {
     case NFS4_OK:
         SET_SSV4resok   resok;
@@ -2976,6 +3023,8 @@ union TEST_STATEID4res switch (nfsstat4 status) {
  * WANT_DELEGATION: Request Delegation
  * ======================================================================
  */
+/* OBJATTR: fh=self.nfs4_fh */
+/* STRFMT1: {0}:{fh:crc32} */
 union deleg_claim4 switch (open_claim_type4 claim) {
     /*
      * No special rights to object. Ordinary delegation
@@ -3001,14 +3050,17 @@ union deleg_claim4 switch (open_claim_type4 claim) {
      */
     case CLAIM_PREVIOUS:
         /* CURRENT_FH: object being reclaimed */
+        /* STRFMT1: {0}:{fh:crc32} {1} */
         open_delegation_type4   deleg_type;
 };
 
+/* STRFMT1: want:{0:#x} {1} */
 struct WANT_DELEGATION4args {
     uint32_t      want;
     deleg_claim4  claim;
 };
 
+/* STRFMT1: {1} */
 union WANT_DELEGATION4res switch (nfsstat4 status) {
     case NFS4_OK:
         open_delegation4  resok;
@@ -3034,16 +3086,24 @@ struct DESTROY_CLIENTID4res {
  * RECLAIM_COMPLETE: Indicates Reclaims Finished
  * ======================================================================
  */
-/* STRFMT1: one_fs:{0} */
-struct RECLAIM_COMPLETE4args {
-    /*
-     * If one_fs TRUE,
-     *
-     *    CURRENT_FH: object in
-     *    filesystem reclaim is
-     *    complete for.
-     */
-    bool            one_fs;
+/*
+ * Original definition
+ * struct RECLAIM_COMPLETE4args {
+ *     bool  one_fs;
+ * };
+ */
+/* STRFMT1: "" */
+union RECLAIM_COMPLETE4args switch (bool one_fs) {
+    case TRUE:
+        /*
+         * If one_fs TRUE,
+         *    CURRENT_FH: object in filesystem reclaim is complete for.
+         */
+        /* OBJATTR: fh=self.nfs4_fh */
+        /* STRFMT1: FH:{fh:crc32} */
+        void;
+    default:
+        void;
 };
 
 /* STRFMT1: "" */
@@ -3061,6 +3121,7 @@ struct RECLAIM_COMPLETE4res {
  * ALLOCATE: Reserve Space in A Region of a File
  * ======================================================================
  */
+/* OBJATTR: fh=self.nfs4_fh */
 /* STRFMT1: FH:{fh:crc32} stid:{0} off:{1:umax64} len:{2:umax64} */
 struct ALLOCATE4args {
     /* CURRENT_FH: file */
@@ -3078,6 +3139,7 @@ struct ALLOCATE4res {
  * COPY: Initiate a server-side copy
  * ======================================================================
  */
+/* OBJATTR: fh=self.nfs4_fh,sfh=self.nfs4_sfh */
 /* STRFMT1: FH:{fh:crc32} src:(stid:{0} off:{2:umax64}) dst:(stid:{1} off:{3:umax64}) len:{4:umax64} */
 struct COPY4args {
     /* SAVED_FH: source file */
@@ -3126,6 +3188,7 @@ union COPY4res switch (nfsstat4 status) {
  * COPY_NOTIFY: Notify a Source Server of a Future Copy
  * ======================================================================
  */
+/* OBJATTR: fh=self.nfs4_fh */
 /* STRFMT1: FH:{fh:crc32} stid:{0} {1} */
 struct COPY_NOTIFY4args {
     /* CURRENT_FH: source file */
@@ -3152,6 +3215,7 @@ union COPY_NOTIFY4res switch (nfsstat4 status) {
  * DEALLOCATE: Unreserve Space in a Region of a File
  * ======================================================================
  */
+/* OBJATTR: fh=self.nfs4_fh */
 /* STRFMT1: FH:{fh:crc32} stid:{0} off:{1:umax64} len:{2:umax64} */
 struct DEALLOCATE4args {
     /* CURRENT_FH: file */
@@ -3183,6 +3247,7 @@ enum IO_ADVISE_type4 {
     IO_ADVISE4_INIT_PROXIMITY          = 10
 };
 
+/* OBJATTR: fh=self.nfs4_fh */
 /* STRFMT1: FH:{fh:crc32} stid:{0} off:{1:umax64} len:{2:umax64} hints:{3} */
 struct IO_ADVISE4args {
     /* CURRENT_FH: file */
@@ -3216,6 +3281,7 @@ struct device_error4 {
     nfs_opnum4      opnum;
 };
 
+/* OBJATTR: fh=self.nfs4_fh */
 /* STRFMT1: FH:{fh:crc32} off:{0:umax64} len:{1:umax64} stid:{2} {3} */
 struct LAYOUTERROR4args {
     /* CURRENT_FH: file */
@@ -3240,6 +3306,7 @@ struct io_info4 {
     uint64_t        bytes;
 };
 
+/* OBJATTR: fh=self.nfs4_fh */
 /* STRFMT1: FH:{fh:crc32} off:{0:umax64} len:{1:umax64} stid:{2} */
 struct LAYOUTSTATS4args {
     /* CURRENT_FH: file */
@@ -3261,6 +3328,7 @@ struct LAYOUTSTATS4res {
  * OFFLOAD_CANCEL: Stop an Offloaded Operation
  * ======================================================================
  */
+/* OBJATTR: fh=self.nfs4_fh */
 /* STRFMT1: FH:{fh:crc32} stid:{0} */
 struct OFFLOAD_CANCEL4args {
     /* CURRENT_FH: file to cancel */
@@ -3276,6 +3344,7 @@ struct OFFLOAD_CANCEL4res {
  * OFFLOAD_STATUS: Poll for Status of Asynchronous Operation
  * ======================================================================
  */
+/* OBJATTR: fh=self.nfs4_fh */
 /* STRFMT1: FH:{fh:crc32} stid:{0} */
 struct OFFLOAD_STATUS4args {
     /* CURRENT_FH: destination file */
@@ -3300,6 +3369,7 @@ union OFFLOAD_STATUS4res switch (nfsstat4 status) {
  * READ_PLUS: READ Data or Holes from a File
  * ======================================================================
  */
+/* OBJATTR: fh=self.nfs4_fh */
 /* STRFMT1: FH:{fh:crc32} stid:{0} off:{1:umax64} len:{2:umax32} */
 struct READ_PLUS4args {
     /* CURRENT_FH: file */
@@ -3356,6 +3426,7 @@ union READ_PLUS4res switch (nfsstat4 status) {
  * SEEK: Find the Next Data or Hole
  * ======================================================================
  */
+/* OBJATTR: fh=self.nfs4_fh */
 /* STRFMT1: FH:{fh:crc32} stid:{0} off:{1:umax64} {2} */
 struct SEEK4args {
     /* CURRENT_FH: file */
@@ -3393,6 +3464,7 @@ struct app_data_block4 {
     opaque          pattern<>;
 };
 
+/* OBJATTR: fh=self.nfs4_fh */
 /* STRFMT1: FH:{fh:crc32} stid:{0} {2} {1} */
 struct WRITE_SAME4args {
     /* CURRENT_FH: file */
@@ -3413,6 +3485,7 @@ union WRITE_SAME4res switch (nfsstat4 status) {
  * CLONE: Clone a Range of File Into Another File
  * ======================================================================
  */
+/* OBJATTR: fh=self.nfs4_fh,sfh=self.nfs4_sfh */
 /* STRFMT1: FH:{fh:crc32} src:(stid:{0} off:{2:umax64}) dst:(stid:{1} off:{3:umax64}) len:{4:umax64} */
 struct CLONE4args {
     /* SAVED_FH: source file */
@@ -3759,6 +3832,7 @@ union nfs_resop4 switch (nfs_opnum4 resop){
 
 /* INHERIT: packet.nfs.nfsbase.NFSbase */
 /* GLOBAL: nfs4_fh=None */
+/* GLOBAL: nfs4_layouttype=None */
 struct COMPOUND4args {
     utf8str_cs      tag;
     uint32_t        minorversion;
@@ -3767,6 +3841,7 @@ struct COMPOUND4args {
 
 /* INHERIT: packet.nfs.nfsbase.NFSbase */
 /* GLOBAL: nfs4_fh=None */
+/* GLOBAL: nfs4_layouttype=None */
 /* XARG: minorversion */
 struct COMPOUND4res {
     nfsstat4        status;
@@ -3845,6 +3920,7 @@ struct CB_RECALL4res {
  * CB_ILLEGAL: Response for illegal operation numbers
  * ======================================================================
  */
+/* STRFMT1: "" */
 struct CB_ILLEGAL4res {
     nfsstat4        status;
 };
@@ -3888,6 +3964,8 @@ struct CB_LAYOUTRECALL4args {
     bool                    changed;
     layoutrecall4           recall;
 };
+
+/* STRFMT1: "" */
 struct CB_LAYOUTRECALL4res {
     nfsstat4        status;
 };
@@ -3966,12 +4044,14 @@ struct notify4 {
     notifylist4     values;
 };
 
+/* STRFMT1: FH:{1:crc32} stid:{0} */
 struct CB_NOTIFY4args {
     stateid4    stateid;
     nfs_fh4     fh;
     notify4     changes<>;
 };
 
+/* STRFMT1: "" */
 struct CB_NOTIFY4res {
     nfsstat4    status;
 };
@@ -3980,12 +4060,14 @@ struct CB_NOTIFY4res {
  * CB_PUSH_DELEG: Offer Previously Requested Delegation to Client
  * ======================================================================
  */
+/* STRFMT1: FH:{0:crc32} {1} */
 struct CB_PUSH_DELEG4args {
     nfs_fh4          fh;
     open_delegation4 delegation;
 
 };
 
+/* STRFMT1: "" */
 struct CB_PUSH_DELEG4res {
     nfsstat4 status;
 };
@@ -4004,11 +4086,13 @@ const RCA4_TYPE_MASK_OBJ_LAYOUT_MAX     = 9;
 const RCA4_TYPE_MASK_OTHER_LAYOUT_MIN   = 12;
 const RCA4_TYPE_MASK_OTHER_LAYOUT_MAX   = 15;
 
+/* STRFMT1: keep:{0} mask:{1} */
 struct CB_RECALL_ANY4args      {
     uint32_t        objects_to_keep;
     bitmap4         mask;
 };
 
+/* STRFMT1: "" */
 struct CB_RECALL_ANY4res {
     nfsstat4        status;
 };
@@ -4019,6 +4103,7 @@ struct CB_RECALL_ANY4res {
  */
 typedef CB_RECALL_ANY4args CB_RECALLABLE_OBJ_AVAIL4args;
 
+/* STRFMT1: "" */
 struct CB_RECALLABLE_OBJ_AVAIL4res {
     nfsstat4        status;
 };
@@ -4027,10 +4112,12 @@ struct CB_RECALLABLE_OBJ_AVAIL4res {
  * CB_RECALL_SLOT: Change Flow Control Limits
  * ======================================================================
  */
+/* STRFMT1: slotid:{0}  */
 struct CB_RECALL_SLOT4args {
     slotid4       target_highest_slotid;
 };
 
+/* STRFMT1: "" */
 struct CB_RECALL_SLOT4res {
     nfsstat4   status;
 };
@@ -4049,6 +4136,7 @@ struct referring_call_list4 {
     referring_call4 referring_calls<>;
 };
 
+/* STRFMT1: "" */
 struct CB_SEQUENCE4args {
     sessionid4           sessionid;
     sequenceid4          sequenceid;
@@ -4066,6 +4154,7 @@ struct CB_SEQUENCE4resok {
     slotid4            target_highest_slotid;
 };
 
+/* STRFMT1: "" */
 union CB_SEQUENCE4res switch (nfsstat4 status) {
     case NFS4_OK:
         CB_SEQUENCE4resok  resok;
@@ -4077,11 +4166,13 @@ union CB_SEQUENCE4res switch (nfsstat4 status) {
  * CB_WANTS_CANCELLED: Cancel Pending Delegation Wants
  * ======================================================================
  */
+/* STRFMT1: contended:{0} resourced:{1} */
 struct CB_WANTS_CANCELLED4args {
     bool contended;
     bool resourced;
 };
 
+/* STRFMT1: "" */
 struct CB_WANTS_CANCELLED4res {
     nfsstat4        status;
 };
@@ -4090,11 +4181,13 @@ struct CB_WANTS_CANCELLED4res {
  * CB_NOTIFY_LOCK: Notify Client of Possible Lock Availability
  * ======================================================================
  */
+/* STRFMT1: FH:{0:crc32} */
 struct CB_NOTIFY_LOCK4args {
     nfs_fh4      fh;
     lock_owner4  lock_owner;
 };
 
+/* STRFMT1: "" */
 struct CB_NOTIFY_LOCK4res {
     nfsstat4  status;
 };
@@ -4124,10 +4217,12 @@ struct notify_deviceid_change4 {
     bool            immediate;
 };
 
+/* STRFMT1: "" */
 struct CB_NOTIFY_DEVICEID4args {
     notify4 changes<>;
 };
 
+/* STRFMT1: "" */
 struct CB_NOTIFY_DEVICEID4res {
     nfsstat4        status;
 };
@@ -4148,12 +4243,14 @@ union offload_info4 switch (nfsstat4 status) {
         length4         count;
 };
 
+/* STRFMT1: FH:{0:crc32} stid:{1} */
 struct CB_OFFLOAD4args {
     nfs_fh4         fh;
     stateid4        stateid;
     offload_info4   info;
 };
 
+/* STRFMT1: "" */
 struct CB_OFFLOAD4res {
     nfsstat4        status;
 };
@@ -4241,6 +4338,7 @@ union nfs_cb_resop4 switch (nfs_cb_opnum4 resop){
 
 /* INHERIT: packet.nfs.nfsbase.NFSbase */
 /* GLOBAL: nfs4_fh=None */
+/* GLOBAL: nfs4_layouttype=None */
 struct CB_COMPOUND4args {
     utf8str_cs      tag;
     uint32_t        minorversion;
@@ -4250,6 +4348,7 @@ struct CB_COMPOUND4args {
 
 /* INHERIT: packet.nfs.nfsbase.NFSbase */
 /* GLOBAL: nfs4_fh=None */
+/* GLOBAL: nfs4_layouttype=None */
 /* XARG: minorversion */
 struct CB_COMPOUND4res {
     nfsstat4 status;
