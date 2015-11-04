@@ -29,10 +29,10 @@ from packet.nfs.mount3 import MOUNT3args,MOUNT3res
 from packet.nfs.portmap2 import PORTMAP2args,PORTMAP2res
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '1.0.7'
+__version__   = "1.1"
 
 class Header(BaseObj):
     """Header object"""
@@ -249,8 +249,8 @@ class RPC(GSS):
         elif self.type == REPLY:
             try:
                 pkt_call = pktt._rpc_xid_map.get(self.xid, None)
-                rpc_header = pkt_call.rpc
                 pktt.pkt_call = pkt_call
+                rpc_header = pkt_call.rpc
 
                 self.program   = rpc_header.program
                 self.version   = rpc_header.version
