@@ -25,7 +25,7 @@ from nfstest.test_util import TestUtil
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.0.3"
+__version__   = "1.1"
 
 USAGE = """%prog --server <server> [options]
 
@@ -153,8 +153,8 @@ class DioTest(TestUtil):
         # DS instead of the MDS
         self.newstyle = False
 
-        if self.nfsversion != 4:
-            self.config("Option nfsversion must be 4")
+        if self.nfsversion < 4:
+            self.config("Option nfsversion must be 4 or above")
 
         # Process --iotype option
         self.io_list = self.get_list(self.iotype, {'read':False, 'write':True})
