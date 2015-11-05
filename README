@@ -263,11 +263,20 @@ Tools
     including their respective replies are displayed.
 
 
+    nfstest_xid - Verify packets are matched correctly by their XID
+    ===============================================================
+    Search all the packet traces given for XID inconsistencies. Verify all
+    operations in the NFSv4.x COMPOUND reply are the same as the operations
+    given in the call.
+
+    Valid for packet traces with NFSv4 and above
+
+
 Installation
 ============
 1. Install package using one of the following methods:
    a. Install the rpm as root:
-      # rpm -i NFStest-2.0-1.noarch.rpm
+      # rpm -i NFStest-2.1-1.noarch.rpm
 
       All manual pages are available
       $ man nfstest
@@ -278,17 +287,17 @@ Installation
    b. Untar the tarball:
       Get the latest tarball from http://wiki.linux-nfs.org/wiki/index.php/NFStest
 
-      $ tar -zxvf NFStest-2.0.tar.gz
+      $ tar -zxvf NFStest-2.1.tar.gz
 
       The tests can run without installation, just set the python path
       environment variable:
-      $ cd NFStest-2.0
+      $ cd NFStest-2.1
       $ export PYTHONPATH=$PWD
       $ cd test
       $ ./nfstest_pnfs --help
 
       Or install to standard python site-packages and executable directories:
-      $ cd ~/NFStest-2.0
+      $ cd ~/NFStest-2.1
       $ sudo python setup.py install
 
       All manual pages are available
@@ -374,6 +383,9 @@ Run the tests
    Display all packets for the file name given
    The only required option is --path (-p)
    $ nfstest_file -p f00000001 /tmp/trace.cap
+
+   Search the packet trace for XID inconsistencies
+   $ nfstest_xid /tmp/trace.cap
 
 
 Useful options

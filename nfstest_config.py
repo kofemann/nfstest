@@ -115,6 +115,7 @@ NFSTEST_SCRIPTS = [
     'test/nfstest_pnfs',
     'test/nfstest_posix',
     'test/nfstest_sparse',
+    'test/nfstest_xid',
 ]
 NFSTEST_ALLMODS = [
     'baseobj.py',

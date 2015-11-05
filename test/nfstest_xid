@@ -1,0 +1,121 @@
+#!/usr/bin/env python
+#===============================================================================
+# Copyright 2015 NetApp, Inc. All Rights Reserved,
+# contribution by Jorge Mora <mora@netapp.com>
+#
+# This program is free software; you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation; either version 2 of the License, or (at your option) any later
+# version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+#===============================================================================
+import packet.utils as utils
+from packet.pktt import Pktt
+import packet.unpack as unpack
+from optparse import OptionParser,IndentedHelpFormatter,OptionGroup
+
+# Module constants
+__author__    = "Jorge Mora (mora@netapp.com)"
+__copyright__ = "Copyright (C) 2015 NetApp, Inc."
+__license__   = "GPL v2"
+__version__   = "1.0"
+
+USAGE = """%prog <trace1> [<trace2> ...]
+
+Verify packets are matched correctly by their XID
+=================================================
+Search all the packet traces given for XID inconsistencies. Verify all
+operations in the NFSv4.x COMPOUND reply are the same as the operations
+given in the call.
+
+Examples:
+    $ %prog /tmp/trace1.pcap
+
+Notes:
+    Valid for packet traces with NFSv4 and above"""
+
+# Defaults
+utils.LOAD_body = False
+
+# Command line options
+opts = OptionParser(USAGE, formatter = IndentedHelpFormatter(2, 16), version = "%prog " + __version__)
+
+pktdisp = OptionGroup(opts, "Packet display")
+hhelp = "Display RPC payload body [default: %default]"
+pktdisp.add_option("--load-body", default=str(utils.LOAD_body), help=hhelp)
+opts.add_option_group(pktdisp)
+
+debug = OptionGroup(opts, "Debug")
+hhelp = "If set to True, enums are strictly enforced [default: %default]"
+debug.add_option("--enum-check", default=str(utils.ENUM_CHECK), help=hhelp)
+hhelp = "Set debug level messages"
+debug.add_option("--debug-level", default="", help=hhelp)
+hhelp = "Raise unpack error when True"
+debug.add_option("--unpack-error", default=str(unpack.UNPACK_ERROR), help=hhelp)
+hhelp = "Exit on first error"
+debug.add_option("--error", action="store_true", default=False, help=hhelp)
+opts.add_option_group(debug)
+
+# Run parse_args to get options
+vopts, args = opts.parse_args()
+
+if len(args) < 1:
+    opts.error("No packet trace file!")
+
+utils.LOAD_body     = eval(vopts.load_body)
+utils.ENUM_CHECK    = eval(vopts.enum_check)
+unpack.UNPACK_ERROR = eval(vopts.unpack_error)
+
+# Process all trace files
+for pfile in args:
+    print pfile
+    pkttobj = Pktt(pfile)
+    if len(vopts.debug_level):
+        pkttobj.debug_level(vopts.debug_level)
+    while pkttobj.match("rpc.type == 1 and rpc.version > 3"):
+        try:
+            pkt_call  = pkttobj.pkt_call
+            pkt_reply = pkttobj.pkt
+            if pkt_call is None or pkt_call.rpc.xid != pkt_reply.rpc.xid:
+                # Do not process if there is no packet call or the xids don't match
+                continue
+            if pkt_call != "nfs" or pkt_reply != "nfs" or not hasattr(pkt_call.nfs, "array") or not hasattr(pkt_reply.nfs, "array"):
+                # Do not process if no NFS layer or is not a COMPOUND
+                continue
+
+            idx = 0
+            nfs = pkt_reply.nfs
+            array = pkt_call.nfs.array
+
+            # Find out if packets have been truncated
+            tlist = []
+            if pkt_call.record.length_orig > pkt_call.record.length_inc:
+                tlist.append("truncated call")
+            if pkt_reply.record.length_orig > pkt_reply.record.length_inc:
+                tlist.append("truncated reply")
+            strtrunc = ""
+            if tlist:
+                strtrunc = " (%s)" % ", ".join(tlist)
+
+            # Check if array sizes don't match only when status is OK
+            # -- an error will have the reply shorter than the call
+            expr = nfs.status == 0 and len(array) != len(nfs.array)
+            # Verify the list of operations are the same
+            for item in pkt_reply.nfs.array:
+                # Reply array is longer than call array
+                # This also avoids an error with array[idx]
+                expr = expr or idx >= len(array)
+                # Operation mismatch between reply and call
+                expr = expr or item.op != array[idx].op
+                if expr:
+                    print "    >>> Operation lists do not match for xid:0x%08x%s" % (pkt_reply.rpc.xid, strtrunc)
+                    print "       ", pkt_call
+                    print "       ", pkt_reply
+                    break
+                idx += 1
+        except:
+            if vopts.error:
+                raise
