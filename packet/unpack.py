@@ -20,10 +20,13 @@ import struct
 import nfstest_config as c
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '2.3'
+__version__   = "2.4"
+
+# Module variables
+UNPACK_ERROR = False  # Raise unpack error when True
 
 class Unpack(object):
     """Unpack object
@@ -324,12 +327,17 @@ class Unpack(object):
         if maxcount > 0 and slen > maxcount:
             raise Exception, "Array exceeds maximum length"
         while slen > 0:
-            # Unpack each item in the array
-            ret.append(unpack_item(self, **uargs))
-            if islist:
-                slen = self._get_ltype(ltype)
-            else:
-                slen -= 1
+            try:
+                # Unpack each item in the array
+                ret.append(unpack_item(self, **uargs))
+                if islist:
+                    slen = self._get_ltype(ltype)
+                else:
+                    slen -= 1
+            except:
+                if UNPACK_ERROR:
+                    raise
+                break
         return ret
 
     def unpack_list(self, *kwts, **kwds):
