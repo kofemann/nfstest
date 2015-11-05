@@ -3831,8 +3831,7 @@ union nfs_resop4 switch (nfs_opnum4 resop){
 };
 
 /* INHERIT: packet.nfs.nfsbase.NFSbase */
-/* GLOBAL: nfs4_fh=None */
-/* GLOBAL: nfs4_layouttype=None */
+/* GLOBAL: nfs4_fh=None,nfs4_sfh=None,nfs4_layouttype=None */
 struct COMPOUND4args {
     utf8str_cs      tag;
     uint32_t        minorversion;
@@ -3840,8 +3839,7 @@ struct COMPOUND4args {
 };
 
 /* INHERIT: packet.nfs.nfsbase.NFSbase */
-/* GLOBAL: nfs4_fh=None */
-/* GLOBAL: nfs4_layouttype=None */
+/* GLOBAL: nfs4_fh=None,nfs4_sfh=None,nfs4_layouttype=None */
 /* XARG: minorversion */
 struct COMPOUND4res {
     nfsstat4        status;
@@ -4337,8 +4335,7 @@ union nfs_cb_resop4 switch (nfs_cb_opnum4 resop){
 };
 
 /* INHERIT: packet.nfs.nfsbase.NFSbase */
-/* GLOBAL: nfs4_fh=None */
-/* GLOBAL: nfs4_layouttype=None */
+/* GLOBAL: nfs4_fh=None,nfs4_sfh=None,nfs4_layouttype=None */
 struct CB_COMPOUND4args {
     utf8str_cs      tag;
     uint32_t        minorversion;
@@ -4347,8 +4344,7 @@ struct CB_COMPOUND4args {
 };
 
 /* INHERIT: packet.nfs.nfsbase.NFSbase */
-/* GLOBAL: nfs4_fh=None */
-/* GLOBAL: nfs4_layouttype=None */
+/* GLOBAL: nfs4_fh=None,nfs4_sfh=None,nfs4_layouttype=None */
 /* XARG: minorversion */
 struct CB_COMPOUND4res {
     nfsstat4 status;
