@@ -3392,7 +3392,7 @@ struct data4 {
 /* STRFMT1: off:{0:umax64} len:{1:umax64} */
 struct data_info4 {
     offset4         offset;
-    length4         length;
+    length4         count;
 };
 
 /* STRFMT1: {1} */
