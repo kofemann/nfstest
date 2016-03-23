@@ -24,7 +24,7 @@ from nfstest.test_util import TestUtil
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.1"
+__version__   = "1.2"
 
 USAGE = """%prog --server <server> [--client <client>] [options]
 
@@ -223,22 +223,22 @@ class DelegTest(TestUtil):
         cmd += "fdko.close()\""
         return self.clientobj.run_cmd(cmd)
 
-    def setup_test(self, deleg_type, existing=False):
+    def setup_test(self, deleg_type, mount=False, existing=False):
         """Setup test by mounting server and hold open a file so that the open
            owner sticks around so a delegation is granted on next open using
            the same open owner -- this is done to avoid a bug on the client
            where open owner is reaped at close
         """
-        if self.clientobj != None:
+        self.umount()
+        if mount and self.clientobj is not None:
             # Unmount server on remote client
             self.clientobj.umount()
 
-            # Mount server on remote client
-            self.clientobj.mount()
-
-        self.umount()
         self.trace_start()
         self.mount()
+        if mount and self.clientobj is not None:
+            # Mount server on remote client
+            self.clientobj.mount()
 
         if deleg_type == OPEN_DELEGATE_READ:
             # Use existing file
@@ -342,8 +342,6 @@ class DelegTest(TestUtil):
             for fd in fds:
                 os.close(fd)
             self.umount()
-            if self.clientobj != None:
-                self.clientobj.umount()
             self.trace_stop()
 
         try:
@@ -435,7 +433,7 @@ class DelegTest(TestUtil):
             lock_str = " with file lock" if lock else ""
             self.test_group("%s delegation recall tests%s -- recall with %s" % (mode_str, lock_str, conflict_str))
 
-            self.setup_test(deleg_type)
+            self.setup_test(deleg_type, mount=True)
 
             # Open file, should get a DELEGATION
             self.dprint('DBG3', "Open file for %s [%s]" % (open_mode_str(deleg_type), self.absfile))
@@ -694,7 +692,7 @@ try:
 except Exception:
     x.test(False, traceback.format_exc())
 finally:
-    if x.clientobj != None:
+    if x.clientobj is not None and x.clientobj.mounted:
         # Unmount server on remote client
         x.clientobj.umount()
     x.cleanup()
