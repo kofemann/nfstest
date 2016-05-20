@@ -18,6 +18,7 @@ import sys
 import time
 import formatstr
 import packet.utils as utils
+import packet.record as record
 import packet.nfs.nfs3_const as nfs3
 import packet.nfs.nfs4_const as nfs4
 from packet.pktt import Pktt,crc32,crc16
@@ -27,7 +28,7 @@ from optparse import OptionParser,OptionGroup,IndentedHelpFormatter
 __author__    = "Jorge Mora (mora@netapp.com)"
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.0"
+__version__   = "1.1"
 
 USAGE = """%prog [options] -p <filepath> <trace1.cap> [<trace2.cap> ...]
 
@@ -125,6 +126,10 @@ hhelp = "Time zone to use to display timestamps"
 opts.add_option("-z", "--tz", default=None, help=hhelp)
 
 pktdisp = OptionGroup(opts, "Packet display")
+hhelp = "Display record frame number [default: %default]"
+pktdisp.add_option("--frame", default=str(record.FRAME), help=hhelp)
+hhelp = "Display packet number [default: %default]"
+pktdisp.add_option("--index", default=str(record.INDEX), help=hhelp)
 hhelp = "Display CRC16 encoded strings [default: %default]"
 pktdisp.add_option("--crc16", default=str(formatstr.CRC16), help=hhelp)
 hhelp = "Display CRC32 encoded strings [default: %default]"
@@ -188,6 +193,8 @@ def print_pkt(pkttobj, pkt):
     if vopts.verbose & 0x04:
         display_pkt(0x04, pkttobj, pkt)
 
+record.FRAME    = eval(vopts.frame)
+record.INDEX    = eval(vopts.index)
 formatstr.CRC16 = eval(vopts.crc16)
 formatstr.CRC32 = eval(vopts.crc32)
 utils.ENUM_CHECK = eval(vopts.enum_check)

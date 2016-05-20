@@ -18,13 +18,14 @@ import sys
 import formatstr
 import packet.utils as utils
 from packet.pktt import Pktt
+import packet.record as record
 from optparse import OptionParser,OptionGroup,IndentedHelpFormatter
 
 # Module constants
 __author__    = "Jorge Mora (mora@netapp.com)"
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.0"
+__version__   = "1.1"
 
 USAGE = """%prog [options] <trace1.cap> [<trace2.cap> ...]
 
@@ -187,6 +188,10 @@ hhelp = "Display NFSv4 main operation only [default: %default]"
 pktdisp.add_option("--nfs-mainop", default=str(utils.NFS_mainop), help=hhelp)
 hhelp = "Display RPC payload body [default: %default]"
 pktdisp.add_option("--load-body", default=str(utils.LOAD_body), help=hhelp)
+hhelp = "Display record frame number [default: %default]"
+pktdisp.add_option("--frame", default=str(record.FRAME), help=hhelp)
+hhelp = "Display packet number [default: %default]"
+pktdisp.add_option("--index", default=str(record.INDEX), help=hhelp)
 hhelp = "Display CRC16 encoded strings [default: %default]"
 pktdisp.add_option("--crc16", default=str(formatstr.CRC16), help=hhelp)
 hhelp = "Display CRC32 encoded strings [default: %default]"
@@ -222,6 +227,8 @@ utils.RPC_ver      = eval(vopts.rpc_ver)
 utils.RPC_xid      = eval(vopts.rpc_xid)
 utils.NFS_mainop   = eval(vopts.nfs_mainop)
 utils.LOAD_body    = eval(vopts.load_body)
+record.FRAME       = eval(vopts.frame)
+record.INDEX       = eval(vopts.index)
 utils.ENUM_CHECK   = eval(vopts.enum_check)
 formatstr.CRC16    = eval(vopts.crc16)
 formatstr.CRC32    = eval(vopts.crc32)
