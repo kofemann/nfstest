@@ -32,7 +32,7 @@ from packet.nfs.portmap2 import PORTMAP2args,PORTMAP2res
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.1"
+__version__   = "1.2"
 
 class Header(BaseObj):
     """Header object"""
@@ -164,6 +164,7 @@ class RPC(GSS):
         """Internal method to decode RPC header"""
         pktt = self._pktt
         unpack = pktt.unpack
+        init_size = unpack.size()
         if self._proto == 6:
             # TCP packet
             save_data = ''
@@ -235,6 +236,10 @@ class RPC(GSS):
                 return
         else:
             return
+
+        if self._proto == 6:
+            hsize = init_size - unpack.size() - 4
+            self.fragment_hdr.data_size = self.fragment_hdr.size - hsize
 
         self._rpc = True
         if not self._state:
@@ -393,6 +398,12 @@ class RPC(GSS):
                 # in the transient program range is considered a callback
                 layer = "nfs"
                 ret = NFS(self, True)
+            else:
+                # Unable to decode RPC load so just get the load bytes
+                if self._proto == 6:
+                    self.data = unpack.read(self.fragment_hdr.data_size)
+                else:
+                    self.data = unpack.read(unpack.size())
 
             if ret:
                 ret._rpc = self
