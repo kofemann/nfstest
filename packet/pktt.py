@@ -58,7 +58,7 @@ from packet.link.ethernet import ETHERNET
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "2.0"
+__version__   = "2.1"
 
 BaseObj.debug_map(0x100000000, 'pkt1', "PKT1: ")
 BaseObj.debug_map(0x200000000, 'pkt2', "PKT2: ")
@@ -72,6 +72,10 @@ _token_map = dict(token.tok_name.items() + symbol.sym_name.items())
 _nfsopmap = {'status': 1, 'tag': 1}
 # Match function map
 _match_func_map = dict(zip(PKT_layers,["self._match_%s"%x for x in PKT_layers]))
+
+# Read size -- the amount of data read at a time from the file
+# The read ahead buffer actual size is always >= 2*READ_SIZE
+READ_SIZE = 64*1024
 
 class Header(BaseObj):
     # Class attributes
@@ -135,6 +139,8 @@ class Pktt(BaseObj, Unpack):
         self.pkt_call  = None # The current packet call if self.pkt is a reply
         self.pktt_list = []   # List of Pktt objects created
         self.tfiles    = []   # List of packet trace files
+        self.rdbuffer  = ""   # Read buffer
+        self.rdoffset  = 0    # Read buffer offset
 
         # TCP stream map: to keep track of the different TCP streams within
         # the trace file -- used to deal with RPC packets spanning multiple
@@ -379,7 +385,7 @@ class Pktt(BaseObj, Unpack):
                 self.eof    = False
 
                 # Position the file pointer to the offset of the first packet
-                self._getfh().seek(self.offset)
+                self.seek(self.ioffset)
 
                 # Clear state
                 self._tcp_stream_map = {}
@@ -396,6 +402,23 @@ class Pktt(BaseObj, Unpack):
             # Rewind succeeded
             return True
         return False
+
+    def seek(self, offset, whence=os.SEEK_SET):
+        """Position the read offset correctly
+           If new position is outside the current read buffer then clear the
+           buffer so a new chunk of data will be read from the file instead
+        """
+        soffset = self.fh.tell() - len(self.rdbuffer)
+        if offset < soffset or whence != os.SEEK_SET:
+            # Seek is before the read buffer, do the actual seek
+            self.rdbuffer = ""
+            self.rdoffset = 0
+            self.fh.seek(offset, whence)
+            self.offset = self.fh.tell()
+        else:
+            # Seek is not before the read buffer
+            self.rdoffset = offset - soffset
+            self.offset = offset
 
     def _getfh(self):
         """Get the filehandle of the trace file, open file if necessary."""
@@ -432,7 +455,9 @@ class Pktt(BaseObj, Unpack):
                     if iszip:
                         raise Exception('Not a tcpdump file')
                     iszip = True
+                    # Do a hard seek and reset read offset
                     self.fh.seek(0)
+                    self.seek(0)
                     # Try if this is a gzip compress file
                     self.fh = gzip.GzipFile(fileobj=self.fh)
 
@@ -451,9 +476,27 @@ class Pktt(BaseObj, Unpack):
            takes care of <EOF> when 'live' option is set which keeps on trying
            to read and switching files when needed.
         """
+        # Open packet trace if needed
+        self._getfh()
         while True:
-            # Read number of bytes specified
-            data = self._getfh().read(count)
+            # Get the number of bytes specified
+            rdsize = len(self.rdbuffer) - self.rdoffset
+            if count > rdsize:
+                # Not all bytes needed are in the read buffer
+                if self.rdoffset > READ_SIZE:
+                    # If the read offset is on the second half of the
+                    # 2*READ_SIZE buffer discard the first bytes so the
+                    # new read offset is right at the middle of the buffer
+                    # This is done in case there is a seek behind the current
+                    # offset so data is not read from the file again
+                    self.rdbuffer = self.rdbuffer[self.rdoffset-READ_SIZE:]
+                    self.rdoffset = READ_SIZE
+                # Read next chunk from file
+                self.rdbuffer += self.fh.read(max(count, READ_SIZE))
+            # Get the bytes requested and increment read offset accordingly
+            data = self.rdbuffer[self.rdoffset:self.rdoffset+count]
+            self.rdoffset += count
+
             ldata = len(data)
             if self.live and ldata != count:
                 # Not all data was read (<EOF>)
@@ -470,7 +513,7 @@ class Pktt(BaseObj, Unpack):
                     self.bfile = basefile
                     self.findex = findex
                 # Re-position file pointer to last known offset
-                self._getfh().seek(self.offset)
+                self.seek(self.offset)
                 time.sleep(1)
             else:
                 break

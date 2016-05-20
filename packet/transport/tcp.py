@@ -21,10 +21,10 @@ from baseobj import BaseObj
 from packet.application.rpc import RPC
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '1.0.3'
+__version__   = "1.1"
 
 _TCP_map = {
     0x001:'FIN',
@@ -296,7 +296,6 @@ class TCP(BaseObj):
                 else:
                     # Next RPC packet is entirely within this TCP packet
                     # Re-position the file pointer to the current offset
-                    pktt.offset = pktt.boffset
-                    pktt._getfh().seek(pktt.offset)
+                    pktt.seek(pktt.boffset)
             else:
                 stream['frag_off'] = 0
