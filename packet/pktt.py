@@ -130,6 +130,7 @@ class Pktt(BaseObj, Unpack):
         self.boffset = 0      # File offset of current packet
         self.ioffset = 0      # File offset of first packet
         self.index   = 0      # Current packet index
+        self.frame   = 1      # Current frame number
         self.mindex  = 0      # Maximum packet index for current trace file
         self.findex  = 0      # Current tcpdump file index (used with self.live)
         self.fh      = None   # Current file handle
@@ -328,6 +329,16 @@ class Pktt(BaseObj, Unpack):
             # Increment cumulative packet index
             self.index += 1
             return self.pkt
+
+        if self.boffset != self.offset:
+            # Frame number is one for every record header on the pcap trace
+            # On the other hand self.index is the packet number. Since there
+            # could be multiple packets on a single frame self.index could
+            # be larger the self.frame except that self.index start at 0
+            # while self.frame starts at 1.
+            # The frame number can be used to match packets with other tools
+            # like wireshark
+            self.frame += 1
 
         # Save file offset for this packet
         self.boffset = self.offset
