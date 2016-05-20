@@ -142,6 +142,7 @@ class Pktt(BaseObj, Unpack):
         self.tfiles    = []   # List of packet trace files
         self.rdbuffer  = ""   # Read buffer
         self.rdoffset  = 0    # Read buffer offset
+        self.filesize  = 0    # Size of packet trace file
 
         # TCP stream map: to keep track of the different TCP streams within
         # the trace file -- used to deal with RPC packets spanning multiple
@@ -414,13 +415,13 @@ class Pktt(BaseObj, Unpack):
             return True
         return False
 
-    def seek(self, offset, whence=os.SEEK_SET):
+    def seek(self, offset, whence=os.SEEK_SET, hard=False):
         """Position the read offset correctly
            If new position is outside the current read buffer then clear the
            buffer so a new chunk of data will be read from the file instead
         """
         soffset = self.fh.tell() - len(self.rdbuffer)
-        if offset < soffset or whence != os.SEEK_SET:
+        if hard or offset < soffset or whence != os.SEEK_SET:
             # Seek is before the read buffer, do the actual seek
             self.rdbuffer = ""
             self.rdoffset = 0
@@ -441,6 +442,7 @@ class Pktt(BaseObj, Unpack):
 
             # Open trace file
             self.fh = open(self.tfile, 'rb')
+            self.filesize = fstat.st_size
 
             iszip = False
             self.header_fmt = None
@@ -466,9 +468,12 @@ class Pktt(BaseObj, Unpack):
                     if iszip:
                         raise Exception('Not a tcpdump file')
                     iszip = True
-                    # Do a hard seek and reset read offset
-                    self.fh.seek(0)
-                    self.seek(0)
+                    # Get the size of the uncompressed file, this only works
+                    # for uncompressed files less than 4GB
+                    self.fh.seek(-4, os.SEEK_END)
+                    self.filesize = struct.unpack("<I", self.fh.read(4))[0]
+                    # Do a hard seek -- clear read ahead buffer
+                    self.seek(0, hard=True)
                     # Try if this is a gzip compress file
                     self.fh = gzip.GzipFile(fileobj=self.fh)
 
