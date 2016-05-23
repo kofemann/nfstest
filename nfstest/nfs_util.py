@@ -35,7 +35,7 @@ from packet.nfs.nfs4_const import *
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "2.0"
+__version__   = "2.1"
 
 class NFSUtil(Host):
     """NFSUtil object
@@ -117,6 +117,7 @@ class NFSUtil(Host):
         self.dslist = []
         self.stateid = None
         self.dsismds = False
+        self.rootfh  = None
 
         # State id to string mapping
         self.stid_map = {}
@@ -681,6 +682,56 @@ class NFSUtil(Host):
             ds_index += nfhs
         return n == m and idx == ds_index
 
+    def getop(self, pkt, op):
+        """Get the NFS operation object from the given packet"""
+        if pkt:
+            # Start looking for the operation after NFSidx if it exists
+            if hasattr(pkt, "NFSidx"):
+                idx = pkt.NFSidx + 1
+            else:
+                idx = 0
+            array = pkt.nfs.array
+            while (idx < len(array) and array[idx].op != op):
+                idx += 1
+            if idx < len(array):
+                # Return the operation object
+                return pkt.nfs.array[idx]
+        return
+
+    def verify_pnfs_supported(self, filehandle, server_type, path=None):
+        """Verify pNFS is supported in the given server path.
+           Finds the GETATTR asking for FATTR4_SUPPORTED_ATTRS(bit 0 and its
+           reply to verify FATTR4_FS_LAYOUT_TYPES is supported for the path.
+           Then it finds the GETATTR asking for FATTR4_FS_LAYOUT_TYPES(bit 62)
+           to verify LAYOUT4_NFSV4_1_FILES is returned in fs_layout_types.
+        """
+        if path:
+            pmsg = " for %s" % path
+        else:
+            pmsg = ""
+        fhstr = self.pktt.escape(filehandle)
+        # Find packet having a GETATTR asking for FATTR4_SUPPORTED_ATTRS(bit 0)
+        attrmatch = "NFS.fh == '%s' and NFS.request & %s != 0" % (fhstr, hex(1 << FATTR4_SUPPORTED_ATTRS))
+        pktcall, pktreply = self.find_nfs_op(OP_GETATTR, self.server_ipaddr, self.port, match=attrmatch)
+        self.test(pktcall, "GETATTR should be sent to %s asking for FATTR4_SUPPORTED_ATTRS%s" % (server_type, pmsg))
+        if pktreply:
+            supported_attrs = pktreply.NFSop.attributes[FATTR4_SUPPORTED_ATTRS]
+            fslt_supported = supported_attrs & (1<<FATTR4_FS_LAYOUT_TYPES) != 0
+            self.test(fslt_supported, "NFS server should support pNFS layout types (FATTR4_FS_LAYOUT_TYPES)%s" % pmsg)
+        elif pktcall:
+            self.test(False, "GETATTR reply was not found")
+
+        # Find packet having a GETATTR asking for FATTR4_FS_LAYOUT_TYPES(bit 62)
+        attrmatch = "NFS.fh == '%s' and NFS.request & %s != 0" % (fhstr, hex(1 << FATTR4_FS_LAYOUT_TYPES))
+        pktcall, pktreply = self.find_nfs_op(OP_GETATTR, self.server_ipaddr, self.port, match=attrmatch)
+        self.test(pktcall, "GETATTR should be sent to %s asking for FATTR4_FS_LAYOUT_TYPES%s" % (server_type, pmsg))
+        if pktreply:
+            # Get list of fs layout types supported by the server
+            fs_layout_types = pktreply.NFSop.attributes[FATTR4_FS_LAYOUT_TYPES]
+            self.test(LAYOUT4_NFSV4_1_FILES in fs_layout_types, "NFS server should return LAYOUT4_NFSV4_1_FILES in fs_layout_types%s" % pmsg)
+        elif pktcall:
+            self.test(False, "GETATTR reply was not found")
+
     def verify_create_session(self, ipaddr, port, ds=False, nocreate=False, ds_index=None, exchid_status=0, cs_status=0):
         """Verify initial connection to the metadata server(MDS)/data server(DS).
            Verify if EXCHANGE_ID, CREATE_SESSION, RECLAIM_COMPLETE,
@@ -722,6 +773,14 @@ class NFSUtil(Host):
             # DS == MDS, client does not connect to DS, it has a connection already
             nocreate = True
             dsmds = " since DS == MDS"
+
+        if not ds:
+            save_index = self.pktt.index
+            # Find PUTROOTFH having a GETFH operation
+            getfhmatch = "NFS.argop == %d" % OP_GETFH
+            pktcall, pktreply = self.find_nfs_op(OP_PUTROOTFH, ipaddr, port, match=getfhmatch)
+            self.rootfh = getattr(self.getop(pktreply, OP_GETFH), "fh", None)
+            self.pktt.rewind(save_index)
 
         # Find EXCHANGE_ID request and reply
         (pktcall, pktreply) = self.find_nfs_op(OP_EXCHANGE_ID, ipaddr, port, status=exchid_status)
@@ -805,27 +864,48 @@ class NFSUtil(Host):
             elif pktcall:
                 self.test(False, "GETATTR reply was not found")
 
-            # Find packet having a GETATTR asking for FATTR4_SUPPORTED_ATTRS(bit 0)
-            attrmatch = "NFS.request & %s != 0" % hex(1 << FATTR4_SUPPORTED_ATTRS)
-            (pktcall, pktreply) = self.find_nfs_op(OP_GETATTR, self.server_ipaddr, self.port, match=attrmatch)
-            self.test(pktcall, "GETATTR should be sent to %s asking for FATTR4_SUPPORTED_ATTRS" % server_type)
-            if pktreply:
-                supported_attrs = pktreply.NFSop.attributes[FATTR4_SUPPORTED_ATTRS]
-                fslt_supported = supported_attrs & (1<<FATTR4_FS_LAYOUT_TYPES) != 0
-                self.test(fslt_supported, "NFS server should support file type layouts (LAYOUT4_NFSV4_1_FILES)")
-            elif pktcall:
-                self.test(False, "GETATTR reply was not found")
+            self.verify_pnfs_supported(self.rootfh, server_type)
+            save_index = self.pktt.index
 
-            # Find packet having a GETATTR asking for FATTR4_FS_LAYOUT_TYPES(bit 62)
-            attrmatch = "NFS.request & %s != 0" % hex(1 << FATTR4_FS_LAYOUT_TYPES)
-            (pktcall, pktreply) = self.find_nfs_op(OP_GETATTR, self.server_ipaddr, self.port, match=attrmatch)
-            self.test(pktcall, "GETATTR should be sent to %s asking for FATTR4_FS_LAYOUT_TYPES" % server_type)
-            if pktreply:
-                # Get list of fs layout types supported by the server
-                fs_layout_types = pktreply.NFSop.attributes[FATTR4_FS_LAYOUT_TYPES]
-                self.test(LAYOUT4_NFSV4_1_FILES in fs_layout_types, "NFS server should return LAYOUT4_NFSV4_1_FILES in fs_layout_types")
-            elif pktcall:
-                self.test(False, "GETATTR reply was not found")
+            # Find if pNFS is supported for the mounted path including datadir
+            path_list = []
+            if len(self.datadir):
+                path = os.path.join(self.export, self.datadir)
+            else:
+                path = self.export
+            while True:
+                plist = os.path.split(path)
+                if plist[1] == "":
+                    break
+                path_list.insert(0, plist[1])
+                path = plist[0]
+            fullpath = "/"
+            fsid_list = []
+            for path in path_list:
+                # Find the LOOKUP
+                fullpath = os.path.join(fullpath, path)
+                match = "NFS.name == '%s'" % path
+                pktcall, pktreply = self.find_nfs_op(OP_LOOKUP, self.server_ipaddr, self.port, match=match)
+                if pktreply:
+                    getfh_obj   = self.getop(pktreply, OP_GETFH)
+                    getattr_obj = self.getop(pktreply, OP_GETATTR)
+                    if getfh_obj is None or getattr_obj is None:
+                        # Could not find GETFH or GETATTR
+                        continue
+                    filehandle = getfh_obj.fh
+                    attributes = getattr_obj.attributes
+                    fsid = attributes.get(FATTR4_FSID)
+                    for xfsid in fsid_list:
+                        if fsid.major == xfsid.major and fsid.minor == xfsid.minor:
+                            # This fsid has already been verified, so skip it
+                            fsid = None
+                            break
+                    if fsid is not None:
+                        # Save the fsid so it won't be verified again
+                        fsid_list.append(fsid)
+                        # Verify this path supports pNFS
+                        self.verify_pnfs_supported(filehandle, server_type, path=fullpath)
+            self.pktt.rewind(save_index)
         return self.sessionid
 
     def verify_layoutget(self, filehandle, iomode, riomode=None, status=0, offset=None, length=None):
