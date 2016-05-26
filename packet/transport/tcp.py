@@ -154,7 +154,7 @@ class TCP(BaseObj):
 
         # Convert sequence numbers to relative numbers
         seq = self.seq_number - stream['seq_base'] + stream['seq_wrap']
-        if seq < 0:
+        if seq < stream['seq_wrap']:
             # Sequence number has reached the maximum and wrapped around
             stream['seq_wrap'] += 4294967296
             seq += 4294967296
