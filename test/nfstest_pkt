@@ -25,7 +25,7 @@ from optparse import OptionParser,OptionGroup,IndentedHelpFormatter
 __author__    = "Jorge Mora (mora@netapp.com)"
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.1"
+__version__   = "1.2"
 
 USAGE = """%prog [options] <trace1.cap> [<trace2.cap> ...]
 
@@ -267,21 +267,21 @@ if vopts.display != "pkt":
 
 def display_pkt(vlevel, pkttobj):
     """Display packet for given verbose level"""
-    pkt = pkttobj.pkt
     if not vopts.verbose & vlevel:
         return
     level = 2
     if vlevel == 0x01:
         level = 1
     pkttobj.debug_repr(level)
+    pkt = pkttobj.pkt
 
     disp = str
     if vlevel == 0x04:
         disp = repr
 
     rpctype = 0
-    if pkttobj.pkt == "rpc":
-        rpctype = pkttobj.pkt.rpc.type
+    if pkt == "rpc":
+        rpctype = pkt.rpc.type
 
     if dlist:
         slist = []
@@ -306,6 +306,12 @@ def display_pkt(vlevel, pkttobj):
         out = disp(pkt)
     print out
 
+def display_packet(pkttobj):
+    """Display packet given the verbose level"""
+    if allpkts or pkttobj.pkt in layers:
+        for level in (0x01, 0x02, 0x04):
+            display_pkt(level, pkttobj)
+
 ################################################################################
 # Entry point
 pkttobj = Pktt(args)
@@ -320,13 +326,13 @@ maxindex = None
 if vopts.end > 0:
     maxindex = vopts.end
 
-while pkttobj.match(vopts.match, rewind=False, reply=vopts.reply, maxindex=maxindex):
-    pkt = pkttobj.pkt
-    if pkt.record.index >= vopts.start:
-        if allpkts or pkt in layers:
-            if vopts.verbose & 0x01:
-                display_pkt(0x01, pkttobj)
-            if vopts.verbose & 0x02:
-                display_pkt(0x02, pkttobj)
-            if vopts.verbose & 0x04:
-                display_pkt(0x04, pkttobj)
+if vopts.match == "True":
+    # Do not use the match method, instead use the iterator method
+    # which is about 36% faster than match
+    for pkt in pkttobj:
+        if maxindex is not None and pkt.record.index >= maxindex:
+            break
+        display_packet(pkttobj)
+else:
+    while pkttobj.match(vopts.match, rewind=False, reply=vopts.reply, maxindex=maxindex):
+        display_packet(pkttobj)
