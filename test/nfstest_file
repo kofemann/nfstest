@@ -28,7 +28,7 @@ from optparse import OptionParser,OptionGroup,IndentedHelpFormatter
 __author__    = "Jorge Mora (mora@netapp.com)"
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.1"
+__version__   = "1.2"
 
 USAGE = """%prog [options] -p <filepath> <trace1.cap> [<trace2.cap> ...]
 
@@ -124,6 +124,8 @@ ehelp = "End index [default: %default]"
 opts.add_option("-e", "--end", type="int", default=0, help=ehelp)
 hhelp = "Time zone to use to display timestamps"
 opts.add_option("-z", "--tz", default=None, help=hhelp)
+hhelp = "Display progress bar [default: %default]"
+opts.add_option("--progress", type="int", default=1, help=hhelp)
 
 pktdisp = OptionGroup(opts, "Packet display")
 hhelp = "Display record frame number [default: %default]"
@@ -238,6 +240,7 @@ if fname[:3] == "FH:":
 # Entry point
 stime = time.time()
 pkttobj = Pktt(files)
+pkttobj.showprog = vopts.progress
 
 maxindex = None
 if vopts.end > 0:
@@ -384,5 +387,6 @@ if fh_list:
         nlmstr = " or ".join(["crc32(nlm.fh) == %d" % fh for fh in fh_list])
         mstr = " or ".join(filter(None, [stidstr, fhstr, nlmstr, filestr, opstr]))
 
+pkttobj.show_progress(True)
 dtime = time.time() - stime
 print "Duration: %d secs\n" % dtime
