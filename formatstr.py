@@ -30,7 +30,7 @@ from string import Formatter
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.2"
+__version__   = "1.3"
 
 # Display variables
 CRC16 = True
@@ -105,6 +105,25 @@ def int_units(value):
         v, m = re.search(r"([-\+\.\d]+)\s*(\w?)", value).groups()
         value = int(float(v) * (1<<(10*UNIT_SUFFIXES.index(m.upper()))))
     return value
+
+def str_time(value):
+    """Convert the number of seconds to a string with a format of "[h:]mm:ss"
+
+       value:
+           Time value to convert (in seconds)
+
+       Examples:
+           out = str_time(123.0) # out = "02:03"
+           out = str_time(12345) # out = "3:25:45"
+    """
+    ret = ""
+    value = int(value)
+    hh = value/3600
+    mm = (value-3600*hh)/60
+    ss = value%60
+    if hh > 0:
+        ret += "%d:" % hh
+    return ret + "%02d:%02d" % (mm, ss)
 
 def crc32(value):
     """Convert string to its crc32 representation"""
