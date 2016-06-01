@@ -40,12 +40,15 @@ Packet layers supported:
 """
 import os
 import re
+import sys
 import gzip
 import time
+import fcntl
 import token
 import struct
 import parser
 import symbol
+import termios
 from formatstr import *
 import nfstest_config as c
 from baseobj import BaseObj
@@ -58,7 +61,7 @@ from packet.link.ethernet import ETHERNET
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "2.1"
+__version__   = "2.2"
 
 BaseObj.debug_map(0x100000000, 'pkt1', "PKT1: ")
 BaseObj.debug_map(0x200000000, 'pkt2', "PKT2: ")
@@ -76,6 +79,9 @@ _match_func_map = dict(zip(PKT_layers,["self._match_%s"%x for x in PKT_layers]))
 # Read size -- the amount of data read at a time from the file
 # The read ahead buffer actual size is always >= 2*READ_SIZE
 READ_SIZE = 64*1024
+
+# Show progress if stderr is a tty and stdout is not
+SHOWPROG = os.isatty(2) and not os.isatty(1)
 
 class Header(BaseObj):
     # Class attributes
@@ -143,6 +149,13 @@ class Pktt(BaseObj, Unpack):
         self.rdbuffer  = ""   # Read buffer
         self.rdoffset  = 0    # Read buffer offset
         self.filesize  = 0    # Size of packet trace file
+        self.prevprog  = -1.0 # Previous progress percentage
+        self.prevtime  = 0.0  # Previous segment time
+        self.prevdone  = -1   # Previous progress bar units done so far
+        self.prevoff   = 0    # Previous offset
+        self.showprog  = 0    # If this is true the progress will be displayed
+        self.progdone  = 0    # Display last progress only once
+        self.timestart = time.time() # Time reference base
 
         # TCP stream map: to keep track of the different TCP streams within
         # the trace file -- used to deal with RPC packets spanning multiple
@@ -286,8 +299,14 @@ class Pktt(BaseObj, Unpack):
                 if minsecs is None or obj.pkt.record.secs < minsecs:
                     minsecs = obj.pkt.record.secs
                     pktt_obj = obj
+            if self.filesize == 0:
+                # Calculate total bytes to process
+                for obj in self.pktt_list:
+                    self.filesize += obj.filesize
             if pktt_obj is None:
                 # All packet trace files have been processed
+                self.offset = self.filesize
+                self.show_progress(True)
                 raise StopIteration
             elif len(self._tcp_stream_map):
                 # This packet trace file should be processed serially
@@ -305,6 +324,7 @@ class Pktt(BaseObj, Unpack):
             self.pkt_call = pktt_obj.pkt_call
             self.tfile = pktt_obj.tfile
             self.pkt.record.index = self.index  # Use a cumulative index
+            self.offset += pktt_obj.offset - pktt_obj.boffset
 
             try:
                 # Get next packet for this packet trace object
@@ -327,6 +347,8 @@ class Pktt(BaseObj, Unpack):
                     self._tcp_stream_map = pktt_obj._tcp_stream_map
                     self._rpc_xid_map    = pktt_obj._rpc_xid_map
 
+            self.show_progress()
+
             # Increment cumulative packet index
             self.index += 1
             return self.pkt
@@ -348,6 +370,8 @@ class Pktt(BaseObj, Unpack):
         data = self._read(16)
         if len(data) < 16:
             self.eof = True
+            self.offset = self.filesize
+            self.show_progress(True)
             raise StopIteration
         # Decode record header
         record = Record(self, data)
@@ -356,6 +380,9 @@ class Pktt(BaseObj, Unpack):
         self.unpack = Unpack(self._read(record.length_inc))
         if self.unpack.size() < record.length_inc:
             # Record has been truncated, stop iteration
+            self.eof = True
+            self.offset = self.filesize
+            self.show_progress(True)
             raise StopIteration
 
         if self.header.link_type == 1:
@@ -364,6 +391,8 @@ class Pktt(BaseObj, Unpack):
         else:
             # Unknown link layer
             record.data = self.unpack.getbytes()
+
+        self.show_progress()
 
         # Increment packet index
         self.index += 1
@@ -897,6 +926,60 @@ class Pktt(BaseObj, Unpack):
         self.pkt = None
         self.dprint('PKT1', ">>> match() -> False")
         return None
+
+    def show_progress(self, done=False):
+        """Display progress bar if enabled and if running on correct terminal"""
+        if SHOWPROG and self.showprog and (done or self.index % 500 == 0):
+            rows, columns = struct.unpack('hh', fcntl.ioctl(2, termios.TIOCGWINSZ, "1234"))
+            if columns < 100:
+                sps = 30
+            else:
+                # Terminal is wide enough, include bytes/sec
+                sps = 42
+            # Progress bar length
+            wlen = int(columns) - len(str_units(self.filesize)) - sps
+            # Number of bytes per progress bar unit
+            xunit = float(self.filesize)/wlen
+            # Progress bar units done so far
+            xdone = int(self.offset/xunit)
+            xtime = time.time()
+            progress = 100.0*self.offset/self.filesize
+
+            # Display progress only if there is some change in progress
+            if (done and not self.progdone) or (self.prevdone != xdone or \
+               int(self.prevtime) != int(xtime) or \
+               round(self.prevprog) != round(progress)):
+                if done:
+                    # Do not display progress again when done=True
+                    self.progdone = 1
+                otime  = xtime - self.timestart # Overall time
+                tdelta = xtime - self.prevtime  # Segment time
+                self.prevprog = progress
+                self.prevdone = xdone
+                self.prevtime = xtime
+                # Number of progress bar units for completion
+                slen = wlen - xdone
+                if done:
+                    # Overall average bytes/sec
+                    bps = self.offset / otime
+                else:
+                    # Segment average bytes/sec
+                    bps = (self.offset - self.prevoff) / tdelta
+                self.prevoff = self.offset
+                # Progress bar has both foreground and background colors
+                # as green and in case the terminal does not support colors
+                # then a "=" is displayed instead instead of a green block
+                pbar = " [\033[32m\033[42m%s\033[m%s] " % ("="*xdone, " "*slen)
+                # Add progress percentage and how many bytes have been
+                # processed so far relative to the total number of bytes
+                pbar += "%5.1f%% %9s/%s" % (progress, str_units(self.offset), str_units(self.filesize))
+                if columns < 100:
+                    sys.stderr.write("%s %-6s\r" % (pbar, str_time(otime)))
+                else:
+                    # Terminal is wide enough, include bytes/sec
+                    sys.stderr.write("%s %9s/s %-6s\r" % (pbar, str_units(bps), str_time(otime)))
+                if done:
+                    sys.stderr.write("\n")
 
     @staticmethod
     def escape(data):
