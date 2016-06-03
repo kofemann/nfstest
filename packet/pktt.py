@@ -156,6 +156,7 @@ class Pktt(BaseObj, Unpack):
         self.showprog  = 0    # If this is true the progress will be displayed
         self.progdone  = 0    # Display last progress only once
         self.timestart = time.time() # Time reference base
+        self.reply_matched = False   # Matching a reply
 
         # TCP stream map: to keep track of the different TCP streams within
         # the trace file -- used to deal with RPC packets spanning multiple
