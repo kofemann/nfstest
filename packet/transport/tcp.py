@@ -24,7 +24,7 @@ from packet.application.rpc import RPC
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.1"
+__version__   = "1.2"
 
 _TCP_map = {
     0x001:'FIN',
@@ -217,7 +217,6 @@ class TCP(BaseObj):
         # Get the total size
         sid = unpack.save_state()
         size = unpack.size()
-        nonvalid = bool(size <= 20 and unpack.getbytes() == '\x00' * size)
 
         # Try decoding the RPC header before using the msfrag data
         # to re-sync the stream
@@ -233,13 +232,6 @@ class TCP(BaseObj):
             # except if this packet is just a TCP ACK (flags = 0x10)
             stream['msfrag'] = ''
             stream['frag_off'] = 0
-
-        # Expected data segment sequence number
-        nseg = self.seq - stream['last_seq']
-
-        # Make sure this segment has valid data
-        if nseg != len(stream['msfrag']) and nonvalid:
-            return
 
         if not rpc:
             if len(stream['msfrag']):
