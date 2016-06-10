@@ -36,7 +36,7 @@
  *   IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  *   ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * This code was derived from [draft-ietf-nfsv4-minorversion2-dot-x-39].
+ * This code was derived from [draft-ietf-nfsv4-minorversion2-dot-x-41].
  *
  *  Copyright (C) The IETF Trust (2007-2014)
  *  All Rights Reserved.
@@ -920,7 +920,7 @@ typedef uint64_t                fattr4_quota_avail_soft;
 typedef uint64_t                fattr4_quota_used;
 typedef specdata4               fattr4_rawdev;
 typedef uint64_t                fattr4_space_avail;
-typedef uint64_t                fattr4_space_free;
+typedef length4                 fattr4_space_free;
 typedef uint64_t                fattr4_space_total;
 typedef uint64_t                fattr4_space_used;
 typedef bool                    fattr4_system;
@@ -3162,7 +3162,7 @@ struct write_response4 {
     verifier4       verifier;
 };
 
-/* STRFMT1: cons:{2} sync:{3} */
+/* STRFMT1: cons:{0} sync:{1} */
 struct copy_requirements4 {
     bool            consecutive;
     bool            synchronous;
