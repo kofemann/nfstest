@@ -118,6 +118,7 @@ class NFSUtil(Host):
         self.stateid = None
         self.dsismds = False
         self.rootfh  = None
+        self.rootfsid = None
 
         # State id to string mapping
         self.stid_map = {}
@@ -780,6 +781,9 @@ class NFSUtil(Host):
             getfhmatch = "NFS.argop == %d" % OP_GETFH
             pktcall, pktreply = self.find_nfs_op(OP_PUTROOTFH, ipaddr, port, match=getfhmatch)
             self.rootfh = getattr(self.getop(pktreply, OP_GETFH), "fh", None)
+            attributes  = getattr(self.getop(pktreply, OP_GETATTR), "attributes", None)
+            if attributes:
+                self.rootfsid = attributes.get(FATTR4_FSID)
             self.pktt.rewind(save_index)
 
         # Find EXCHANGE_ID request and reply
@@ -881,6 +885,8 @@ class NFSUtil(Host):
                 path = plist[0]
             fullpath = "/"
             fsid_list = []
+            if self.rootfsid is not None:
+                fsid_list.append(self.rootfsid)
             for path in path_list:
                 # Find the LOOKUP
                 fullpath = os.path.join(fullpath, path)
