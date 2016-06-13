@@ -1090,6 +1090,7 @@ class PosixTest(TestUtil):
                         pass
                     strerror = ": %s" % openerr.strerror if openerr else ""
 
+                    fstat = None
                     if opened:
                         # Get file stats after open
                         fstat = posix.fstat(fd)
@@ -1139,11 +1140,15 @@ class PosixTest(TestUtil):
                         elif posix.O_CREAT in flags:
                             # O_CREAT is set
                             msg = "open - file should be created when O_CREAT is used"
-                            self.test(os.path.exists(self.absfile), msg, subtest=flag_str)
-                            expr = fstat.st_mode & 0777 == perms
-                            msg = "open - file should be created with correct permission mode"
-                            fmsg = ": expecting %04o, got %04o" % (perms, fstat.st_mode & 0777)
-                            self.test(expr, msg, subtest=flag_str, failmsg=fmsg)
+                            file_exists = os.path.exists(self.absfile)
+                            self.test(file_exists, msg, subtest=flag_str)
+                            if file_exists:
+                                if fstat is None:
+                                    fstat = os.stat(self.absfile)
+                                expr = fstat.st_mode & 0777 == perms
+                                msg = "open - file should be created with correct permission mode"
+                                fmsg = ": expecting %04o, got %04o" % (perms, fstat.st_mode & 0777)
+                                self.test(expr, msg, subtest=flag_str, failmsg=fmsg)
                         else:
                             # O_CREAT is not set
                             (expr, fmsg) = self._oserror(openerr, errno.ENOENT)
