@@ -35,7 +35,7 @@ from packet.nfs.nfs4_const import *
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "2.1"
+__version__   = "2.2"
 
 class NFSUtil(Host):
     """NFSUtil object
@@ -116,7 +116,6 @@ class NFSUtil(Host):
         self.device_info = {}
         self.dslist = []
         self.stateid = None
-        self.dsismds = False
         self.rootfh  = None
         self.rootfsid = None
 
@@ -542,6 +541,18 @@ class NFSUtil(Host):
 
         return (layoutget, layoutget_res, loc_body)
 
+    def get_addr_port(self, addr):
+        """Get address and port number from universal address string"""
+        addr_list = addr.split('.')
+        if len(addr_list) == 6:
+            # IPv4 address
+            ipaddr = '.'.join(addr_list[:4])
+        else:
+            # IPv6 address
+            ipaddr = addr_list[0]
+        port = (int(addr_list[-2])<<8) + int(addr_list[-1])
+        return ipaddr, port
+
     def find_getdeviceinfo(self, deviceid=None):
         """Find the call and its corresponding reply for the NFSv4 GETDEVICEINFO
            going to the server specified by the ipaddr for self.server and port
@@ -564,12 +575,11 @@ class NFSUtil(Host):
                 multipath_ds_list = da_addr_body.multipath_ds_list
 
                 for ds_list in multipath_ds_list:
+                    dslist.append([])
                     for item in ds_list:
                         # Get ip address and port for DS
-                        addr_list = item.addr.split('.')
-                        ipaddr = '.'.join(addr_list[:4])
-                        port = (int(addr_list[4])<<8) + int(addr_list[5])
-                        dslist.append({'ipaddr': ipaddr, 'port': port})
+                        ipaddr, port = self.get_addr_port(item.addr)
+                        dslist[-1].append({'ipaddr': ipaddr, 'port': port})
             # Save device info for future reference
             self.device_info[pktcall.NFSop.deviceid] = {
                 'call':  pktcall,
@@ -1115,6 +1125,9 @@ class NFSUtil(Host):
         if len(xids) == 0:
             return 0
 
+        # Flag showing if this DS is the same as the MDS
+        dsismds = (ipaddr == self.server_ipaddr and port == self.port)
+
         # Find all I/O replies for MDS or current DS
         while True:
             # Find I/O reply
@@ -1141,7 +1154,7 @@ class NFSUtil(Host):
                         good_pattern += 1
                 else:
                     if pkt.nfs.status == NFS4_OK:
-                        if not self.dsismds:
+                        if not dsismds:
                             self.mdsd_lcommit = True
                         if nfsop.committed < FILE_SYNC4:
                             # Need layout commit if reply is not FILE_SYNC4

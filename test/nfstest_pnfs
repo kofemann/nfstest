@@ -25,7 +25,7 @@ from nfstest.test_util import TestUtil
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.0.3"
+__version__   = "1.1"
 
 USAGE = """%prog --server <server> [options]
 
@@ -193,10 +193,10 @@ class pNFSTest(TestUtil):
         self.test_commit_full = True
         self.test_commit_verf = True
         self.test_no_commit   = False
-        self.dsio_list = []
-        self.stateid = None
-        test_pattern = True
+        self.stateid          = None
+        test_pattern          = True
         io_str = 'READ' if iomode == LAYOUTIOMODE4_READ else 'WRITE'
+        io_op = OP_READ if iomode == LAYOUTIOMODE4_READ else OP_WRITE
         layout_dense = 'dense' if self.layout['dense'] else 'sparse'
         filehandle = openfh['filehandle']
 
@@ -205,8 +205,7 @@ class pNFSTest(TestUtil):
 
         # Get number of DS's in layout
         nds = 0
-        for ds_list in multipath_ds_list:
-            nds += len(ds_list)
+        nds = len(multipath_ds_list)
 
         # Check if file size is big enough to send traffic to all DS's
         self.dprint('DBG2', "Number of DataServers %d" % nds)
@@ -235,23 +234,35 @@ class pNFSTest(TestUtil):
                 index += 1
 
         ds_index = 0
+        dsio_list = []
         for ds_list in multipath_ds_list:
+            ds_traffic = False
+            dsio_list.append(0)
             for item in ds_list:
                 if not self.layout['commit_mds']:
                     self.writeverf = None
 
                 # Get ip address and port for DS
-                addr_list = item.addr.split('.')
-                ipaddr = '.'.join(addr_list[:4])
-                port = (int(addr_list[4])<<8) + int(addr_list[5])
+                ipaddr, port = self.get_addr_port(item.addr)
                 self.dprint('DBG2', "DataServer(%d) ipaddr: %s, port: %d" % (ds_index, ipaddr, port))
-                self.dsismds = ipaddr == self.server_ipaddr
 
                 # Rewind trace file to saved packet index
                 self.pktt.rewind(save_index)
 
                 if nocreate_list:
+                    # nocreate_list takes precedence over newgetdev
+                    newgetdev = False
                     nocreate = nocreate_list[ds_index]
+
+                if len(ds_list) > 1:
+                    # Mulipath DS, so find out if any address on given
+                    # DS has any traffic
+                    (pktcall, pktreply) = self.find_nfs_op(io_op, ipaddr, port)
+                    if pktcall:
+                        ds_traffic = True
+                        self.pktt.rewind(save_index)
+                    elif ds_traffic or item != ds_list[-1]:
+                        continue
 
                 # Verify NFSv4.1 create session to DS
                 self.verify_create_session(ipaddr, port, ds=True, nocreate=(nocreate and not newgetdev), ds_index=ds_index)
@@ -261,7 +272,7 @@ class pNFSTest(TestUtil):
                 # Find all I/O requests and replies for current DS
                 self.test_pattern = True
                 nio = self.verify_io(iomode, stateid, ipaddr, port, ds_index=ds_index)
-                self.dsio_list.append(nio)
+                dsio_list[ds_index] += nio
                 if len(write_list) > 0:
                     if write_list[ds_index] and not self.test_pattern:
                         test_pattern = False
@@ -274,8 +285,7 @@ class pNFSTest(TestUtil):
 
                     # Verify commits
                     self.verify_commit(ipaddr, port, self.get_filehandle(ds_index))
-
-                ds_index += 1
+            ds_index += 1
 
         if len(write_list) == 0:
             # Option is not given so expect writes to all DS's
@@ -285,7 +295,7 @@ class pNFSTest(TestUtil):
         no_write = True
         index = 0
         nio_total = 0
-        for nio in self.dsio_list:
+        for nio in dsio_list:
             if write_list[index] and nio == 0:
                 do_write = False
             elif not write_list[index] and nio > 0:
@@ -338,9 +348,7 @@ class pNFSTest(TestUtil):
                 for ds_list in multipath_ds_list:
                     for item in ds_list:
                         # Get ip address and port for DS
-                        addr_list = item.addr.split('.')
-                        ipaddr = '.'.join(addr_list[:4])
-                        port = (int(addr_list[4])<<8) + int(addr_list[5])
+                        ipaddr, port = self.get_addr_port(item.addr)
 
                         # Rewind trace file to saved packet index
                         self.pktt.rewind(save_index)

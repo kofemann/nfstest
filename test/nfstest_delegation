@@ -24,7 +24,7 @@ from nfstest.test_util import TestUtil
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.2"
+__version__   = "1.3"
 
 USAGE = """%prog --server <server> [--client <client>] [options]
 
@@ -263,13 +263,15 @@ class DelegTest(TestUtil):
         dsindex = 0
         for fh in filehandles:
             if self.dslist:
+                # The address is one of the DS's connection
                 ds = self.dslist[dsindex]
-                ipaddr = ds['ipaddr']
-                port = ds['port']
             else:
-                ipaddr = self.server_ipaddr
-                port = self.port
-            nio += self.verify_io(iomode, deleg_stid, ipaddr, port, filehandle=fh, src_ipaddr=src_ipaddr, maxindex=maxindex, pattern=PATTERN)
+                # The address is the mounted server
+                ds = [{"ipaddr": self.server_ipaddr, "port": self.port}]
+            for item in ds:
+                save_index = self.pktt.index
+                nio += self.verify_io(iomode, deleg_stid, item["ipaddr"], item["port"], filehandle=fh, src_ipaddr=src_ipaddr, maxindex=maxindex, pattern=PATTERN)
+                self.pktt.rewind(save_index)
             dsindex += 1
         return nio
 
@@ -396,6 +398,8 @@ class DelegTest(TestUtil):
                 if deleg_type == OPEN_DELEGATE_READ:
                     unique_io_list = sorted(set(self.test_offsets))
                     self.test(len(self.test_offsets) == len(unique_io_list), "%s's should not be sent when reading delegated file from a different process" % mode_str)
+            else:
+                self.test(False, "%s's should be sent to server" % mode_str)
 
             # Rewind trace file to saved packet index
             self.pktt.rewind(save_index)
