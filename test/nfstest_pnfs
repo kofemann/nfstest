@@ -841,8 +841,10 @@ class pNFSTest(TestUtil):
                 filename2 = self.files[1]
                 self.read_file(filename2)
 
-            time.sleep(2)
-            trace2 = self.trace_start()
+            if swrite or write:
+                time.sleep(1)
+                trace2 = self.trace_start()
+
             if swrite:
                 self.dprint('DBG3', "Open first file again on same session [%s] writing %d@%d" % (filename, self.filesize, 0))
                 fd = os.open(self.abspath(filename), os.O_WRONLY|os.O_CREAT|os.O_SYNC)
@@ -869,7 +871,6 @@ class pNFSTest(TestUtil):
             self.test_group("Verify traffic for second file using pNFS within the same mount - %s" % wstr)
             self.verify_file(filename2, iomode=iomode, nocreate=True, multipath_ds_list=multipath_ds_list)
 
-            self.trace_open(trace2)
             if write:
                 if 'deleg_stateid' in openfh and openfh['deleg_stateid'] is not None:
                     # Client should not send another open while holding a delegation
@@ -883,6 +884,7 @@ class pNFSTest(TestUtil):
                 self.test_group("Verify traffic for first file opened again using pNFS within the same mount - %s" % swstr)
                 openfh['samefile'] = True
                 openfh['dtcached'] = True
+                self.trace_open(trace2)
                 self.verify_file(filename, iomode=siomode, nocreate=True, multipath_ds_list=multipath_ds_list, openfh=openfh, delegreturn=delegreturn)
 
             self.session_ids = session_ids
