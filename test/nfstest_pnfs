@@ -552,7 +552,9 @@ class pNFSTest(TestUtil):
                 xid = pktcall.rpc.xid
                 self.test(pktcall.NFSop.type == LAYOUT4_NFSV4_1_FILES, "GETDEVICEINFO layout type should be LAYOUT4_NFSV4_1_FILES")
                 if getattr(self, 'ca_maxrespsz', None) is not None:
-                    self.test(pktcall.NFSop.maxcount <= self.ca_maxrespsz, "GETDEVICEINFO maxcount should be less than or equal to max_response_size in CREATE_SESSION reply")
+                    tmsg = "GETDEVICEINFO maxcount should be less than or equal to max_response_size in CREATE_SESSION reply"
+                    fmsg = " - (%d > %d)" % (pktcall.NFSop.maxcount, self.ca_maxrespsz)
+                    self.test(pktcall.NFSop.maxcount <= self.ca_maxrespsz, tmsg, failmsg=fmsg)
 
                 # Find GETDEVICEINFO reply
                 if pktreply:
