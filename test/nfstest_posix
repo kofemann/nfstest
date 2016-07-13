@@ -30,7 +30,7 @@ from nfstest.test_util import TestUtil
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.1"
+__version__   = "1.2"
 
 USAGE = """%prog --server <server> [options]
 
@@ -438,13 +438,15 @@ class PosixTest(TestUtil):
         self.test(fstat.st_mode & 0777 == mode, "creat - mode permissions of opened file should not be changed")
         self.test(fstat.st_size == 0, "creat - existent file should be truncated")
 
-    def _do_io(self, fd, dmsg):
+    def _do_io(self, fd, dmsg, pattern=None):
         """Wrapper to do I/O."""
         self.dprint('DBG3', dmsg)
         if self.posix_read:
-            self.posix_data += posix.read(fd, self.posix_iosize)
+            return posix.read(fd, self.posix_iosize)
         else:
-            self.posix_offset += posix.write(fd, self.data_pattern(self.posix_offset, self.posix_iosize))
+            count = posix.write(fd, self.data_pattern(self.posix_offset, self.posix_iosize, pattern=pattern))
+            self.posix_offset += count
+            return count
 
     def _fcntl_test(self, objtype):
         """Verify the POSIX API fcntl() commands F_DUPFD, F_GETFD, F_SETFD,
@@ -472,20 +474,37 @@ class PosixTest(TestUtil):
             self.posix_read = False
             self.get_filename()
 
+        self.test_info("fcntl on %s file descriptor" % objtype)
         self.dprint('DBG3', "Open file %s for %s" % (self.absfile, str_ing))
         fd = posix.open(self.absfile, mode)
         self.posix_offset = 0
-        self.posix_data = ''
-        self.posix_iosize = 32
+        self.posix_iosize = 64
         test_pos = 32
         nfd = 1000
 
-        self._do_io(fd, "%s file" % objtype.capitalize())
+        for i in xrange(10):
+            self._do_io(fd, "%s file" % objtype.capitalize())
 
         self.dprint('DBG3', "DUP file descriptor using POSIX API fcntl(fd, F_DUPFD, n)")
         self.libc.fcntl.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int]
         fd2 = self.libc.fcntl(fd, fcntl.F_DUPFD, nfd)
         self.test(fd2 >= nfd, "fcntl - DUP'ed file descriptor should be greater than or equal to the value given")
+
+        self.dprint('DBG3', "Reposition file pointer using DUP'ed file descriptor")
+        posix.lseek(fd2, test_pos, os.SEEK_SET)
+        pos = posix.lseek(fd, 0, os.SEEK_CUR)
+        self.test(pos == test_pos, "fcntl - repositioning file pointer using DUP'ed file descriptor should reposition it in the original file descriptor as well")
+        self.posix_offset = pos
+        out = self._do_io(fd, "%s file using original file descriptor" % objtype.capitalize(), pattern="-")
+        if self.posix_read:
+            data = self.data_pattern(test_pos, self.posix_iosize)
+        else:
+            data = self.data_pattern(test_pos, self.posix_iosize, pattern="-")
+            fdr = open(self.absfile, "r")
+            fdr.seek(test_pos)
+            out = fdr.read(self.posix_iosize)
+            fdr.close()
+        self.test(out == data, "fcntl - %s data is correct when repositioning file pointer using DUP'ed file descriptor" % str_ed)
 
         fdflags = self.libc.fcntl(fd, fcntl.F_GETFD, 0)
         self.test(fdflags >= 0, "fcntl - F_GETFD should succeed")
@@ -493,6 +512,8 @@ class PosixTest(TestUtil):
         self.test(out != -1, "fcntl - F_SETFD should succeed")
         fdflags = self.libc.fcntl(fd, fcntl.F_GETFD, 0)
         self.test(fdflags & fcntl.FD_CLOEXEC == fcntl.FD_CLOEXEC, "fcntl - F_SETFD should set the given file descriptor flag correctly")
+        fdflags = self.libc.fcntl(fd2, fcntl.F_GETFD, 0)
+        self.test(fdflags & fcntl.FD_CLOEXEC != fcntl.FD_CLOEXEC, "fcnlt - F_SETFD should change the flag for the given file descriptor only")
 
         flflags = self.libc.fcntl(fd, fcntl.F_GETFL, 0)
         self.test(flflags >= 0, "fcntl - F_GETFL should succeed")
@@ -500,33 +521,24 @@ class PosixTest(TestUtil):
         self.test(out != -1, "fcntl - F_SETFL should succeed")
         flflags = self.libc.fcntl(fd, fcntl.F_GETFL, 0)
         self.test(flflags & os.O_APPEND == os.O_APPEND, "fcntl - F_SETFL should set the given file status flag correctly")
+        flflags = self.libc.fcntl(fd2, fcntl.F_GETFL, 0)
+        self.test(flflags & os.O_APPEND == os.O_APPEND, "fcnlt - F_SETFL should change the flag for all file descriptors on the same file")
 
-        flags = self.libc.fcntl(fd2, fcntl.F_GETFD, 0)
-        self.test(flags != fdflags, "fcnlt - F_SETFD should change the flag for the given file descriptor only")
-        flags = self.libc.fcntl(fd2, fcntl.F_GETFL, 0)
-        self.test(flags == flflags, "fcnlt - F_SETFL should change the flag for all file descriptors on the same file")
+        if not self.posix_read:
+            self.dprint('DBG3', "Reposition file pointer using DUP'ed file descriptor")
+            posix.lseek(fd2, test_pos, os.SEEK_SET)
+            pos = posix.lseek(fd, 0, os.SEEK_CUR)
+            self.test(pos == test_pos, "fcntl - repositioning file pointer using DUP'ed file descriptor should reposition it in the original file descriptor as well")
+            self.posix_offset = pos
+            out = self._do_io(fd2, "%s file using DUP'ed file descriptor" % objtype.capitalize(), pattern="+")
 
-        for i in xrange(10):
-            self._do_io(fd2, "%s file using DUP'ed file descriptor" % objtype.capitalize())
-
-        self._do_io(fd, "%s file using original file descriptor" % objtype.capitalize())
-
-        if objtype == 'read':
-            test_expr = self.posix_data == self.data_pattern(0, len(self.posix_data))
-        else:
+            data = self.data_pattern(test_pos, self.posix_iosize, pattern="+")
             fdr = open(self.absfile, "r")
-            data = fdr.read()
+            fdr.seek(-self.posix_iosize, os.SEEK_END)
+            out = fdr.read(self.posix_iosize)
             fdr.close()
-            test_expr = data == self.data_pattern(0, self.posix_offset)
-        self.test(test_expr, "fcntl - %s data on both file descriptors should be correct" % str_ed)
+            self.test(out == data, "fcntl - data is %s correctly at the end of the file when O_APPEND is set regardless where the file pointer is set" % str_ed)
 
-        self.dprint('DBG3', "Reposition file pointer using DUP'ed file descriptor")
-        posix.lseek(fd2, test_pos, os.SEEK_SET)
-        pos = posix.lseek(fd, 0, os.SEEK_CUR)
-        self.posix_offset = pos
-        self.posix_data = ""
-        self._do_io(fd, "%s file using original file descriptor" % objtype.capitalize())
-        self.test(pos == test_pos, "fcntl - repositioning file pointer using DUP'ed file descriptor should reposition it in the original file descriptor as well")
         posix.close(fd)
 
         try:
@@ -540,11 +552,13 @@ class PosixTest(TestUtil):
         out = self.libc.fcntl(fd2, fcntl.F_SETLKW, ctypes.byref(flock))
         self.test(out != -1, "fcntl - F_SETLKW (%s) should succeed" % str_lck)
 
-        pos = posix.lseek(fd2, 0, os.SEEK_CUR)
+        pos = posix.lseek(fd2, 0, os.SEEK_SET)
         self.posix_offset = pos
-        self.posix_data = ""
-        self._do_io(fd2, "%s file using DUP'ed file descriptor" % objtype.capitalize())
-        test_expr = self.posix_data == self.data_pattern(pos, len(self.posix_data))
+        out = self._do_io(fd2, "%s file using DUP'ed file descriptor" % objtype.capitalize())
+        if self.posix_read:
+            test_expr = out == self.data_pattern(0, self.posix_iosize)
+        else:
+            test_expr = out == self.posix_iosize
         self.test(test_expr, "fcntl - %s on DUP'ed descriptor after closing original file descriptor should succeed" % objtype)
 
         flock = Flock(fcntl.F_UNLCK, 0, 0, int(self.filesize/4), 0)
@@ -1250,8 +1264,6 @@ class PosixTest(TestUtil):
            of 0 bytes returns 0.
         """
         self.test_group("Verify POSIX API read() on %s" % self.nfsstr())
-        #self.umount()
-        #self.mount()
 
         absfile = self.abspath(self.files[0])
         self.dprint('DBG3', "Open file %s for reading" % absfile)
