@@ -25,7 +25,7 @@ from nfstest.test_util import TestUtil
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.1"
+__version__   = "1.2"
 
 USAGE = """%prog --server <server> [options]
 
@@ -267,7 +267,7 @@ class pNFSTest(TestUtil):
                 # Verify NFSv4.1 create session to DS
                 self.verify_create_session(ipaddr, port, ds=True, nocreate=(nocreate and not newgetdev), ds_index=ds_index)
                 if self.sessionid:
-                    self.session_ids.append(self.sessionid)
+                    self.session_ids[self.sessionid] = "DS(%d)" % ds_index
 
                 # Find all I/O requests and replies for current DS
                 self.test_pattern = True
@@ -445,7 +445,7 @@ class pNFSTest(TestUtil):
         delegreturn       = kwargs.pop('delegreturn', False)
         verify_close      = kwargs.pop('verify_close', True)
 
-        self.session_ids = []
+        self.session_ids = {}
 
         if len(multipath_ds_list) == 0:
             # Clear list of device ids
@@ -455,7 +455,7 @@ class pNFSTest(TestUtil):
             # Verify NFSv4.1 create session to MDS
             self.verify_create_session(self.server_ipaddr, self.port)
             if self.sessionid:
-                self.session_ids.append(self.sessionid)
+                self.session_ids[self.sessionid] = "MDS"
 
         # Find OPEN request
         self.dprint('DBG2', "Find OPEN for file %s" % filename)
@@ -640,37 +640,26 @@ class pNFSTest(TestUtil):
     def verify_destroy_session(self):
         """Verify DESTROY_SESSION should be sent to MDS and all DS's on umount."""
         # Find all DESTROY_SESSION requests
-        xids = []
-        save_index = self.pktt.index
+        xids = {}
         if len(self.session_ids) == 0:
             self.test(False, "No session ids to look for on DESTROY_SESSION")
             return
-        while True:
-            pkt = self.pktt.match("NFS.argop == %d" % OP_DESTROY_SESSION)
-            if not pkt:
-                break
-            sessionid = pkt.NFSop.sessionid
-            if sessionid in self.session_ids:
-                self.session_ids.remove(sessionid)
-                xids.append(pkt.rpc.xid)
-
-        self.test(len(self.session_ids) == 0, "DESTROY_SESSION should be sent to MDS and all DS's on umount")
-
-        # Rewind trace file to saved packet index
-        self.pktt.rewind(save_index)
-
-        # Find all DESTROY_SESSION replies
-        while True:
-            # Find DESTROY_SESSION reply
-            pkt = self.pktt.match("NFS.resop == %d" % OP_DESTROY_SESSION)
-            if not pkt:
-                break
-            xid = pkt.rpc.xid
-            if xid in xids:
-                xids.remove(xid)
-                if len(xids) == 0:
-                    break
-
+        while self.pktt.match("NFS.argop == %d" % OP_DESTROY_SESSION, reply=True):
+            pkt = self.pktt.pkt
+            if pkt.rpc.type == 0:
+                sessionid = pkt.NFSop.sessionid
+                server = self.session_ids.pop(sessionid, None)
+                if server is not None:
+                    xids[pkt.rpc.xid] = server
+                    self.test(True, "DESTROY_SESSION should be sent to %s on umount" % server)
+            else:
+                xid = pkt.rpc.xid
+                server = xids.pop(xid, None)
+                if server is not None:
+                    fmsg = " - failed with %s(%d)" % (pkt.nfs.status, pkt.nfs.status)
+                    self.test(pkt.nfs.status == 0, "DESTROY_SESSION should succeed for %s" % server, failmsg=fmsg)
+        for server in self.session_ids.values():
+            self.test(False, "DESTROY_SESSION should be sent to %s on umount" % server)
         if len(xids) > 0:
             self.test(False, "Could not find all replies to DESTROY_SESSION")
 
