@@ -23,13 +23,13 @@ This module also includes some module variables to change how certain
 objects are displayed.
 """
 import nfstest_config as c
-from baseobj import BaseObj
+from baseobj import BaseObj, fstrobj
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '1.1'
+__version__   = "1.2"
 
 # RPC type constants
 RPC_CALL  = 0
@@ -47,7 +47,7 @@ NFS_mainop = False # Display only the main operation in an NFS COMPOUND
 LOAD_body  = True  # Display the body of layer/procedure/operation
 
 # Module variables for Enum
-ENUM_CHECK = True
+ENUM_CHECK = False
 
 class IntHex(int):
     """Integer object which is displayed in hex"""
@@ -58,6 +58,12 @@ class LongHex(long):
     """Long integer object which is displayed in hex"""
     def __str__(self):
         return "{0:#018x}".format(self)
+
+class DateStr(float):
+    """Floating point object which is displayed as a date"""
+    _strfmt = "{0:date}"
+    def __str__(self):
+        return repr(fstrobj.format(self._strfmt, self))
 
 class StrHex(str):
     """String object which is displayed in hex"""
