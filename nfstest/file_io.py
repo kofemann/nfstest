@@ -52,6 +52,7 @@ import signal
 import struct
 import formatstr
 import traceback
+import subprocess
 from random import Random
 import nfstest_config as c
 from baseobj import BaseObj
@@ -62,7 +63,7 @@ from multiprocessing import Process,JoinableQueue
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.1"
+__version__   = "1.2"
 
 # Default values
 P_SEED       = None
@@ -910,6 +911,20 @@ class FileIO(BaseObj):
 
         return
 
+    def get_mountpoint(self):
+        """Get mount point from data directory"""
+        path = self.datadir
+        st1 = os.stat(path)
+        while path != os.sep:
+            # Get parent directory
+            parpath = os.path.realpath(os.path.join(path, os.pardir))
+            st2 = os.stat(parpath)
+            # Compare device ids from current and parent directories
+            if st1.st_dev != st2.st_dev:
+                break;
+            path = parpath
+        return path
+
     def run_process(self, tid=0):
         """Main loop for each process"""
         ret = 0
@@ -1020,10 +1035,27 @@ class FileIO(BaseObj):
         self.flush_log()
         stime = time.time()
 
+        self.dprint("INFO", "System:  %s" % " ".join(os.uname()))
+        self.dprint("INFO", "Command: %s" % " ".join(sys.argv))
+
         if not os.path.exists(self.datadir):
             # Create top level directory if it does not exist
             os.mkdir(self.datadir, 0777)
         self.datadir_st = os.stat(self.datadir)
+
+        # Get mount stats for mount point
+        mtpoint = self.get_mountpoint()
+        cmd = "mountstats %s" % mtpoint
+        process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+        pstdout, pstderr = process.communicate()
+        for line in pstdout.split("\n"):
+            regex = re.search("Stats for\s+(.*):", line)
+            if regex:
+                self.dprint("INFO", regex.group(1))
+            else:
+                regex = re.search("NFS mount options:.*", line)
+                if regex:
+                    self.dprint("INFO", regex.group(0))
 
         if self.nprocs > 1:
             # setup interprocess queue

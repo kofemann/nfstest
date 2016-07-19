@@ -18,11 +18,10 @@ from nfstest.file_io import *
 from optparse import OptionParser, OptionGroup, IndentedHelpFormatter
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.0.1'
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-
+__version__   = "1.1"
 
 USAGE = """%prog -d <datadir> [options]
 
