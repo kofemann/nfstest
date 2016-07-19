@@ -2611,7 +2611,7 @@ const CREATE_SESSION4_FLAG_PERSIST              = 0x00000001;
 const CREATE_SESSION4_FLAG_CONN_BACK_CHAN       = 0x00000002;
 const CREATE_SESSION4_FLAG_CONN_RDMA            = 0x00000004;
 
-/* STRFMT1: clientid:{0} seqid:{1} cb_prog:{5:#010x} */
+/* STRFMT1: clientid:{0} seqid:{1} flags:{2:#010x} cb_prog:{5:#010x} */
 struct CREATE_SESSION4args {
     clientid4               clientid;
     sequenceid4             sequenceid;
@@ -2625,7 +2625,7 @@ struct CREATE_SESSION4args {
     callback_sec_parms4     sec_parms<>;
 };
 
-/* STRFMT1: sessionid:{0:crc32} seqid:{1} */
+/* STRFMT1: sessionid:{0:crc32} seqid:{1} flags:{2:#010x} */
 struct CREATE_SESSION4resok {
     sessionid4              sessionid;
     sequenceid4             sequenceid;
