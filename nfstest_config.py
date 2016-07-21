@@ -133,6 +133,7 @@ NFSTEST_ALLMODS = [
     'packet/utils.py',
     'packet/application/gss.py',
     'packet/application/gss_const.py',
+    'packet/application/ntp4.py',
     'packet/application/rpc.py',
     'packet/application/rpc_const.py',
     'packet/application/rpc_creds.py',

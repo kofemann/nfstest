@@ -19,12 +19,13 @@ Decode UDP layer.
 import nfstest_config as c
 from baseobj import BaseObj
 from packet.application.rpc import RPC
+from packet.application.ntp4 import NTP
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '1.0'
+__version__   = "1.1"
 
 class UDP(BaseObj):
     """UDP object
@@ -72,6 +73,13 @@ class UDP(BaseObj):
 
     def _decode_payload(self, pktt):
         """Decode UDP payload."""
+        if 123 in [self.src_port, self.dst_port]:
+            # NTP on port 123
+            ntp = NTP(pktt)
+            if ntp:
+                pktt.pkt.ntp = ntp
+            return
+
         # Get RPC header
         rpc = RPC(pktt, proto=17)
 
