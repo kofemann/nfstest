@@ -42,8 +42,14 @@ __license__   = "GPL v2"
 __version__   = "1.1"
 
 # The order in which to display all layers in the packet
-PKT_layers = ['record', 'ethernet', 'ip', 'arp', 'tcp', 'udp', 'rpc',
-              'gssd', 'nfs', 'mount', 'portmap', 'nlm', 'gssc']
+PKT_layers = [
+    'record',
+    'ethernet',
+    'ip', 'arp', 'rarp',
+    'tcp', 'udp',
+    'rpc',
+    'gssd', 'nfs', 'mount', 'portmap', 'nlm', 'gssc',
+]
 # Required layers for debug_repr(1)
 _PKT_rlayers = ['record', 'ip']
 # Do not display these layers for debug_repr(1)

@@ -27,10 +27,14 @@ __version__   = "1.0"
 # Enum arp_oper
 REQUEST = 1
 REPLY   = 2
+RARP_REQUEST = 3
+RARP_REPLY   = 4
 
 arp_oper = {
     1: "REQUEST",
     2: "REPLY",
+    3: "REQUEST",
+    4: "REPLY",
 }
 
 # Hardware types

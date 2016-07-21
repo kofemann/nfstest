@@ -14,9 +14,10 @@
 """
 ARP module
 
-Decode ARP layer.
+Decode ARP and RARP layers.
 
 RFC 826 An Ethernet Address Resolution Protocol
+RFC 903 A Reverse Address Resolution Protocol
 """
 import arp_const as const
 import nfstest_config as c
@@ -88,8 +89,15 @@ class ARP(BaseObj):
         elif self.oper == const.REPLY:
             self._strfmt1 = "ARP {4} {5}"
             self._strfmt2 = "{4}: {6} is {5}"
+        elif self.oper == const.RARP_REQUEST:
+            self._strfmt1 = "RARP {4} {7}"
+            self._strfmt2 = "{4}: Who is {7}? Tell {5}"
+        elif self.oper == const.RARP_REPLY:
+            self._strfmt1 = "RARP {4} {8}"
+            self._strfmt2 = "{4}: {7} is {8}"
 
-        pktt.pkt.arp = self
+        # Set packet layer
+        setattr(pktt.pkt, self.__class__.__name__.lower(), self)
 
     def _getha(self, unpack):
         """Get hardware address"""
@@ -110,3 +118,5 @@ class ARP(BaseObj):
         else:
             ret = unpack.read(self.plen)
         return ret
+
+class RARP(ARP): pass

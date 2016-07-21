@@ -19,9 +19,9 @@ Decode ethernet layer (RFC 894) Ethernet II.
 import nfstest_config as c
 from baseobj import BaseObj
 from macaddr import MacAddr
-from packet.internet.arp import ARP
 from packet.internet.ipv4 import IPv4
 from packet.internet.ipv6 import IPv6
+from packet.internet.arp import ARP,RARP
 
 # Module constants
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
@@ -33,6 +33,7 @@ _ETHERNET_map = {
     0x0800: 'IPv4',
     0x86dd: 'IPv6',
     0x0806: 'ARP',
+    0x8035: 'RARP',
 }
 
 class ETHERNET(BaseObj):
@@ -80,6 +81,9 @@ class ETHERNET(BaseObj):
         elif self.type == 0x0806:
             # Decode ARP packet
             ARP(pktt)
+        elif self.type == 0x8035:
+            # Decode RARP packet
+            RARP(pktt)
         else:
             self.data = unpack.getbytes()
 
