@@ -18,6 +18,7 @@ Decode TCP layer.
 """
 import nfstest_config as c
 from baseobj import BaseObj
+from packet.application.dns import DNS
 from packet.application.rpc import RPC
 
 # Module constants
@@ -209,6 +210,14 @@ class TCP(BaseObj):
         rpc = None
         pkt = pktt.pkt
         unpack = pktt.unpack
+
+        if 53 in [self.src_port, self.dst_port]:
+            # DNS on port 53
+            dns = DNS(pktt, proto=6)
+            if dns:
+                pkt.dns = dns
+            return
+
         if stream['frag_off'] > 0 and len(stream['msfrag']) == 0:
             # This RPC packet lies within previous TCP packet,
             # Re-position the offset of the data

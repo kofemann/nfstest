@@ -18,6 +18,7 @@ Decode UDP layer.
 """
 import nfstest_config as c
 from baseobj import BaseObj
+from packet.application.dns import DNS
 from packet.application.rpc import RPC
 from packet.application.ntp4 import NTP
 
@@ -78,6 +79,12 @@ class UDP(BaseObj):
             ntp = NTP(pktt)
             if ntp:
                 pktt.pkt.ntp = ntp
+            return
+        elif 53 in [self.src_port, self.dst_port]:
+            # DNS on port 53
+            dns = DNS(pktt, proto=17)
+            if dns:
+                pktt.pkt.dns = dns
             return
 
         # Get RPC header

@@ -131,6 +131,8 @@ NFSTEST_ALLMODS = [
     'packet/record.py',
     'packet/unpack.py',
     'packet/utils.py',
+    'packet/application/dns.py',
+    'packet/application/dns_const.py',
     'packet/application/gss.py',
     'packet/application/gss_const.py',
     'packet/application/ntp4.py',

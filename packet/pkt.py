@@ -47,7 +47,7 @@ PKT_layers = [
     'ethernet',
     'ip', 'arp', 'rarp',
     'tcp', 'udp',
-    'rpc', 'ntp',
+    'rpc', 'ntp', 'dns',
     'gssd', 'nfs', 'mount', 'portmap', 'nlm', 'gssc',
 ]
 # Required layers for debug_repr(1)
