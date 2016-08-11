@@ -149,6 +149,60 @@ def bitmap_dict(unpack, bitmap, func_map, name_map=None):
         bitnum += 1
     return ret
 
+class OptionFlags(BaseObj):
+    """OptionFlags base object
+
+       This base class is used to have a set of raw flags represented by an
+       integer and splits every bit into an object attribute according to the
+       class attribute _bitnames where the key is the bit number and the value
+       is the attribute name.
+
+       This should only be used as a base class where the class attribute
+       _bitnames should be initialized. The class attribute _reversed can
+       also be initialized to reverse the _bitnames so the first bit becomes
+       the last, e.g., _reversed = 31, bits are reversed on a 32 bit integer
+       so 0 becomes 31, 1 becomes 30, etc.
+
+       Usage:
+           from packet.utils import OptionFlags
+
+           class MyFlags(OptionFlags):
+               _bitnames = {0:"bit0", 1:"bit1", 2:"bit2", 3:"bit3"}
+
+           x = MyFlags(10) # 10 = 0b1010
+
+           The attributes of object are:
+               x.rawflags = 10, # Original raw flags
+               x.bit0     = 0,
+               x.bit1     = 1,
+               x.bit2     = 0,
+               x.bit3     = 1,
+    """
+    _strfmt1  = "{0:#010x}"
+    _strfmt2  = "{0:#010x}"
+    _attrlist = ("rawflags",)
+    # Dictionary where key is bit number and value is attribute name
+    _bitnames = {}
+    # Bit numbers are reversed if > 0, this is the max number of bits in flags
+    # if set to 31, bits are reversed on a 32 bit integer (0 becomes 31, etc.)
+    _reversed = 0
+
+    def __init__(self, options):
+        """Initialize object's private data.
+
+           options:
+               Unsigned integer of raw flags
+        """
+        self.rawflags = options # Raw option flags
+        bitnames = self._bitnames
+        for bit,name in bitnames.items():
+            if self._reversed > 0:
+                # Bit numbers are reversed
+                bit = self._reversed - bit
+            setattr(self, name, (options >> bit) & 0x01)
+        # Get attribute list sorted by its bit number
+        self._attrlist += tuple(bitnames[k] for k in sorted(bitnames))
+
 class RPCload(BaseObj):
     """RPC load base object
        This is used as a base class for an RPC payload object
