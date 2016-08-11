@@ -71,7 +71,7 @@ opgroup.add_option("--lock",     type="int", default=P_LOCK,     help="Lock file
 opgroup.add_option("--unlock",   type="int", default=P_UNLOCK,   help="Unlock file percentage [default: %default]")
 opgroup.add_option("--tlock",    type="int", default=P_TLOCK,    help="Lock test percentage [default: %default]")
 opgroup.add_option("--lockfull", type="int", default=P_LOCKFULL, help="Lock full file percentage [default: %default]")
-opgroup.add_option("--minfiles", default=str(MIN_FILES),  help="Mininum number of files to create before any file operation is executed [default: %default]")
+opgroup.add_option("--minfiles", default=str(MIN_FILES),  help="Minimum number of files to create before any file operation is executed [default: %default]")
 opts.add_option_group(opgroup)
 
 filegroup = OptionGroup(opts, "File size options")

@@ -375,7 +375,7 @@ class AllocTest(TestUtil):
                 fmsg = ", expecting %d but got %d" % (offset, allocobj.offset)
                 self.test(allocobj.offset == offset, "%s should be sent with correct offset" % opstr.upper(), failmsg=fmsg)
                 fmsg = ", expecting %d but got %d" % (size, allocobj.length)
-                self.test(allocobj.length == size, "%s should be sent with corrent length" % opstr.upper(), failmsg=fmsg)
+                self.test(allocobj.length == size, "%s should be sent with correct length" % opstr.upper(), failmsg=fmsg)
                 self.test(pktreply.nfs.status == 0, "%s should return NFS4_OK" % opstr.upper())
         except Exception:
             self.test(False, traceback.format_exc())
@@ -757,7 +757,7 @@ class AllocTest(TestUtil):
             fmsg = ", expecting %d but got %d" % (offset, allocobj.offset)
             self.test(allocobj.offset == offset, "ALLOCATE should be sent with correct offset", failmsg=fmsg)
             fmsg = ", expecting %d but got %d" % (size, allocobj.length)
-            self.test(allocobj.length == size, "ALLOCATE should be sent with corrent length", failmsg=fmsg)
+            self.test(allocobj.length == size, "ALLOCATE should be sent with correct length", failmsg=fmsg)
             self.test(pktreply and pktreply.nfs.status == 0, "ALLOCATE should return NFS4_OK")
 
             # Find ALLOCATE which allocates the rest of the disk space
@@ -777,7 +777,7 @@ class AllocTest(TestUtil):
             fmsg = ", expecting %d but got %d" % (self.filesize, allocobj.offset)
             self.test(allocobj.offset == self.filesize, "ALLOCATE should be sent with correct offset", failmsg=fmsg)
             fmsg = ", expecting %d but got %d" % (self.filesize, allocobj.length)
-            self.test(allocobj.length == self.filesize, "ALLOCATE should be sent with corrent length", failmsg=fmsg)
+            self.test(allocobj.length == self.filesize, "ALLOCATE should be sent with correct length", failmsg=fmsg)
             if pktreply:
                 status = pktreply.nfs.status
                 fmsg = ", expecting NFS4ERR_NOSPC but got %s" % nfsstat4.get(status, status)
@@ -1049,7 +1049,7 @@ class AllocTest(TestUtil):
             fmsg = ", expecting %d but got %d" % (offset, allocobj.offset)
             self.test(allocobj.offset == offset, "DEALLOCATE should be sent with correct offset", failmsg=fmsg)
             fmsg = ", expecting %d but got %d" % (size, allocobj.length)
-            self.test(allocobj.length == size, "DEALLOCATE should be sent with corrent length", failmsg=fmsg)
+            self.test(allocobj.length == size, "DEALLOCATE should be sent with correct length", failmsg=fmsg)
             self.test(pktreply and pktreply.nfs.status == 0, "DEALLOCATE should return NFS4_OK")
 
             in_dealloc  = True
@@ -1089,9 +1089,9 @@ class AllocTest(TestUtil):
             else:
                 self.test(False, "WRITE within the deallocated region should be sent")
             if non_dealloc_cnt > 0:
-                self.test(non_dealloc, "WRITE sent to another file should succeed when no space is left on the device after a succesful DEALLOCATE")
+                self.test(non_dealloc, "WRITE sent to another file should succeed when no space is left on the device after a successful DEALLOCATE")
             else:
-                self.test(False, "WRITE shoud be sent to another file when no space is left on the device after a succesful DEALLOCATE")
+                self.test(False, "WRITE should be sent to another file when no space is left on the device after a successful DEALLOCATE")
             if out_dealloc_cnt > 0:
                 self.test(out_dealloc, "WRITE within the deallocated region should fail with NFS4ERR_NOSPC when no space is left on the device")
             else:

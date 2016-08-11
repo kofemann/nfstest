@@ -549,14 +549,14 @@ class XDRobject:
         return
 
     def get_comments(self, comm_list, strline, spnam, sppre, ctype=False, newobj=False):
-        """Returns a tupple of two comments to display, the first one is
+        """Returns a tuple of two comments to display, the first one is
            the main comment to be displayed before the python code and
            the second comment is the inline comment.
 
            comm_list:
                List of comments: (inline, multi, old)
            strline:
-               Python code to be displayed. This is used for formating the
+               Python code to be displayed. This is used for formatting the
                multi-line comments going as inline comments
            spnam:
                Extra spaces to match the longest variable name to line up
@@ -876,7 +876,7 @@ class XDRobject:
             return '"%s"' % strfmt
 
     def set_strfmt(self, fd, deftags, indent):
-        """Process the STRFMT1 and STRFMT2 tags and write the set_fortmat
+        """Process the STRFMT1 and STRFMT2 tags and write the set_strfmt
            calls to the output file
 
            fd:

@@ -130,7 +130,7 @@ class TermSignal(Exception):
     pass
 
 def stop_handler(signum, frame):
-    """Signal handler to catch SIGTERM and allow for gracefull termination
+    """Signal handler to catch SIGTERM and allow for graceful termination
        of subprocesses
     """
     raise TermSignal("Terminating process!")
@@ -214,7 +214,7 @@ class FileIO(BaseObj):
            lockfull:
                Lock full file percentage [default: 50]
            minfiles:
-               Mininum number of files to create before any file operation
+               Minimum number of files to create before any file operation
                is executed [default: 10]
            fsizeavg:
                File size average [default: 1m]

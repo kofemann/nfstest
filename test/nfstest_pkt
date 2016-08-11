@@ -108,17 +108,17 @@ Examples:
     # Display all NFS file handles
     $ %prog -d "pkt.NFSop.fh" -m "len(nfs.fh) > 0" /tmp/trace.cap
 
-    # Display all RPC packets including the record infomation (packet number, timestamp, etc.)
+    # Display all RPC packets including the record information (packet number, timestamp, etc.)
     # For verbose level 1 (default) the "," separator will be converted to a
     # space if all items are only pkt(.*)? or pkt_call(.*)?
     $ %prog -d "pkt.record,pkt.rpc" -l rpc /tmp/trace.cap
 
-    # Display all RPC packets including the record infomation (packet number, timestamp, etc.)
+    # Display all RPC packets including the record information (packet number, timestamp, etc.)
     # For verbose level 2 the "," separator will be converted to a new line if
     # all items are only pkt(.*)? or pkt_call(.*)?
     $ %prog -v 2 -d "pkt.record,pkt.rpc" -l rpc /tmp/trace.cap
 
-    # Display all RPC packets including the record infomation (packet number, timestamp, etc.)
+    # Display all RPC packets including the record information (packet number, timestamp, etc.)
     # using the given display format
     $ %prog -d ">>> record: pkt.record   >>> rpc: pkt.rpc" -l rpc /tmp/trace.cap
 
@@ -163,9 +163,9 @@ ehelp = "End index [default: %default]"
 opts.add_option("-e", "--end", type="int", default=0, help=ehelp)
 mhelp = "Match string [default: %default]"
 opts.add_option("-m", "--match", default="True", help=mhelp)
-chelp = "If matching a reply packet, include its coresponding call in the output"
+chelp = "If matching a reply packet, include its corresponding call in the output"
 opts.add_option("-c", "--call", action="store_true", default=False, help=chelp)
-rhelp = "If matching a call packet, include its coresponding reply in the output"
+rhelp = "If matching a call packet, include its corresponding reply in the output"
 opts.add_option("-r", "--reply", action="store_true", default=False, help=rhelp)
 dhelp = "Print specific packet or part of a packet [default: %default]"
 opts.add_option("-d", "--display", default="pkt", help=dhelp)

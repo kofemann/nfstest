@@ -91,7 +91,7 @@ class RPC(GSS):
                    size   = int,
                ),
                verifier = Credential(
-                   data   =string,
+                   data   = string,
                    flavor = int,
                    size   = int,
                ),
