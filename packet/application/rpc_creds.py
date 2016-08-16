@@ -21,16 +21,16 @@ import nfstest_config as c
 from baseobj import BaseObj
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.0.1'
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = "1.1"
 
 class AuthNone(BaseObj):
     """AuthNone object"""
     # Class attributes
     flavor = AUTH_NONE
-    _itemlist = ("flavor",)
+    _attrlist = ("flavor",)
 
     def __init__(self, unpack):
         """Constructor which takes the Unpack object as input"""
@@ -41,7 +41,7 @@ class AuthSys(BaseObj):
     """AuthSys object"""
     # Class attributes
     flavor = AUTH_SYS
-    _itemlist = ("flavor", "size", "stamp", "machine", "uid", "gid", "gids")
+    _attrlist = ("flavor", "size", "stamp", "machine", "uid", "gid", "gids")
 
     def __init__(self, unpack):
         """Constructor which takes the Unpack object as input"""
@@ -56,7 +56,7 @@ class GSS_Credential(BaseObj):
     """GSS_Credential object"""
     # Class attributes
     flavor = RPCSEC_GSS
-    _itemlist = ("flavor", "size", "gss_version", "gss_proc", "gss_seq_num",
+    _attrlist = ("flavor", "size", "gss_version", "gss_proc", "gss_seq_num",
                  "gss_service", "gss_context")
 
     def __init__(self, unpack):
@@ -72,7 +72,7 @@ class GSS_Verifier(BaseObj):
     """GSS_Verifier object"""
     # Class attributes
     flavor = RPCSEC_GSS
-    _itemlist = ("flavor", "size", "gss_token")
+    _attrlist = ("flavor", "size", "gss_token")
 
     def __init__(self, unpack):
         """Constructor which takes the Unpack object as input"""
