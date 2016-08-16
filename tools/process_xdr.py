@@ -1455,7 +1455,7 @@ class XDRobject:
                 constlist = []
                 self.old_comment = []
             elif deftype in [ENUM, BITMAP]:
-                regex = re.search(r"^\s*([\w\d]+)\s*=\s*([^,;\s]+),?.*", line)
+                regex = re.search(r"^\s*([\w\-]+)\s*=\s*([^,;\s]+),?.*", line)
                 ename  = regex.group(1).strip()
                 evalue = regex.group(2).strip()
                 comms = [self.inline_comment, self.multi_comment, self.old_comment]
@@ -1508,7 +1508,7 @@ class XDRobject:
                         spnam = " " * (value_maxlen - len(item[1]))
                         if len(item[0]):
                             sps = " " * (name_maxlen - len(item[0]))
-                            out = "%s%s = %s" % (item[0], sps, item[1])
+                            out = "%s%s = %s" % (item[0].replace("-", "_"), sps, item[1])
                         mcommstr, incommstr = self.get_comments(item[2], out, spnam, "")
                         if len(mcommstr):
                             fd.write(mcommstr)
