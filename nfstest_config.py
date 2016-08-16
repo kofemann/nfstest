@@ -136,6 +136,8 @@ NFSTEST_ALLMODS = [
     'packet/application/dns_const.py',
     'packet/application/gss.py',
     'packet/application/gss_const.py',
+    'packet/application/krb5.py',
+    'packet/application/krb5_const.py',
     'packet/application/ntp4.py',
     'packet/application/rpc.py',
     'packet/application/rpc_const.py',

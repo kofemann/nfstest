@@ -20,6 +20,7 @@ import nfstest_config as c
 from baseobj import BaseObj
 from packet.application.dns import DNS
 from packet.application.rpc import RPC
+from packet.application.krb5 import KRB5
 
 # Module constants
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
@@ -216,6 +217,12 @@ class TCP(BaseObj):
             dns = DNS(pktt, proto=6)
             if dns:
                 pkt.dns = dns
+            return
+        elif 88 in [self.src_port, self.dst_port]:
+            # KRB5 on port 88
+            krb = KRB5(pktt, proto=6)
+            if krb:
+                pkt.krb = krb
             return
 
         if stream['frag_off'] > 0 and len(stream['msfrag']) == 0:
