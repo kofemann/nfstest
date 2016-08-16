@@ -126,6 +126,7 @@ NFSTEST_ALLMODS = [
     'nfstest/rexec.py',
     'nfstest/test_util.py',
     'nfstest/utils.py',
+    'packet/derunpack.py',
     'packet/pkt.py',
     'packet/pktt.py',
     'packet/record.py',
