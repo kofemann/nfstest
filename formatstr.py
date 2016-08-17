@@ -30,7 +30,7 @@ from string import Formatter
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.3"
+__version__   = "1.4"
 
 # Display variables
 CRC16 = True
@@ -200,6 +200,13 @@ class FormatStr(Formatter):
            out = x.format("{0:@3}", "hello") # out = "lo"
            out = x.format("{0:.2}", "hello") # out = "he"
 
+           # Nested formatting for strings, where processing is done in
+           # reversed order -- process the last format first
+           #   Display substring of 4 bytes as hex (substring then hex)
+           out = x.format("{0:#x:.4}", "hello") # out = "0x68656c6c"
+           #   Display first 4 bytes of string in hex (hex then substring)
+           out = x.format("{0:.4:#x}", "hello") # out = "0x68"
+
            # Integer extension to display umax name instead of the value
            # Format: {0:max32|umax32|max64|umax64}
            # Output: if value matches the largest number in format given,
@@ -246,6 +253,12 @@ class FormatStr(Formatter):
             # This is an object derived from int, convert it to string
             value = str(value)
         if isinstance(value, str):
+            fmtlist = (xmod+fmt).split(":")
+            if len(fmtlist) > 1:
+                # Nested format, process in reversed order
+                for sfmt in reversed(fmtlist):
+                    value = self.format_field(value, sfmt)
+                return value
             if fmt == "x":
                 # Display string in hex
                 xprefix = ""
