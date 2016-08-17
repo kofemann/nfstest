@@ -16,20 +16,35 @@ RPC Credentials module
 
 Decode RPC Credentials.
 """
-from rpc_const import *
+import gss_const
+import rpc_const
 import nfstest_config as c
+from packet.utils import *
 from baseobj import BaseObj
 
 # Module constants
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.1"
+__version__   = "1.2"
+
+class auth_flavor(Enum):
+    """enum auth_flavor"""
+    _enumdict = rpc_const.auth_flavor
+
+class rpc_gss_proc(Enum):
+    """enum rpc_gss_proc"""
+    _enumdict = gss_const.rpc_gss_proc
+
+class rpc_gss_service(Enum):
+    """enum rpc_gss_service"""
+    _enumdict = gss_const.rpc_gss_service
 
 class AuthNone(BaseObj):
     """AuthNone object"""
     # Class attributes
-    flavor = AUTH_NONE
+    flavor = auth_flavor(rpc_const.AUTH_NONE)
+    _strfmt2  = "{0}"
     _attrlist = ("flavor",)
 
     def __init__(self, unpack):
@@ -40,7 +55,8 @@ class AuthNone(BaseObj):
 class AuthSys(BaseObj):
     """AuthSys object"""
     # Class attributes
-    flavor = AUTH_SYS
+    flavor = auth_flavor(rpc_const.AUTH_SYS)
+    _strfmt2  = "{0}({4}:{5})"
     _attrlist = ("flavor", "size", "stamp", "machine", "uid", "gid", "gids")
 
     def __init__(self, unpack):
@@ -55,7 +71,8 @@ class AuthSys(BaseObj):
 class GSS_Credential(BaseObj):
     """GSS_Credential object"""
     # Class attributes
-    flavor = RPCSEC_GSS
+    flavor = auth_flavor(rpc_const.RPCSEC_GSS)
+    _strfmt2  = "{0}({3}:{5:@12})"
     _attrlist = ("flavor", "size", "gss_version", "gss_proc", "gss_seq_num",
                  "gss_service", "gss_context")
 
@@ -63,15 +80,16 @@ class GSS_Credential(BaseObj):
         """Constructor which takes the Unpack object as input"""
         self.size        = unpack.unpack_uint()
         self.gss_version = unpack.unpack_uint()
-        self.gss_proc    = unpack.unpack_uint()
+        self.gss_proc    = rpc_gss_proc(unpack.unpack_uint())
         self.gss_seq_num = unpack.unpack_uint()
-        self.gss_service = unpack.unpack_uint()
+        self.gss_service = rpc_gss_service(unpack.unpack_uint())
         self.gss_context = unpack.unpack_opaque()
 
 class GSS_Verifier(BaseObj):
     """GSS_Verifier object"""
     # Class attributes
-    flavor = RPCSEC_GSS
+    flavor = auth_flavor(rpc_const.RPCSEC_GSS)
+    _strfmt2  = "{0}"
     _attrlist = ("flavor", "size", "gss_token")
 
     def __init__(self, unpack):
@@ -84,11 +102,11 @@ def rpc_credential(unpack, verifier=False):
     try:
         # Get credential/verifier flavor
         flavor = unpack.unpack_uint()
-        if flavor == AUTH_SYS:
+        if flavor == rpc_const.AUTH_SYS:
             return AuthSys(unpack)
-        elif flavor == AUTH_NONE:
+        elif flavor == rpc_const.AUTH_NONE:
             return AuthNone(unpack)
-        elif flavor == RPCSEC_GSS:
+        elif flavor == rpc_const.RPCSEC_GSS:
             if verifier:
                 return GSS_Verifier(unpack)
             else:
