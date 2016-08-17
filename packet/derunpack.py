@@ -22,6 +22,7 @@ the following is a list of supported data types in this implementation:
     INTEGER,
     BIT_STRING,
     NULL,
+    OBJECT_IDENTIFIER,
     GeneralizedTime,
     Strings (OCTET STRING, PrintableString, etc.)
     SEQUENCE OF,
@@ -29,6 +30,7 @@ the following is a list of supported data types in this implementation:
 """
 import re
 import time
+import struct
 import nfstest_config as c
 from packet.unpack import Unpack
 
@@ -235,8 +237,8 @@ class DERunpack(Unpack):
             ret -= (1<<(8*size))
         return ret
 
-    def get_date(self, size):
-        """Get a date time of type GeneralizedTime
+    def der_date(self, size):
+        """Return a date time of type GeneralizedTime
            Type GeneralizedTime takes values of the year, month, day, hour,
            minute, second, and second fraction in any of following three forms:
 
@@ -278,6 +280,25 @@ class DERunpack(Unpack):
             slen = len(data[2])
             utctime += int(data[2])/float(10**slen)
         return utctime
+
+    def der_oid(self, size):
+        """Return an object identifier (OID)"""
+        out = 0
+        clist = struct.unpack("!%dB"%size, self.read(size))
+        # First byte has the first two nodes
+        ret = [str(clist[0]/40), str(clist[0]%40)]
+        for item in clist[1:]:
+            if item & 0x80:
+                # Current node has more bytes
+                out = (out << 7) + (item & 0x7f)
+            else:
+                if out > 0:
+                    # This is the last byte for multi-byte node
+                    item = (out << 7) + (item & 0x7f)
+                ret.append(str(item))
+                # Reset multi-byte node
+                out = 0
+        return ".".join(ret)
 
     def get_item(self):
         """Get item from the byte stream using TLV
@@ -332,7 +353,9 @@ class DERunpack(Unpack):
             elif self.tag == NULL:
                 ret = None
             elif self.tag == GeneralizedTime:
-                ret = self.get_date(size)
+                ret = self.der_date(size)
+            elif self.tag == OBJECT_IDENTIFIER:
+                ret = self.der_oid(size)
             else:
                 ret = self.read(size)
         else:
