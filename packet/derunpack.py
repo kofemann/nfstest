@@ -310,6 +310,7 @@ class DERunpack(Unpack):
            decode the whole ASN.1 representation
         """
         ret = None
+        tagidx = 0
         # Get the Tag
         tag = self.get_tag()
         # Save tag class and P/C
@@ -330,7 +331,14 @@ class DERunpack(Unpack):
                 item = self.get_item()
                 if tclass in (APPLICATION, CONTEXT):
                     # Current item (ret) is an Application or Context
-                    ret[tag] = item
+                    if tagidx == 1:
+                        # Application has more than one item so use implicit
+                        # tag numbering
+                        ret[tag] = {0:ret[tag], 1:item}
+                    elif tagidx > 1:
+                        ret[tag][tagidx] = item
+                    else:
+                        ret[tag] = item
                 elif self.tclass == CONTEXT:
                     # The item (item) has a Context tag
                     key, value = item.items()[0]
@@ -343,6 +351,8 @@ class DERunpack(Unpack):
                     if isinstance(ret, dict):
                         ret = []
                     ret.append(item)
+                if tclass == APPLICATION:
+                    tagidx += 1
         elif self.tclass == UNIVERSAL:
             if self.tag == INTEGER:
                 ret = self.der_integer(size)
