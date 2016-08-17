@@ -32,7 +32,7 @@ from packet.nfs.portmap2 import PORTMAP2args,PORTMAP2res
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.2"
+__version__   = "1.3"
 
 class Header(BaseObj):
     """Header object"""
@@ -294,7 +294,11 @@ class RPC(GSS):
             out = "RPC %s %s xid: 0x%08x" % (rtype, prog, self.xid)
         elif rdebug == 2:
             rtype = "%-5s(%d)" % (msg_type.get(self.type, 'Unknown'), self.type)
-            out = "%s,%s xid: 0x%08x" % (rtype, prog, self.xid)
+            if self.type == CALL:
+                creds = ", %s" % self.credential
+            else:
+                creds = ", %s" % self.verifier
+            out = "%s,%s xid: 0x%08x%s" % (rtype, prog, self.xid, creds)
         else:
             out = BaseObj.__str__(self)
         return out
