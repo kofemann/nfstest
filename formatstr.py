@@ -180,16 +180,16 @@ class FormatStr(Formatter):
            out = x.vformat("{key}: {value}", named_args)
            out = x.vformat("{key}: {value}, {0}, {1}", pos_args, named_args)
 
-           # Convert string into hex
+           # Display string in hex
            out = x.format("{0:x}", "hello")  # out = "68656c6c6f"
 
-           # Convert string into hex with leading 0x
+           # Display string in hex with leading 0x
            out = x.format("{0:#x}", "hello") # out = "0x68656c6c6f"
 
-           # Convert string into crc32
+           # Display string in crc32
            out = x.format("{0:crc32}", "hello") # out = "0x3610a686"
 
-           # Convert string into crc16
+           # Display string in crc16
            out = x.format("{0:crc16}", "hello") # out = "0x9c62"
 
            # Substring using "@" format modifier
@@ -209,7 +209,7 @@ class FormatStr(Formatter):
 
            # Number extension to display the value with units
            # Format: {0:units[.precision]}
-           # Output: convert value to a string with units, by default
+           # Output: display value as a string with units, by default
            #         precision=2 and all trailing zeros are removed.
            #         To force the precision use a negative number.
            out = x.format("{0:units}", 1024)    # out = "1KB"
