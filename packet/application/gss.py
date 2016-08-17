@@ -25,10 +25,10 @@ import nfstest_config as c
 from baseobj import BaseObj
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.0.3'
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2013 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = "1.1"
 
 class GSS_Data(BaseObj):
     """GSS Data object
@@ -132,7 +132,7 @@ class GSS(BaseObj):
 
     def _gss_data_reply(self):
         """Internal method to decode GSS data on a REPLY"""
-        if self.verifier.flavor != RPCSEC_GSS or not hasattr(self.verifier, 'gss_proc'):
+        if self.verifier.flavor != RPCSEC_GSS and not hasattr(self.verifier, 'gss_proc'):
             # Not a GSS encoded packet
             return
         unpack = self._pktt.unpack
