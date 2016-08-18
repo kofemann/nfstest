@@ -23,6 +23,7 @@ NOTE:
 """
 import rpc_const
 import gss_const as const
+from packet.utils import *
 import nfstest_config as c
 from baseobj import BaseObj
 
@@ -30,7 +31,16 @@ from baseobj import BaseObj
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2013 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.2"
+__version__   = "1.3"
+
+# GSS Major Status Codes
+class gss_major_status(Enum):
+    """enum gss_major_status"""
+    _enumdict = const.gss_major_status
+
+class gss_minor_status(Enum):
+    """enum gss_minor_status"""
+    _enumdict = const.gss_minor_status
 
 class GSS_init_arg(BaseObj):
     """struct rpc_gss_init_arg {
@@ -59,10 +69,12 @@ class GSS_init_res(BaseObj):
 
     def __init__(self, unpack):
         self.context    = unpack.unpack_opaque()
-        self.major      = unpack.unpack_uint()
-        self.minor      = unpack.unpack_uint()
+        self.major      = gss_major_status(unpack.unpack_uint())
+        self.minor      = gss_minor_status(unpack.unpack_int())
         self.seq_window = unpack.unpack_uint()
         self.token      = unpack.unpack_opaque()
+        if self.major not in (const.GSS_S_COMPLETE, const.GSS_S_CONTINUE_NEEDED):
+            self.set_strfmt(2, "major: {1}, minor: {2}")
 
 class GSS_data(BaseObj):
     """struct rpc_gss_data_t {
