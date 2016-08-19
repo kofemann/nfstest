@@ -300,7 +300,7 @@ class DERunpack(Unpack):
                 out = 0
         return ".".join(ret)
 
-    def get_item(self):
+    def get_item(self, oid=None):
         """Get item from the byte stream using TLV
            This is a recursive function where the tag and length are decoded
            and then this function is called to get the value if tag is one of
@@ -338,7 +338,11 @@ class DERunpack(Unpack):
                     elif tagidx > 1:
                         ret[tag][tagidx] = item
                     else:
-                        ret[tag] = item
+                        if self.tag == OBJECT_IDENTIFIER and oid is not None and oid == item:
+                            ret[tag] = {tagidx:item}
+                            break
+                        else:
+                            ret[tag] = item
                 elif self.tclass == CONTEXT:
                     # The item (item) has a Context tag
                     key, value = item.items()[0]
