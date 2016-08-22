@@ -17,6 +17,7 @@ GSS constants module
 Provide constant values and mapping dictionaries for the GSS layer.
 
 RFC 2203 RPCSEC_GSS Protocol Specification
+RFC 1964 The Kerberos Version 5 GSS-API Mechanism
 """
 import nfstest_config as c
 
@@ -64,6 +65,17 @@ gss_bind_chan_stat = {
 
 RPCSEC_GSS_VERS_1 = 1
 RPCSEC_GSS_VERS_2 = 2
+
+# Integrity algorithm indicator
+DES_MAC_MD5 = 0x0000
+MD2_5       = 0x0100
+DES_MAC     = 0x0200
+
+gss_sgn_alg = {
+    0x0000: "DES_MAC_MD5",
+    0x0100: "MD2.5",
+    0x0200: "DES_MAC",
+}
 
 # Enum gss_major_status
 GSS_S_COMPLETE                   = 0x00000000  # Indicates an absence of any API errors or supplementary information bits
