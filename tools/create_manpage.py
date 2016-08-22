@@ -16,19 +16,46 @@ import os
 import re
 import sys
 import time
+import tokenize
+import StringIO
 import subprocess
 import nfstest_config as c
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '1.1'
+__version__   = "1.2"
 
 def _get_modules(script):
-    fd = open(script, 'r')
+    # Read the whole file
+    with open(script, "r") as fd:
+        filedata = fd.read()
+
+    # Join code lines separated by "\" at the end of the line
+    # because untokenize fails with split code lines
+    filedata = re.sub(r"\\\n\s+", r" ", filedata)
+
+    # Have the file data be used as a file
+    fd = StringIO.StringIO(filedata)
+
+    # Remove all comments and replace strings so all matches are done
+    # on the source code only
+    tokenlist = []
+    for tok in tokenize.generate_tokens(fd.readline):
+        toktype, tok_string, start, end, line = tok
+        if toktype == tokenize.COMMENT:
+            # Remove all comments
+            tok = (toktype, "", start, end, line)
+        elif toktype == tokenize.STRING:
+            # Replace all strings
+            tok = (toktype, "'STRING'", start, end, line)
+        tokenlist.append(tok)
+    filedata = tokenize.untokenize(tokenlist)
+    fd.close()
+
     modules = {}
-    for line in fd.readlines():
+    for line in filedata.split("\n"):
         line = line.lstrip().rstrip()
         m = re.search(r'^(from|import)\s+(.*)', line)
         if m:
@@ -48,7 +75,6 @@ def _get_modules(script):
                     for mods in mod_entries[0]:
                         for item in mod_entries[1]:
                             modules['.'.join([mods, item])] = 1
-    fd.close()
     return modules.keys()
 
 def _get_see_also(src, modules, local_mods):
