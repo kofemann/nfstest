@@ -325,6 +325,23 @@ class AP_REQ(BaseObj):
         self.ticket        = Ticket(obj.get(3))
         self.authenticator = EncryptedData(obj.get(4))
 
+class AP_REP(BaseObj):
+    """
+       AP-REP  ::= [APPLICATION 15] SEQUENCE {
+           pvno      [0] INTEGER (5),
+           msg-type  [1] INTEGER (15),
+           enc-part  [2] EncryptedData -- EncAPRepPart
+       }
+    """
+    # Class attributes
+    _attrlist = ("pvno", "msgtype", "enc_part")
+
+    def __init__(self, obj):
+        obj = obj[15] # Application 15
+        self.pvno     = obj.get(0)
+        self.msgtype  = krb5_application(obj.get(1))
+        self.enc_part = EncryptedData(obj.get(2))
+
 class KDC_REQ_BODY(BaseObj):
     """
        KDC-REQ-BODY  ::= SEQUENCE {
