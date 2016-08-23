@@ -77,10 +77,19 @@ def _get_modules(script):
                             modules['.'.join([mods, item])] = 1
     return modules.keys()
 
-def _get_see_also(src, modules, local_mods):
+def _get_see_also(src, manpage, modules, local_mods):
     parent_objs = {}
+    dirname = os.path.dirname(os.path.abspath(src))
     for item in modules:
         if item not in local_mods and item[0] != '_':
+            if item.find(".") < 0:
+                # This module has only one component, check if it is on the
+                # same directory as the source
+                itempath = os.path.join(dirname, item+".py")
+                if os.path.exists(itempath):
+                    items = manpage.split(".")
+                    if len(items) > 2:
+                        item = ".".join(items[:-2] + [item])
             osrc = item.replace('.', '/')
             osrcpy = osrc + '.py'
             if src in (osrc, osrcpy):
@@ -467,7 +476,7 @@ def create_manpage(src, dst):
             all_modules += mods
             local_mods.append(cls['name'])
     all_modules += c.NFSTEST_SCRIPTS if is_script or progname == 'NFStest' else []
-    see_also += _get_see_also(src, all_modules, local_mods)
+    see_also += _get_see_also(src, manpage, all_modules, local_mods)
 
     # Get a list of functions included from imported modules
     mod_funcs = []
