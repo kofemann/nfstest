@@ -15,9 +15,14 @@
 TCP module
 
 Decode TCP layer.
+
+RFC  793 TRANSMISSION CONTROL PROTOCOL
+RFC 2018 TCP Selective Acknowledgment Options
+RFC 7323 TCP Extensions for High Performance
 """
 import nfstest_config as c
 from baseobj import BaseObj
+from packet.unpack import Unpack
 from packet.utils import OptionFlags
 from packet.application.dns import DNS
 from packet.application.rpc import RPC
@@ -27,7 +32,7 @@ from packet.application.krb5 import KRB5
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.3"
+__version__   = "1.4"
 
 TCPflags = {
     0: "FIN",
@@ -45,6 +50,43 @@ class Flags(OptionFlags):
     """TCP Option flags"""
     _bitnames = TCPflags
     __str__ = OptionFlags.str_flags
+
+class Option(BaseObj):
+    """Option object"""
+    def __init__(self, unpack):
+        """Constructor which takes an unpack object as input"""
+        self.kind = None
+        try:
+            self.kind = unpack.unpack_uchar()
+            if self.kind not in (0,1):
+                length = unpack.unpack_uchar()
+                if length > 2:
+                    if self.kind == 2:
+                        # Maximum Segment Size (MSS)
+                        self.mss = unpack.unpack_ushort()
+                        self._attrlist = ("kind", "mss")
+                    elif self.kind == 3:
+                        # Window Scale option (WSopt)
+                        self.wsopt = unpack.unpack_uchar()
+                        self._attrlist = ("kind", "wsopt")
+                    elif self.kind == 5:
+                        # Sack Option Format
+                        self.blocks = []
+                        for i in range((length-2)/8):
+                            left_edge  = unpack.unpack_uint()
+                            right_edge = unpack.unpack_uint()
+                            self.blocks.append([left_edge, right_edge])
+                        self._attrlist = ("kind", "blocks")
+                    elif self.kind == 8:
+                        # Timestamps option (TSopt)
+                        self.tsval = unpack.unpack_uint()
+                        self.tsecr = unpack.unpack_uint()
+                        self._attrlist = ("kind", "tsval", "tsecr")
+                    else:
+                        self.data = unpack.read(length-2)
+                        self._attrlist = ("kind", "data")
+        except:
+            pass
 
 class TCP(BaseObj):
     """TCP object
@@ -84,7 +126,7 @@ class TCP(BaseObj):
            checksum    = int, # Checksum
            urgent_ptr  = int, # Urgent pointer
            seq         = int, # Relative sequence number
-           options = string,  # Raw data of TCP options if available
+           options = list,    # List of TCP options
            data = string,     # Raw data of payload if unable to decode
        )
     """
@@ -151,8 +193,17 @@ class TCP(BaseObj):
         self.seq = seq
 
         if self.header_size > 20:
+            self.options = []
             osize = self.header_size - 20
-            self.options = unpack.read(osize)
+            optunpack = Unpack(unpack.read(osize))
+            while optunpack.size():
+                optobj = Option(optunpack)
+                if optobj.kind == 0:
+                    # End of option list
+                    break
+                elif optobj.kind > 0:
+                    # Valid option
+                    self.options.append(optobj)
 
         # Save length of TCP segment
         self.length = unpack.size()
