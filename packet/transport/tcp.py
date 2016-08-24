@@ -18,6 +18,7 @@ Decode TCP layer.
 """
 import nfstest_config as c
 from baseobj import BaseObj
+from packet.utils import OptionFlags
 from packet.application.dns import DNS
 from packet.application.rpc import RPC
 from packet.application.krb5 import KRB5
@@ -26,36 +27,24 @@ from packet.application.krb5 import KRB5
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.2"
+__version__   = "1.3"
 
-_TCP_map = {
-    0x001:'FIN',
-    0x002:'SYN',
-    0x004:'RST',
-    0x008:'PSH',
-    0x010:'ACK',
-    0x020:'URG',
-    0x040:'ECE',
-    0x080:'CWR',
-    0x100:'NS',
+TCPflags = {
+    0: "FIN",
+    1: "SYN",
+    2: "RST",
+    3: "PSH",
+    4: "ACK",
+    5: "URG",
+    6: "ECE",
+    7: "CWR",
+    8: "NS",
 }
 
-class Flags(BaseObj):
-    """Flags object"""
-    # Class attributes
-    _attrlist = ("FIN", "SYN", "RST", "PSH", "ACK", "URG", "ECE", "CWR", "NS")
-
-    def __init__(self, data):
-        """Constructor which takes a short integer as input"""
-        self.FIN = (data & 0x01)
-        self.SYN = ((data >> 1) & 0x01)
-        self.RST = ((data >> 2) & 0x01)
-        self.PSH = ((data >> 3) & 0x01)
-        self.ACK = ((data >> 4) & 0x01)
-        self.URG = ((data >> 5) & 0x01)
-        self.ECE = ((data >> 6) & 0x01)
-        self.CWR = ((data >> 7) & 0x01)
-        self.NS  = ((data >> 8) & 0x01)
+class Flags(OptionFlags):
+    """TCP Option flags"""
+    _bitnames = TCPflags
+    __str__ = OptionFlags.str_flags
 
 class TCP(BaseObj):
     """TCP object
@@ -74,8 +63,8 @@ class TCP(BaseObj):
            ack_number  = int, # Acknowledgment number
            hl          = int, # Data offset or header length (32bit words)
            header_size = int, # Data offset or header length in bytes
-           flags_raw   = int, # Raw flags
-           flags = Flags(     # Individual flags:
+           flags = Flags(     # TCP flags:
+               rawflags = int,#   Raw flags
                FIN = int,     #   No more data from sender
                SYN = int,     #   Synchronize sequence numbers
                RST = int,     #   Synchronize sequence numbers
@@ -101,8 +90,8 @@ class TCP(BaseObj):
     """
     # Class attributes
     _attrlist = ("src_port", "dst_port", "seq_number", "ack_number", "hl",
-                 "header_size", "flags_raw", "flags", "window_size",
-                 "checksum", "urgent_ptr", "options", "data")
+                 "header_size", "flags", "window_size", "checksum",
+                 "urgent_ptr", "options", "length", "data")
 
     def __init__(self, pktt):
         """Constructor
@@ -122,8 +111,7 @@ class TCP(BaseObj):
         self.ack_number  = ulist[3]
         self.hl          = ulist[4] >> 12
         self.header_size = 4*self.hl
-        self.flags_raw   = (ulist[4] & 0x1FF)
-        self.flags       = Flags(self.flags_raw)
+        self.flags       = Flags(ulist[4] & 0x1FF)
         self.window_size = ulist[5]
         self.checksum    = ulist[6]
         self.urgent_ptr  = ulist[7]
@@ -188,20 +176,15 @@ class TCP(BaseObj):
 
            If set to 2 the representation of the object also includes the
            length of payload and a little bit more verbose:
-               'src port 708 -> dst port 2049, seq: 3294175829, ack: 3395739041, len: 0, flags: ACK,FIN'
+               'src port 708 -> dst port 2049, seq: 3294175829, ack: 3395739041, len: 0, flags: FIN,ACK'
         """
         rdebug = self.debug_repr()
-        if rdebug > 0:
-            flags = []
-            for flag in _TCP_map:
-                if self.flags_raw & flag != 0:
-                    flags.append(_TCP_map[flag])
         if rdebug == 1:
             out = "TCP %d -> %d, seq: %d, ack: %d, %s" % \
-                  (self.src_port, self.dst_port, self.seq_number, self.ack_number, ','.join(flags))
+                  (self.src_port, self.dst_port, self.seq_number, self.ack_number, self.flags)
         elif rdebug == 2:
             out = "src port %d -> dst port %d, seq: %d, ack: %d, len: %d, flags: %s" % \
-                  (self.src_port, self.dst_port, self.seq_number, self.ack_number, self.length, ','.join(flags))
+                  (self.src_port, self.dst_port, self.seq_number, self.ack_number, self.length, self.flags)
         else:
             out = BaseObj.__str__(self)
         return out
@@ -242,7 +225,7 @@ class TCP(BaseObj):
                 unpack.restore_state(sid)
                 sid = unpack.save_state()
 
-        if rpc or (size == 0 and len(stream['msfrag']) > 0 and self.flags_raw != 0x10):
+        if rpc or (size == 0 and len(stream['msfrag']) > 0 and self.flags.rawflags != 0x10):
             # There has been some data lost in the capture,
             # to continue decoding next packets, reset stream
             # except if this packet is just a TCP ACK (flags = 0x10)
