@@ -52,12 +52,14 @@ ENUM_CHECK = False
 class IntHex(int):
     """Integer object which is displayed in hex"""
     def __str__(self):
-        return "{0:#010x}".format(self)
+        return "0x%08x" % self
+    __repr__ = __str__
 
 class LongHex(long):
     """Long integer object which is displayed in hex"""
     def __str__(self):
-        return "{0:#018x}".format(self)
+        return "0x%016x" % self
+    __repr__ = __str__
 
 class DateStr(float):
     """Floating point object which is displayed as a date"""
