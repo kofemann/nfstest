@@ -186,8 +186,9 @@ class OptionFlags(BaseObj):
                x.bit2     = 0,
                x.bit3     = 1,
     """
-    _strfmt1  = "{0:#010x}"
-    _strfmt2  = "{0:#010x}"
+    _strfmt1  = "{0}"
+    _strfmt2  = "{0}"
+    _rawfunc  = IntHex # Raw flags object modifier
     _attrlist = ("rawflags",)
     # Dictionary where key is bit number and value is attribute name
     _bitnames = {}
@@ -201,7 +202,7 @@ class OptionFlags(BaseObj):
            options:
                Unsigned integer of raw flags
         """
-        self.rawflags = options # Raw option flags
+        self.rawflags = self._rawfunc(options) # Raw option flags
         bitnames = self._bitnames
         for bit,name in bitnames.items():
             if self._reversed > 0:
