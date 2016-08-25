@@ -29,7 +29,7 @@ from baseobj import BaseObj, fstrobj
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.2"
+__version__   = "1.3"
 
 # RPC type constants
 RPC_CALL  = 0
@@ -211,6 +211,22 @@ class OptionFlags(BaseObj):
             setattr(self, name, (options >> bit) & 0x01)
         # Get attribute list sorted by its bit number
         self._attrlist += tuple(bitnames[k] for k in sorted(bitnames))
+
+    def str_flags(self):
+        """Display the flag names which are set, e.g., in the above example
+           the output will be "bit1,bit3" (bit1=1, bit3=1)
+           Use "__str__ = OptionFlags.str_flags" to have it as the default
+           string representation
+        """
+        ulist = []
+        bitnames = self._bitnames
+        for bit in sorted(bitnames):
+            if self._reversed > 0:
+                # Bit numbers are reversed
+                bit = self._reversed - bit
+            if (self.rawflags >> bit) & 0x01:
+                ulist.append(bitnames[bit])
+        return ",".join(ulist)
 
 class RPCload(BaseObj):
     """RPC load base object
