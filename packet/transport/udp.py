@@ -18,6 +18,7 @@ Decode UDP layer.
 """
 import nfstest_config as c
 from baseobj import BaseObj
+from packet.utils import ShortHex
 from packet.application.dns import DNS
 from packet.application.rpc import RPC
 from packet.application.ntp4 import NTP
@@ -50,7 +51,7 @@ class UDP(BaseObj):
     # Class attributes
     _attrlist = ("src_port", "dst_port", "length", "checksum", "data")
     _strfmt1  = "UDP {0} -> {1}, len: {2}"
-    _strfmt2  = "src port {0} -> dst port {1}, len: {2}, checksum: {3:#010x}"
+    _strfmt2  = "src port {0} -> dst port {1}, len: {2}, checksum: {3}"
 
     def __init__(self, pktt):
         """Constructor
@@ -68,7 +69,7 @@ class UDP(BaseObj):
         self.src_port = ulist[0]
         self.dst_port = ulist[1]
         self.length   = ulist[2]
-        self.checksum = ulist[3]
+        self.checksum = ShortHex(ulist[3])
 
         pktt.pkt.udp = self
         self._decode_payload(pktt)

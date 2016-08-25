@@ -153,7 +153,7 @@ class DNS(BaseObj):
             self._offset = unpack.tell()
             ulist = unpack.unpack(12, "!6H")
 
-            self.id          = ulist[0]
+            self.id          = ShortHex(ulist[0])
             self.QR          = dns_query(ulist[1] >> 15)
             self.opcode      = dns_opcode((ulist[1] >> 11) & 0x0f)
             self.AA          = (ulist[1] >> 10) & 0x01 # Authoritative Answer
@@ -175,13 +175,13 @@ class DNS(BaseObj):
             self.authorities = unpack.unpack_array(self._resource, self.nscount)
             self.additional  = unpack.unpack_array(self._resource, self.arcount)
             if self.QR == const.QUERY:
-                self.set_strfmt(1, "DNS call  id={0:#x} {14}")
+                self.set_strfmt(1, "DNS call  id={0} {14}")
             else:
                 if self.rcode == const.NOERROR:
-                    self.set_strfmt(1, "DNS reply id={0:#x} {15}")
+                    self.set_strfmt(1, "DNS reply id={0} {15}")
                 else:
                     # Display error
-                    self.set_strfmt(1, "DNS reply id={0:#x} {7}")
+                    self.set_strfmt(1, "DNS reply id={0} {7}")
         except Exception as e:
             return
         if len(unpack) > 0:

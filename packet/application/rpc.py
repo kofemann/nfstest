@@ -23,6 +23,7 @@ from rpc_const import *
 import nfstest_config as c
 from baseobj import BaseObj
 from packet.nfs.nfs import NFS
+from packet.utils import IntHex
 from rpc_creds import rpc_credential
 from packet.nfs.nlm4 import NLM4args,NLM4res
 from packet.nfs.mount3 import MOUNT3args,MOUNT3res
@@ -191,7 +192,7 @@ class RPC(GSS):
             return
 
         # Decode XID and RPC type
-        self.xid  = unpack.unpack_uint()
+        self.xid  = IntHex(unpack.unpack_uint())
         self.type = unpack.unpack_uint()
 
         if self.type == CALL:
@@ -291,14 +292,14 @@ class RPC(GSS):
                     prog += " %s: %d," % (item, value)
         if rdebug == 1:
             rtype = "%-5s" % msg_type.get(self.type, 'Unknown').lower()
-            out = "RPC %s %s xid: 0x%08x" % (rtype, prog, self.xid)
+            out = "RPC %s %s xid: %s" % (rtype, prog, self.xid)
         elif rdebug == 2:
             rtype = "%-5s(%d)" % (msg_type.get(self.type, 'Unknown'), self.type)
             if self.type == CALL:
                 creds = ", %s" % self.credential
             else:
                 creds = ", %s" % self.verifier
-            out = "%s,%s xid: 0x%08x%s" % (rtype, prog, self.xid, creds)
+            out = "%s,%s xid: %s%s" % (rtype, prog, self.xid, creds)
         else:
             out = BaseObj.__str__(self)
         return out

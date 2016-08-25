@@ -23,10 +23,10 @@ RFC 7323 TCP Extensions for High Performance
 import nfstest_config as c
 from baseobj import BaseObj
 from packet.unpack import Unpack
-from packet.utils import OptionFlags
 from packet.application.dns import DNS
 from packet.application.rpc import RPC
 from packet.application.krb5 import KRB5
+from packet.utils import OptionFlags, ShortHex
 
 # Module constants
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
@@ -48,6 +48,7 @@ TCPflags = {
 
 class Flags(OptionFlags):
     """TCP Option flags"""
+    _rawfunc  = ShortHex
     _bitnames = TCPflags
     __str__ = OptionFlags.str_flags
 
@@ -155,7 +156,7 @@ class TCP(BaseObj):
         self.header_size = 4*self.hl
         self.flags       = Flags(ulist[4] & 0x1FF)
         self.window_size = ulist[5]
-        self.checksum    = ulist[6]
+        self.checksum    = ShortHex(ulist[6])
         self.urgent_ptr  = ulist[7]
 
         pktt.pkt.tcp = self
