@@ -49,6 +49,12 @@ LOAD_body  = True  # Display the body of layer/procedure/operation
 # Module variables for Enum
 ENUM_CHECK = False
 
+class ShortHex(int):
+    """Short integer object which is displayed in hex"""
+    def __str__(self):
+        return "0x%04x" % self
+    __repr__ = __str__
+
 class IntHex(int):
     """Integer object which is displayed in hex"""
     def __str__(self):
