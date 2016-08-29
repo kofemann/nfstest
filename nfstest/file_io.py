@@ -63,7 +63,7 @@ from multiprocessing import Process,JoinableQueue
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.2"
+__version__   = "1.3"
 
 # Default values
 P_SEED       = None
@@ -72,30 +72,30 @@ P_RUNTIME    = 0
 P_VERBOSE    = "none"
 P_CREATELOG  = False
 P_CREATELOGS = False
-P_CREATE     = 5
-P_OSYNC      = 20
-P_FSYNC      = 5
-P_READ       = 40
-P_WRITE      = 40
-P_RDWR       = 20
-P_ODGRADE    = 10
-P_RANDIO     = 50
+P_CREATE     = 5.0
+P_OSYNC      = 10.0
+P_FSYNC      = 2.0
+P_READ       = 40.0
+P_WRITE      = 40.0
+P_RDWR       = 20.0
+P_ODGRADE    = 5.0
+P_RANDIO     = 50.0
 P_RDWRONLY   = False
 P_DIRECT     = False
 P_TMPDIR     = "/tmp"
 P_IODELAY    = 0.0
 
-P_RENAME     = 5
-P_REMOVE     = 5
-P_TRUNC      = 5
-P_FTRUNC     = 5
-P_LINK       = 2
-P_SLINK      = 1
-P_READDIR    = 1
-P_LOCK       = 20
-P_UNLOCK     = 80
-P_TLOCK      = 50
-P_LOCKFULL   = 50
+P_RENAME     = 5.0
+P_REMOVE     = 5.0
+P_TRUNC      = 2.0
+P_FTRUNC     = 2.0
+P_LINK       = 1.0
+P_SLINK      = 0.2
+P_READDIR    = 0.5
+P_LOCK       = 20.0
+P_UNLOCK     = 80.0
+P_TLOCK      = 20.0
+P_LOCKFULL   = 50.0
 
 P_FILESIZE   = "1m"
 P_FSIZEDEV   = "256k"
@@ -103,7 +103,7 @@ P_RSIZE      = "64k"
 P_WSIZE      = "64k"
 P_RSIZEDEV   = "8k"
 P_WSIZEDEV   = "8k"
-P_SIZEMULT   = "1"
+P_SIZEMULT   = "1.0"
 
 # Minimum number of files to create before doing any other
 # file operations like remove, rename, etc.
@@ -170,13 +170,13 @@ class FileIO(BaseObj):
            exiterr:
                Exit on first error [default: False]
            read:
-               Read file percentage [default: 40]
+               Read file percentage [default: 40.0]
            write:
-               Write file percentage [default: 40]
+               Write file percentage [default: 40.0]
            rdwr:
-               Read/write file percentage [default: 20]
+               Read/write file percentage [default: 20.0]
            randio:
-               Random file access percentage [default: 50]
+               Random file access percentage [default: 50.0]
            iodelay:
                Seconds to delay I/O operations [default: 0.0]
            direct:
@@ -184,35 +184,35 @@ class FileIO(BaseObj):
            rdwronly:
                Use read and write only, no rename, remove, etc. [default: False]
            create:
-               Create file percentage [default: 5]
+               Create file percentage [default: 5.0]
            odgrade:
-               Open downgrade percentage [default: 10]
+               Open downgrade percentage [default: 5.0]
            osync:
-               Open file with O_SYNC [default: 20]
+               Open file with O_SYNC [default: 10.0]
            fsync:
-               Percentage of fsync after write [default: 5]
+               Percentage of fsync after write [default: 2.0]
            rename:
-               Rename file percentage [default: 5]
+               Rename file percentage [default: 5.0]
            remove:
-               Remove file percentage [default: 5]
+               Remove file percentage [default: 5.0]
            trunc:
-               Truncate file percentage [default: 5]
+               Truncate file percentage [default: 2.0]
            ftrunc:
-               Truncate opened file percentage [default: 5]
+               Truncate opened file percentage [default: 2.0]
            link:
-               Create hard link percentage [default: 2]
+               Create hard link percentage [default: 1.0]
            slink:
-               Create symbolic link percentage [default: 1]
+               Create symbolic link percentage [default: 0.2]
            readdir:
-               List contents of directory percentage [default: 1]
+               List contents of directory percentage [default: 0.5]
            lock:
-               Lock file percentage [default: 20]
+               Lock file percentage [default: 20.0]
            unlock:
-               Unlock file percentage [default: 80]
+               Unlock file percentage [default: 80.0]
            tlock:
-               Lock test percentage [default: 50]
+               Lock test percentage [default: 20.0]
            lockfull:
-               Lock full file percentage [default: 50]
+               Lock full file percentage [default: 50.0]
            minfiles:
                Minimum number of files to create before any file operation
                is executed [default: 10]
@@ -229,7 +229,7 @@ class FileIO(BaseObj):
            wsizedev:
                Write block size standard deviation [default: 8k]
            sizemult:
-               Size multiplier [default: 1]
+               Size multiplier [default: 1.0]
            createlog:
                Create log file [default: False]
            createlogs:
@@ -306,14 +306,18 @@ class FileIO(BaseObj):
             self.lockfull = kwargs.pop("lockfull", P_LOCKFULL)
 
         # Get size multiplier
-        self.sizemult  = int_units(kwargs.pop("sizemult", P_SIZEMULT))
+        sizemult = kwargs.pop("sizemult", P_SIZEMULT)
+        if re.search("^[\d\.]+$", sizemult):
+            self.sizemult = float(sizemult)
+        else:
+            self.sizemult = float(int_units(sizemult))
         # Convert sizes and apply multiplier
-        self.fsizeavg  = self.sizemult * int_units(kwargs.pop("fsizeavg", P_FILESIZE))
-        self.fsizedev  = self.sizemult * int_units(kwargs.pop("fsizedev", P_FSIZEDEV))
-        self.rsize     = self.sizemult * int_units(kwargs.pop("rsize",    P_RSIZE))
-        self.wsize     = self.sizemult * int_units(kwargs.pop("wsize",    P_WSIZE))
-        self.rsizedev  = self.sizemult * int_units(kwargs.pop("rsizedev", P_RSIZEDEV))
-        self.wsizedev  = self.sizemult * int_units(kwargs.pop("wsizedev", P_WSIZEDEV))
+        self.fsizeavg  = int(self.sizemult * int_units(kwargs.pop("fsizeavg", P_FILESIZE)))
+        self.fsizedev  = int(self.sizemult * int_units(kwargs.pop("fsizedev", P_FSIZEDEV)))
+        self.rsize     = int(self.sizemult * int_units(kwargs.pop("rsize",    P_RSIZE)))
+        self.wsize     = int(self.sizemult * int_units(kwargs.pop("wsize",    P_WSIZE)))
+        self.rsizedev  = int(self.sizemult * int_units(kwargs.pop("rsizedev", P_RSIZEDEV)))
+        self.wsizedev  = int(self.sizemult * int_units(kwargs.pop("wsizedev", P_WSIZEDEV)))
 
         if self.direct:
             # When using direct I/O, use fixed read/write block sizes
@@ -343,19 +347,19 @@ class FileIO(BaseObj):
         self.stime    = 0
 
         # Set read and write option percentages
-        total = 100
+        total = 100.0
         if self.rdwr is None:
             if self.read is None and self.write is None:
-                # All read and write options are not given, use defaults
+                # None of the read and write options are given, use defaults
                 self.read  = P_READ
                 self.write = P_WRITE
                 self.rdwr  = P_RDWR
             elif self.read is None or self.write is None:
                 # If only read or write is given, don't use rdwr
-                self.rdwr = 0
+                self.rdwr = 0.0
             else:
                 # If both read and write are given, set rdwr to add up to 100
-                self.rdwr = max(0, total - self.read - self.write)
+                self.rdwr = max(0.0, total - self.read - self.write)
         else:
             # Option rdwr is given, calculate remainder left for read and write
             total -= self.rdwr
@@ -363,7 +367,7 @@ class FileIO(BaseObj):
         if self.read is None and self.write is None:
             # Only rdwr is given, distribute remainder equally
             # between read and write
-            self.read = int(total/2)
+            self.read = total/2.0
             self.write = total - self.read
         elif self.read is None and self.write is not None:
             # Option rdwr and write are given, set read percentage
@@ -374,7 +378,7 @@ class FileIO(BaseObj):
 
         # Verify read and write options add up to 100 percent
         total = abs(self.read) + abs(self.write) + abs(self.rdwr)
-        if total != 100:
+        if total != 100.0:
             print "Total for read, write and rdwr must be == 100"
             sys.exit(2)
 
@@ -480,7 +484,7 @@ class FileIO(BaseObj):
             return True
         elif pvalue <= 0:
             return False
-        return self.random.randint(0,99) < pvalue
+        return self.random.randint(0,9999) < 100*pvalue
 
     def _get_fileobj(self):
         """Get a random file object"""
@@ -534,11 +538,11 @@ class FileIO(BaseObj):
 
     def _getlock(self, name, fd, lock_type=None, offset=0, length=0, lock=None, tlock=False):
         """Get byte range lock on file given by file descriptor"""
-        n = self.random.randint(0,99)
+        rn = self.random.randint(0,9999)
         stype = fcntl.F_SETLK
         if lock_type == fcntl.F_UNLCK:
             lstr = "UNLOCK"
-            if not lock or n >= self.unlock:
+            if not lock or rn >= 100*self.unlock:
                 # Do not unlock file
                 return
             self.nunlock += 1
@@ -547,13 +551,13 @@ class FileIO(BaseObj):
                 # Just do TLOCK
                 lstr = "TLOCK "
                 stype = fcntl.F_GETLK
-                if n >= self.tlock:
+                if rn >= 100*self.tlock:
                     # No lock, so no tlock
                     return
                 self.ntlock += 1
             else:
                 lstr = "LOCK  "
-                if n >= self.lock:
+                if rn >= 100*self.lock:
                     # No lock
                     return
                 self.nlock += 1
@@ -748,11 +752,11 @@ class FileIO(BaseObj):
 
         # Select type of open: read, write or rdwr
         total = self.read + self.write
-        rn = self.random.randint(0,99)
-        if rn < self.read:
+        rn = self.random.randint(0,9999)
+        if rn < 100*self.read:
             oflags = os.O_RDONLY
             oflist = ["O_RDONLY"]
-        elif rn < total:
+        elif rn < 100*total:
             oflags = os.O_WRONLY
             oflist = ["O_WRONLY"]
         else:
@@ -1028,15 +1032,15 @@ class FileIO(BaseObj):
             # Create random seed
             self.seed = int(1000.0*time.time())
 
+        self.dprint("INFO", "System:  %s" % " ".join(os.uname()))
+        self.dprint("INFO", "Command: %s" % " ".join(sys.argv))
+
         # Main seed so run can be reproduced
         self.dprint("INFO", "SEED = %d" % self.seed)
         # Flush log file descriptor to make sure above info is not written
         # to all log files when using multiple logs for each subprocess
         self.flush_log()
         stime = time.time()
-
-        self.dprint("INFO", "System:  %s" % " ".join(os.uname()))
-        self.dprint("INFO", "Command: %s" % " ".join(sys.argv))
 
         if not os.path.exists(self.datadir):
             # Create top level directory if it does not exist
