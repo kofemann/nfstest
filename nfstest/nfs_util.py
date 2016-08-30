@@ -832,6 +832,8 @@ class NFSUtil(Host):
                     self.sessionid = pktreply.NFSop.sessionid
                     # Save the max response size
                     self.ca_maxrespsz = pktreply.NFSop.fore_chan_attrs.maxresponsesize
+                    self.dprint('DBG2', "CREATE_SESSION sessionid: %s" % self.sessionid)
+                    self.dprint('DBG2', "CREATE_SESSION ca_maxrespsz: %s" % self.ca_maxrespsz)
 
                     slotid = 0
                     fmsg = None
