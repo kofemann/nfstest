@@ -24,7 +24,7 @@ from optparse import OptionParser, IndentedHelpFormatter
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.1"
+__version__   = "1.2"
 
 USAGE = """%prog [options] <xdrfile1.x> [<xdrfile2.x> ...]
 
@@ -1614,6 +1614,12 @@ class XDRobject:
 
             if deftype is None:
                 deftype, defname, deftags, defcomments = self.process_def(line)
+                # Process CLASSATTR
+                classattr = []
+                cattrs = deftags.get("CLASSATTR")
+                if cattrs is not None:
+                    for cattr in cattrs.split(","):
+                        classattr.append(cattr.split("="))
                 if deftype is None:
                     regex = re.search(r"^\s*typedef\s" + vardefstr, line)
                     if regex:
@@ -1689,8 +1695,12 @@ class XDRobject:
                     if defname == "bool":
                         # Rename "bool" definition
                         defname = "nfs_bool"
-                    objdesc = '    """enum %s"""\n    ' % defname
-                    out = "class %s(Enum):\n%s_enumdict = const.%s" % (defname, objdesc, defname)
+                    objdesc = '    """enum %s"""' % defname
+                    out = "class %s(Enum):\n%s" % (defname, objdesc)
+                    classattr.append(["_enumdict", "const.%s" % defname])
+                    lmax = max([len(x[0]) for x in classattr])
+                    for cattr in classattr:
+                        out += "\n    %-*s = %s" % (lmax, cattr[0], cattr[1])
                     mcommstr, incommstr = self.get_comments(defcomments, out, "", "", newobj=True)
                     if len(mcommstr):
                         fd.write(mcommstr)
