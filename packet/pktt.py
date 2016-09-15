@@ -930,7 +930,8 @@ class Pktt(BaseObj, Unpack):
 
     def show_progress(self, done=False):
         """Display progress bar if enabled and if running on correct terminal"""
-        if SHOWPROG and self.showprog and (done or self.index % 500 == 0):
+        if SHOWPROG and self.showprog and (done or self.index % 500 == 0) \
+          and (os.getpgrp() == os.tcgetpgrp(sys.stderr.fileno())):
             rows, columns = struct.unpack('hh', fcntl.ioctl(2, termios.TIOCGWINSZ, "1234"))
             if columns < 100:
                 sps = 30
