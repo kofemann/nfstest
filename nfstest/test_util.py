@@ -52,6 +52,7 @@ import struct
 import inspect
 import textwrap
 from utils import *
+from rexec import Rexec
 import nfstest_config as c
 from baseobj import BaseObj
 from nfs_util import NFSUtil
@@ -61,7 +62,7 @@ from optparse import OptionParser, OptionGroup, IndentedHelpFormatter
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.2"
+__version__   = "1.3"
 
 # Constants
 PASS = 0
@@ -205,6 +206,11 @@ class TestUtil(NFSUtil):
         self._opts_done = False
         # List of sparse files
         self.sparse_files = []
+        # Rexec attributes
+        self.rexecobj = None
+        self.rexecobj_list = []
+        # List of remote files
+        self.remote_files = []
 
         for tid in _test_map:
             self._msg_count[tid] = 0
@@ -341,6 +347,8 @@ class TestUtil(NFSUtil):
         self.log_opgroup.add_option("--tverbose", default=_rtverbose_map[self.tverbose], help=hmsg)
         hmsg = "Create log file"
         self.log_opgroup.add_option("--createlog", action="store_true", default=False, help=hmsg)
+        hmsg = "Create rexec log files"
+        self.log_opgroup.add_option("--rexeclog", action="store_true", default=False, help=hmsg)
         hmsg = "Display warnings"
         self.log_opgroup.add_option("--warnings", action="store_true", default=False, help=hmsg)
         hmsg = "Informational tag, it is displayed as an INFO message [default: '%default']"
@@ -577,7 +585,7 @@ class TestUtil(NFSUtil):
                                 idblock = name
                             elif idblock == self.sid:
                                 # Open a testblock only if testblock is located
-                                # inside an idblock correspondig to script ID
+                                # inside an idblock corresponding to script ID
                                 testblock = name
                                 if self.testopts.get(name) is None:
                                     # Initialize testblock only if it has not
@@ -776,6 +784,36 @@ class TestUtil(NFSUtil):
         self.nocleanup = True
 
         self.dprint('DBG7', "CLEANUP starts")
+        if not self.mounted and self.remove_list:
+            self.mount()
+
+        for rexecobj in self.rexecobj_list:
+            try:
+                if rexecobj.remote:
+                    srvname = "at %s" % rexecobj.servername
+                else:
+                    srvname = "locally"
+                self.dprint('DBG3', "    Stop remote procedure server %s" % srvname)
+                rexecobj.close()
+            except:
+                pass
+        self.rexecobj = None
+        self.rexecobj_list = []
+
+        for item in self.remote_files:
+            try:
+                cmd = "scp %s:%s %s" % (item[0], item[1], self.tmpdir)
+                self.run_cmd(cmd, dlevel='DBG4', msg="    Copy remote file: ")
+            except Exception as e:
+                self.dprint('DBG7', "    ERROR: %s" % e)
+
+        for item in self.remote_files:
+            try:
+                cmd = "ssh -t %s sudo rm -f %s" % (item[0], item[1])
+                self.run_cmd(cmd, dlevel='DBG4', msg="    Removing remote file: ")
+            except:
+                pass
+
         if not self.keeptraces and (self.rmtraces or self._msg_count[FAIL] == 0):
             for rfile in self.tracefiles:
                 try:
@@ -785,8 +823,6 @@ class TestUtil(NFSUtil):
                 except:
                     pass
 
-        if not self.mounted and self.remove_list:
-            self.mount()
         for rfile in reversed(self.remove_list):
             try:
                 if os.path.exists(rfile):
@@ -806,6 +842,26 @@ class TestUtil(NFSUtil):
                 pass
         self.umount()
         self.dprint('DBG7', "CLEANUP done")
+
+    def create_rexec(self, servername=None, **kwds):
+        """Create remote server object."""
+        if self.rexeclog:
+            kwds["logfile"] = kwds.get("logfile", self.get_logname())
+        else:
+            kwds["logfile"] = None
+
+        # Start remote procedure server on given client
+        if servername in [None, "", "localhost", "127.0.0.1"]:
+            svrname = "locally"
+        else:
+            svrname = "at %s" % servername
+            if kwds.get("logfile") is not None:
+                self.remote_files.append([servername, kwds["logfile"]])
+
+        self.dprint('DBG2', "Start remote procedure server %s" % svrname)
+        self.rexecobj = Rexec(servername, **kwds)
+        self.rexecobj_list.append(self.rexecobj)
+        return self.rexecobj
 
     def run_tests(self, **kwargs):
         """Run all test specified by the --runtest option.
@@ -1090,7 +1146,7 @@ class TestUtil(NFSUtil):
     def get_name(self):
         """Get unique name for this instance."""
         if not self._name:
-            timestr = self.timestamp("{0:date:%Y%m%d%H%M%S_%q}")
+            timestr = self.timestamp("{0:date:%Y%m%d%H%M%S}")
             self._name = "%s_%s" % (self.progname, timestr)
         return self._name
 
