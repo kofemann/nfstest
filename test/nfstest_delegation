@@ -153,8 +153,16 @@ class DelegTest(TestUtil):
         # Disable createtraces option
         self.createtraces = False
 
-        if self.client != None:
+        # Check if remote server needs to run
+        isremote = False
+        for tname in TESTNAMES_REMOTE:
+            if tname in self.testlist:
+                isremote = True
+                break
+
+        if self.client is not None and isremote:
             self.create_host(self.client)
+            self.create_rexec(self.client)
         else:
             self.clientobj = None
 
@@ -216,12 +224,12 @@ class DelegTest(TestUtil):
 
     def get_deleg_remote(self):
         """Get a read delegation on the remote client."""
-        cmd = "python -c \"fdko = open('%s', 'r')\n" % self.abspath(self.files[0])
-        cmd += "fd = open('%s', 'r')\n" % self.absfile
-        cmd += "fd.read()\n"
-        cmd += "fd.close()\n"
-        cmd += "fdko.close()\""
-        return self.clientobj.run_cmd(cmd)
+        fdko = self.rexecobj.run(os.open, self.abspath(self.files[0]), os.O_RDONLY)
+        self.dprint("DBG2", "Get a read delegation on the remote client [%s]" % self.absfile)
+        fdrd = self.rexecobj.run(os.open, self.absfile, os.O_RDONLY)
+        data = self.rexecobj.run(os.read, fdrd, 1024)
+        self.rexecobj.run(os.close, fdrd)
+        self.rexecobj.run(os.close, fdko)
 
     def setup_test(self, deleg_type, mount=False, existing=False):
         """Setup test by mounting server and hold open a file so that the open
@@ -462,18 +470,23 @@ class DelegTest(TestUtil):
                 self.get_deleg_remote()
 
             if conflict_type == OP_SETATTR:
-                # Change the permissions on the file from another client to recall delegation
-                self.clientobj.run_cmd('chmod 777 %s' % self.absfile)
+                self.dprint("DBG2", "Change the permissions on file from another client to recall delegation [%s]" % self.absfile)
+                self.rexecobj.run(os.chmod, self.absfile, 0777)
             elif conflict_type == OPEN_DELEGATE_READ:
-                # Read to same file from another client to recall delegation
-                self.clientobj.run_cmd('cat %s' % self.absfile)
+                self.dprint("DBG2", "Read same file from another client to recall delegation [%s]" % self.absfile)
+                fdrd = self.rexecobj.run(os.open, self.absfile, os.O_RDONLY)
+                data = self.rexecobj.run(os.read, fdrd, 1024)
+                self.rexecobj.run(os.close, fdrd)
             elif self.truncate:
-                # Write to same file from another client to recall delegation
-                # Truncate file before writing
-                self.clientobj.run_cmd('echo -n %s > %s' % (self.data_pattern(0, 32, 'F'), self.absfile))
+                self.dprint("DBG2", "Write same file from another client to recall delegation, truncate before writing [%s]" % self.absfile)
+                fdwr  = self.rexecobj.run(os.open, self.absfile, os.O_WRONLY|os.O_TRUNC)
+                count = self.rexecobj.run(os.write, fdwr, self.data_pattern(0, 1024, "x"))
+                self.rexecobj.run(os.close, fdwr)
             else:
-                # Write to same file from another client to recall delegation
-                self.clientobj.run_cmd('echo -n %s >> %s' % (self.data_pattern(0, 32, 'F'), self.absfile))
+                self.dprint("DBG2", "Write same file from another client to recall delegation [%s]" % self.absfile)
+                fdwr  = self.rexecobj.run(os.open, self.absfile, os.O_WRONLY|os.O_APPEND)
+                count = self.rexecobj.run(os.write, fdwr, self.data_pattern(0, 1024, "X"))
+                self.rexecobj.run(os.close, fdwr)
 
             # Read/Write file
             if deleg_type == OPEN_DELEGATE_READ:
