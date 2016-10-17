@@ -29,7 +29,7 @@ from fcntl import fcntl,F_WRLCK,F_SETLK
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2015 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.0"
+__version__   = "1.1"
 
 USAGE = """%prog --server <server> [options]
 
@@ -396,7 +396,7 @@ class AllocTest(TestUtil):
         msg4 = " for a range starting and ending at a non-aligned block size boundary"
         self.alloc01(os.O_WRONLY, offset=blocksize/2, size=blocksize, msg=msg4)
 
-        if self.deleg_stateid is None:
+        if hasattr(self, "deleg_stateid") and self.deleg_stateid is None:
             # Run tests with byte range locking
             msg = " (locking file)"
             self.alloc01(os.O_WRONLY, msg=msg, lock=True)
@@ -427,7 +427,7 @@ class AllocTest(TestUtil):
         msg7 = " when range is fully outside the current file size"
         self.alloc01(os.O_RDWR, offset=self.filesize, size=self.filesize, msg=msg7)
 
-        if self.deleg_stateid is None:
+        if hasattr(self, "deleg_stateid") and self.deleg_stateid is None:
             # Run tests with byte range locking
             msg = " (locking file)"
             self.alloc01(os.O_RDWR, msg=msg, lock=True)
@@ -644,6 +644,7 @@ class AllocTest(TestUtil):
             fd = None
             fd1 = None
             rmfile = None
+            otherfile = None
             offset = 0
             size = self.filesize
 
@@ -679,7 +680,7 @@ class AllocTest(TestUtil):
             fd1 = os.open(self.absfile, os.O_WRONLY|os.O_CREAT)
             rmfile = self.absfile
 
-            maxsize = self.get_freebytes()
+            maxsize = self.get_freebytes() - 4*self.statvfs.f_bsize
             strsize = formatstr.str_units(maxsize)
             self.dprint('DBG3', "Allocate %s file (rest of the available disk space)" % strsize)
             out = self.libc.fallocate(fd1, SR_ALLOCATE, 0, maxsize)
@@ -697,6 +698,7 @@ class AllocTest(TestUtil):
                 fmsg = ", expecting ENOSPC but got %s" % errno.errorcode.get(werror.errno,werror.errno)
             expr = werror and werror.errno == errno.ENOSPC
             self.test(expr, "Write to a different file should fail with ENOSPC when no space is left on the device", failmsg=fmsg)
+            otherfile = self.filename
 
             self.dprint('DBG3', "Allocate %s file" % strsize)
             out = self.libc.fallocate(fd, SR_ALLOCATE, self.filesize, self.filesize)
@@ -825,7 +827,21 @@ class AllocTest(TestUtil):
             if non_alloc_cnt > 0:
                 self.test(non_alloc, "WRITE sent to non-allocated file should return NFS4ERR_NOSPC when no space is left on the device")
             else:
-                self.test(False, "WRITE sent to non-allocated file should be sent")
+                # No writes found for other file, look for OPEN to check if
+                # it failed on open instead
+                self.pktt.rewind(0)
+                file_str = "NFS.claim.name == '%s'" % otherfile
+                (pktcall, pktreply) = self.find_nfs_op(OP_OPEN, self.server_ipaddr, self.port, match=file_str, status=None)
+                if pktreply is None:
+                    # Could not find OPEN, fail with the write error below
+                    status = NFS4_OK
+                else:
+                    status = pktreply.NFSop.status
+                if status != NFS4_OK:
+                    fmsg = ", expecting NFS4ERR_NOSPC but got %s" % nfsstat4.get(status, status)
+                    self.test(status == NFS4ERR_NOSPC, "OPEN sent to non-allocated file should return NFS4ERR_NOSPC", failmsg=fmsg)
+                else:
+                    self.test(False, "WRITE to non-allocated file should be sent")
         except Exception:
             self.test(False, traceback.format_exc())
 
@@ -835,7 +851,7 @@ class AllocTest(TestUtil):
         self.testidx = 1
         self.alloc06()
 
-        if self.deleg_stateid is None:
+        if hasattr(self, "deleg_stateid") and self.deleg_stateid is None:
             # Run tests with byte range locking
             msg = " (locking file)"
             self.alloc06(msg=msg, lock=True)
@@ -862,7 +878,7 @@ class AllocTest(TestUtil):
         msg7 = " when range is fully outside the current file size"
         self.alloc01(os.O_WRONLY, offset=self.filesize, size=self.filesize, msg=msg7, dealloc=True)
 
-        if self.deleg_stateid is None:
+        if hasattr(self, "deleg_stateid") and self.deleg_stateid is None:
             # Run tests with byte range locking
             msg = " (locking file)"
             self.alloc01(os.O_WRONLY, msg=msg, lock=True, dealloc=True)
@@ -896,7 +912,7 @@ class AllocTest(TestUtil):
         msg7 = " when range is fully outside the current file size"
         self.alloc01(os.O_RDWR, offset=self.filesize, size=self.filesize, msg=msg7, dealloc=True)
 
-        if self.deleg_stateid is None:
+        if hasattr(self, "deleg_stateid") and self.deleg_stateid is None:
             # Run tests with byte range locking
             msg = " (locking file)"
             self.alloc01(os.O_RDWR, msg=msg, lock=True, dealloc=True)
@@ -950,7 +966,7 @@ class AllocTest(TestUtil):
             fd = os.open(self.absfile, os.O_WRONLY|os.O_CREAT)
             rmfile = self.absfile
 
-            maxsize = self.get_freebytes()
+            maxsize = self.get_freebytes() - 4*self.statvfs.f_bsize
             strsize = formatstr.str_units(maxsize)
             self.dprint('DBG3', "Allocate %s file (rest of the available disk space)" % strsize)
             out = self.libc.fallocate(fd, SR_ALLOCATE, 0, maxsize)
@@ -1105,7 +1121,7 @@ class AllocTest(TestUtil):
         self.testidx = 1
         self.dealloc06()
 
-        if self.deleg_stateid is None:
+        if hasattr(self, "deleg_stateid") and self.deleg_stateid is None:
             # Run tests with byte range locking
             msg = " (locking file)"
             self.dealloc06(msg=msg, lock=True)
