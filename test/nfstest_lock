@@ -19,7 +19,6 @@ import signal
 import struct
 import traceback
 import nfstest_config as c
-from nfstest.rexec import Rexec
 from nfstest.test_util import TestUtil
 from fcntl import fcntl,F_RDLCK,F_WRLCK,F_UNLCK,F_SETLK,F_SETLKW,F_GETLK
 
@@ -27,7 +26,7 @@ from fcntl import fcntl,F_RDLCK,F_WRLCK,F_UNLCK,F_SETLK,F_SETLKW,F_GETLK
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2013 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.1"
+__version__   = "1.2"
 
 USAGE = """%prog --server <server> [--client <client>] [options]
 
@@ -267,9 +266,6 @@ class LockTest(TestUtil):
         if self.setl_list is None:
             self.opts.error("invalid type given in --setlock [%s]" % self.setlock)
 
-        self.mtindex = 1
-        self.rexecobjs = []
-
         self.client_opts()
         if len(self.client_list) > 1:
             # As of now, only one client is allowed
@@ -357,8 +353,8 @@ class LockTest(TestUtil):
 
         # Start remote procedure server on host
         if not remote_process or len(self.client_list) < 1:
+            self.rexecobj  = None
             self.clientobj = None
-            self.rexecobj = None
             for tname in NCTESTS + OCTESTS:
                 if tname in self.testlist:
                     self.testlist.remove(tname)
@@ -368,12 +364,10 @@ class LockTest(TestUtil):
             for client_d in self.client_list:
                 client_args = dict(client_d)
                 client_name = client_args.pop('client')
-                self.mtindex += 1
                 self.create_host(client_name, **client_args)
                 self.clientobj.umount()
                 self.clientobj.mount()
-                self.rexecobj = self.start_rexec(client_name)
-                self.rexecobjs.append(self.rexecobj)
+                self.start_rexec(client_name)
 
         # Unmount server on local host
         self.umount()
@@ -391,14 +385,8 @@ class LockTest(TestUtil):
            clientname:
                Name of client where the remote procedure server will be started
         """
-        logfile = None
-        if self.createlog:
-            logfile = self.get_logname()
-
         # Start remote procedure server on given client
-        svr = "at %s" % clientname if len(clientname) else "locally"
-        self.dprint('DBG2', "Start remote procedure server %s" % svr)
-        execobj = Rexec(clientname, logfile=logfile)
+        execobj = self.create_rexec(clientname)
 
         # Setup function to lock and unlock a file
         execobj.rimport("fcntl", ["fcntl", "F_SETLK"])
