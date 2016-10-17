@@ -303,7 +303,7 @@ if not fh_list and (dirfhcrc32 is not None or len(paths) == 0):
             pkt = pkttobj.match("RPC.xid == %d" % xid, rewind=False, maxindex=maxindex)
             if pkt:
                 print_pkt(pkttobj, pkt)
-                if pkt.nfs.status == 0:
+                if pkt == "nfs" and hasattr(pkt.nfs, "status") and pkt.nfs.status == 0:
                     if pkt.rpc.version == 3:
                         fh_list.append(crc32(pkt.nfs.fh))
                     else:
