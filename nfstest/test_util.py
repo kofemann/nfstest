@@ -236,7 +236,7 @@ class TestUtil(NFSUtil):
         self._print_msg("")
         self.dprint('DBG7', "Calling %s() destructor" % self.__class__.__name__)
         self.trace_stop()
-        self.cleanup()
+        self.cleanup(newline=False)
         # Call base destructor
         NFSUtil.__del__(self)
 
@@ -772,7 +772,7 @@ class TestUtil(NFSUtil):
             self.umount()
         self.dprint('DBG7', "SETUP done")
 
-    def cleanup(self):
+    def cleanup(self, newline=True):
         """Clean up test environment.
 
            Remove any files created: test files, trace files.
@@ -783,6 +783,9 @@ class TestUtil(NFSUtil):
         # Cleanup just once
         self.nocleanup = True
 
+        if newline:
+            self._tverbose()
+            self._print_msg("")
         self.dprint('DBG7', "CLEANUP starts")
         if not self.mounted and self.remove_list:
             self.mount()
