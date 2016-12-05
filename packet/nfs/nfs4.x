@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2015 IETF Trust and the persons identified
- * as the document authors.  All rights reserved.
+ * Copyright (c) 2016 IETF Trust and the persons identified
+ * as the authors.  All rights reserved.
  *
- * The Redistribution and use in source and binary forms, with
+ * Redistribution and use in source and binary forms, with
  * or without modification, are permitted provided that the
  * following conditions are met:
  *
@@ -36,7 +36,7 @@
  *   IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  *   ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * This code was derived from [draft-ietf-nfsv4-minorversion2-dot-x-41].
+ * This code was derived from RFC 7863.
  *
  *  Copyright (C) The IETF Trust (2007-2014)
  *  All Rights Reserved.
@@ -2427,7 +2427,7 @@ union callback_sec_parms4 switch (nfs_secflavor4 flavor) {
     case AUTH_NONE:
         void;
     case AUTH_SYS:
-        authsys_parms   sys_cred; /* RFC 1831 */
+        authsys_parms   sys_cred; /* RFC 5531 */
     case RPCSEC_GSS:
         gss_cb_handles4 gss_handles;
 };
