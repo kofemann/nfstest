@@ -35,7 +35,7 @@ from packet.nfs.nfs4_const import *
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "2.2"
+__version__   = "2.3"
 
 class NFSUtil(Host):
     """NFSUtil object
@@ -101,6 +101,8 @@ class NFSUtil(Host):
         self.tmpdir    = kwargs.pop("tmpdir",    c.NFSTEST_TMPDIR)
         self.tbsize    = kwargs.pop("tbsize",    50000)
         self._nfsdebug = False
+        self.pktcall   = None
+        self.pktreply  = None
 
         # Initialize object variables
         self.dbgidx = 1
@@ -359,8 +361,8 @@ class NFSUtil(Host):
             match += " and "
         if port != None:
             dst += "TCP.dst_port == %d and " % port
-        pktcall   = None
-        pktreply  = None
+        pktcall  = None
+        pktreply = None
         while True:
             # Find request
             pktcall = self.pktt.match(src + dst + match + "NFS.argop == %d" % op, maxindex=maxindex)
@@ -372,6 +374,8 @@ class NFSUtil(Host):
                     break
             else:
                 break
+        self.pktcall  = pktcall
+        self.pktreply = pktreply
         return (pktcall, pktreply)
 
     def find_open(self, **kwargs):
@@ -384,7 +388,7 @@ class NFSUtil(Host):
                Find open call and reply for this file handle using CLAIM_FH
                [default: None]
            ipaddr:
-               Destination IP address [default: self.server]
+               Destination IP address [default: self.server_ipaddr]
            port:
                Destination port [default: self.port]
            deleg_type:
@@ -414,6 +418,8 @@ class NFSUtil(Host):
         src_ipaddr    = kwargs.pop('src_ipaddr', None)
         maxindex      = kwargs.pop('maxindex', None)
         anyclaim      = kwargs.pop('anyclaim', False)
+        self.pktcall  = None
+        self.pktreply = None
 
         src = "IP.src == '%s' and " % src_ipaddr if src_ipaddr is not None else ''
         dst = self.pktt.ip_tcp_dst_expr(ipaddr, port)
@@ -486,6 +492,8 @@ class NFSUtil(Host):
             else:
                 deleg_stateid = None
 
+            self.pktcall  = pktcall
+            self.pktreply = pktreply
             return (filehandle, open_stateid, deleg_stateid)
 
     def find_layoutget(self, filehandle):
@@ -1320,7 +1328,7 @@ class NFSUtil(Host):
             self.test(getattr_res.attributes[FATTR4_SIZE] == filesize, "GETATTR should return correct file size within LAYOUTCOMMIT compound")
         return
 
-    def get_stateid(self, filename):
+    def get_stateid(self, filename, **kwargs):
         """Search the packet trace for the file name given to get the OPEN
            so all related state ids can be searched. A couple of object
            attributes are defined, one is the correct state id that should
@@ -1328,9 +1336,11 @@ class NFSUtil(Host):
            which maps the state id to a string identifying if the state
            id is an open, lock or delegation state id.
         """
-        self.stid_map = {}
+        noreset = kwargs.pop("noreset", False)
+        if not noreset:
+            self.stid_map = {}
         self.lock_stateid = None
-        (self.filehandle, self.open_stateid, self.deleg_stateid) = self.find_open(filename=filename)
+        (self.filehandle, self.open_stateid, self.deleg_stateid) = self.find_open(filename=filename, **kwargs)
         if self.open_stateid:
             self.stid_map[self.open_stateid] = "OPEN stateid"
         if self.deleg_stateid:
@@ -1341,7 +1351,9 @@ class NFSUtil(Host):
             # Look for a lock stateid
             save_index = self.pktt.index
             mstr = "NFS.fh == '%s'" % self.pktt.escape(self.filehandle)
-            (pktcall, pktreply) = self.find_nfs_op(OP_LOCK, self.server_ipaddr, self.port, match=mstr)
+            ipaddr = kwargs.get("ipaddr", self.server_ipaddr)
+            port   = kwargs.get("port", self.port)
+            (pktcall, pktreply) = self.find_nfs_op(OP_LOCK, ipaddr, port, match=mstr)
             if pktreply:
                 self.lock_stateid = pktreply.NFSop.stateid.other
                 self.stid_map[self.lock_stateid] = "LOCK stateid"
