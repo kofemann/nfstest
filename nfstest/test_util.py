@@ -62,7 +62,7 @@ from optparse import OptionParser, OptionGroup, IndentedHelpFormatter
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.3"
+__version__   = "1.4"
 
 # Constants
 PASS = 0
@@ -416,6 +416,8 @@ class TestUtil(NFSUtil):
         self.dbg_opgroup.add_option("--nfsdebug", default=self.nfsdebug, help=hmsg)
         hmsg = "Set RPC kernel debug flags and save log messages [default: '%default']"
         self.dbg_opgroup.add_option("--rpcdebug", default=self.rpcdebug, help=hmsg)
+        hmsg = "Display main packets related to the given test"
+        self.dbg_opgroup.add_option("--pktdisp", action="store_true", default=False, help=hmsg)
         self.opts.add_option_group(self.dbg_opgroup)
 
         usage = self.usage
