@@ -197,7 +197,6 @@ class TestUtil(NFSUtil):
         self.logidx = 1
         self.files = []
         self.dirs = []
-        self.abshash = {}
         self.test_msgs = []
         self._msg_count = {}
         self._reset_files()
@@ -1138,14 +1137,6 @@ class TestUtil(NFSUtil):
         """Return the number of instances the testid has occurred."""
         return self._msg_count[tid]
 
-    def abspath(self, filename, dir=None):
-        """Return the absolute path for the given file name."""
-        path = self.abshash.get(filename)
-        if path is None:
-            bdir = "" if dir is None else "%s/" % dir
-            path = "%s/%s%s" % (self.mtdir, bdir, filename)
-        return path
-
     def get_name(self):
         """Get unique name for this instance."""
         if not self._name:
@@ -1158,7 +1149,6 @@ class TestUtil(NFSUtil):
         self.dirname = "%s_d_%d" % (self.get_name(), self.diridx)
         self.diridx += 1
         self.absdir = self.abspath(self.dirname, dir=dir)
-        self.abshash[self.dirname] = self.absdir
         self.dirs.append(self.dirname)
         self.remove_list.append(self.absdir)
         return self.dirname
@@ -1168,7 +1158,6 @@ class TestUtil(NFSUtil):
         self.filename = "%s_f_%d" % (self.get_name(), self.fileidx)
         self.fileidx += 1
         self.absfile = self.abspath(self.filename, dir=dir)
-        self.abshash[self.filename] = self.absfile
         self.files.append(self.filename)
         self.remove_list.append(self.absfile)
         return self.filename

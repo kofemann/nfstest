@@ -183,6 +183,12 @@ class Host(BaseObj):
         else:
             return "NFSv%d.%d" % (nver, mver)
 
+    def abspath(self, filename, dir=None):
+        """Return the absolute path for the given file name."""
+        bdir = "" if dir is None else "%s/" % dir
+        path = "%s/%s%s" % (self.mtdir, bdir, filename)
+        return path
+
     def sudo_cmd(self, cmd):
         """Prefix the SUDO command if effective user is not root."""
         if os.getuid() != 0:
