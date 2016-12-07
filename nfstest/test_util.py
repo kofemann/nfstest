@@ -75,7 +75,8 @@ IGNR = -4
 
 VT_NORM = "\033[m"
 VT_BOLD = "\033[1m"
-VT_UL   = "\033[4m"
+VT_BLUE = "\033[34m"
+VT_HL   = "\033[47m"
 
 _isatty = os.isatty(1)
 
@@ -189,6 +190,7 @@ class TestUtil(NFSUtil):
         self.ignore = False
         self.bugmsgs = None
         self.nocleanup = True
+        self.isatty = _isatty
         self.test_time = [time.time()]
         self._fileopt = True
         self.remove_list = []
@@ -247,11 +249,11 @@ class TestUtil(NFSUtil):
                 msg = "%d tests%s" % (ntests, tmsg)
                 self.write_log("\n" + msg)
                 if self._msg_count[FAIL] > 0:
-                    msg = "\033[31m" + msg + "\033[m" if _isatty else msg
+                    msg = "\033[31m" + msg + "\033[m" if self.isatty else msg
                 elif self._msg_count[WARN] > 0:
-                    msg = "\033[33m" + msg + "\033[m" if _isatty else msg
+                    msg = "\033[33m" + msg + "\033[m" if self.isatty else msg
                 else:
-                    msg = "\033[32m" + msg + "\033[m" if _isatty else msg
+                    msg = "\033[32m" + msg + "\033[m" if self.isatty else msg
                 print "\n" + msg
         if self._opts_done:
             self.total_time = time.time() - self.test_time[0]
@@ -352,6 +354,8 @@ class TestUtil(NFSUtil):
         self.log_opgroup.add_option("--warnings", action="store_true", default=False, help=hmsg)
         hmsg = "Informational tag, it is displayed as an INFO message [default: '%default']"
         self.log_opgroup.add_option("--tag", default="", help=hmsg)
+        hmsg = "Do not use terminal colors on output"
+        self.log_opgroup.add_option("--notty", action="store_true", default=False, help=hmsg)
         self.opts.add_option_group(self.log_opgroup)
 
         self.cap_opgroup = OptionGroup(self.opts, "Packet trace options")
@@ -626,6 +630,10 @@ class TestUtil(NFSUtil):
             # --file option
             self.scan_options()
         else:
+            if opts.notty:
+                # Do not use terminal colors
+                self.isatty = False
+
             try:
                 # Set verbose level mask
                 self.debug_level(opts.verbose)
@@ -888,11 +896,13 @@ class TestUtil(NFSUtil):
         """Display message to the screen and to the log file."""
         tidmsg_l = '' if tid is None else _test_map[tid]
         self.write_log(tidmsg_l + msg)
-        if _isatty:
+        if self.isatty:
             tidmsg_s = _test_map_c.get(tid, tidmsg_l)
             if tid == HEAD:
-                msg = VT_UL + VT_BOLD + msg + VT_NORM
+                msg = VT_HL + VT_BOLD + msg + VT_NORM
             elif tid == INFO:
+                msg = VT_BLUE + VT_BOLD + msg + VT_NORM
+            elif tid in [PASS, FAIL]:
                 msg = VT_BOLD + msg + VT_NORM
         else:
             tidmsg_s = tidmsg_l
