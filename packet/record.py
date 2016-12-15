@@ -26,10 +26,11 @@ from baseobj import BaseObj
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "2.0"
+__version__   = "2.1"
 
-FRAME = 0
-INDEX = 1
+FRAME  = 0
+INDEX  = 1
+TSTAMP = 1
 
 class Record(BaseObj):
     """Record object
@@ -100,8 +101,9 @@ class Record(BaseObj):
                'frame 57 @ 2014-03-16 13:42:56.530957, 42 bytes on wire, 42 packet bytes'
         """
         idxstr = ""
+        tstamp = ""
         rdebug = self.debug_repr()
-        if rdebug in [1,2]:
+        if TSTAMP and rdebug in [1,2]:
             tstamp = "%s.%06d" % (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.seconds)), self.usecs)
         if rdebug == 1:
             if FRAME and INDEX:
