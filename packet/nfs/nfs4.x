@@ -3196,7 +3196,7 @@ struct COPY_NOTIFY4args {
     netloc4   dst_server;
 };
 
-/* STRFMT1: lease:{0} stid:{1} {2} */
+/* STRFMT1: stid:{1} {2} */
 struct COPY_NOTIFY4resok {
     nfstime4  lease_time;
     stateid4  stateid;
