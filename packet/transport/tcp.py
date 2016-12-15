@@ -49,14 +49,67 @@ TCPflags = {
 class Stream(BaseObj):
     """TCP stream buffer object"""
     # Printing of this object is used for debugging only so don't display buffer
-    _attrlist = ("last_seq", "seq_wrap", "seq_base", "frag_off")
+    _attrlist = ("last_seq", "next_seq", "seq_wrap", "seq_base", "frag_off")
 
     def __init__(self, seqno):
         self.buffer   = "" # Keep track of RPC packets spanning multiple TCP packets
         self.frag_off = 0  # Keep track of multiple RPC packets within a single TCP packet
         self.last_seq = 0  # Last sequence number processed
+        self.next_seq = 0  # Next sequence number expected
         self.seq_wrap = 0  # Keep track when sequence number has wrapped around
         self.seq_base = seqno # Base sequence number to convert to relative sequence numbers
+        self.segments = [] # Array of missing fragments, item: [start seq, end seq]
+
+    def add_fragment(self, data, seq):
+        """Add fragment data to stream buffer"""
+        if len(data) == 0:
+            return
+        if seq == self.next_seq or len(self.buffer) == 0:
+            # Append fragment data to stream buffer
+            self.buffer += data
+            self.segments = []
+        elif seq > self.next_seq:
+            # Previous fragment is missing so fill previous fragment with zeros
+            size = seq - self.next_seq
+            self.segments.append([self.next_seq, seq])
+            self.buffer += "\x00" * size
+            self.buffer += data
+        else:
+            # Fragment is out of order -- found previous missing fragment
+            off  = len(self.buffer) - self.next_seq + seq
+            datalen = len(data)
+            size = datalen + off
+            # Insert fragment where it belongs
+            self.buffer = self.buffer[:off] + data + self.buffer[size:]
+
+            # Remove fragment from segments list
+            index = 0
+            for frag in self.segments:
+                if seq >= frag[0] and seq < frag[1]:
+                    if seq == frag[0] and seq+datalen == frag[1]:
+                        # Full segment matched, so just remove it
+                        self.segments.pop(index)
+                    elif seq == frag[0]:
+                        # Start of segment matched, set new missing start
+                        frag[0] = seq+datalen
+                    elif seq+datalen == frag[1]:
+                        # End of segment matched, set new missing end
+                        frag[1] = seq
+                    else:
+                        # Full segment is within missing segment,
+                        # set new missing end and create a new segment
+                        newfrag = [seq+datalen, frag[1]]
+                        frag[1] = seq
+                        self.segments.insert(index+1, newfrag)
+                    break
+                index += 1
+
+    def missing_fragment(self, seq):
+        """Check if given sequence number is within a missing fragment"""
+        for frag in self.segments:
+            if seq >= frag[0] and seq < frag[1]:
+                return True
+        return False
 
 class Flags(OptionFlags):
     """TCP Option flags"""
@@ -213,7 +266,7 @@ class TCP(BaseObj):
         # Save length of TCP segment
         self.length = unpack.size()
 
-        if seq < stream.last_seq:
+        if seq < stream.last_seq and not stream.missing_fragment(seq):
             # This is a re-transmission, do not process
             return
 
@@ -221,6 +274,7 @@ class TCP(BaseObj):
 
         if self.length > 0:
             stream.last_seq = seq
+            stream.next_seq = seq + self.length
 
     def __str__(self):
         """String representation of object
@@ -308,7 +362,7 @@ class TCP(BaseObj):
         if truncbytes == 0 and ldata < rpcsize:
             # An RPC fragment is missing to decode RPC payload
             unpack.restore_state(sid)
-            stream.buffer += unpack.getbytes()
+            stream.add_fragment(unpack.getbytes(), self.seq)
         else:
             if len(stream.buffer) > 0 or ldata == rpcsize:
                 stream.frag_off = 0
@@ -339,7 +393,7 @@ class TCP(BaseObj):
                     # Part of next RPC packet is within this TCP packet
                     # Save the multi-span fragment data
                     unpack.restore_state(sid)
-                    stream.buffer += unpack.getbytes()
+                    stream.add_fragment(unpack.getbytes(), self.seq)
                 else:
                     # Next RPC packet is entirely within this TCP packet
                     # Re-position the file pointer to the current offset
