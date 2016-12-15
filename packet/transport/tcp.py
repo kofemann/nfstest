@@ -32,7 +32,7 @@ from packet.utils import OptionFlags, ShortHex
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.4"
+__version__   = "1.5"
 
 TCPflags = {
     0: "FIN",
@@ -45,6 +45,18 @@ TCPflags = {
     7: "CWR",
     8: "NS",
 }
+
+class Stream(BaseObj):
+    """TCP stream buffer object"""
+    # Printing of this object is used for debugging only so don't display buffer
+    _attrlist = ("last_seq", "seq_wrap", "seq_base", "frag_off")
+
+    def __init__(self, seqno):
+        self.buffer   = "" # Keep track of RPC packets spanning multiple TCP packets
+        self.frag_off = 0  # Keep track of multiple RPC packets within a single TCP packet
+        self.last_seq = 0  # Last sequence number processed
+        self.seq_wrap = 0  # Keep track when sequence number has wrapped around
+        self.seq_base = seqno # Base sequence number to convert to relative sequence numbers
 
 class Flags(OptionFlags):
     """TCP Option flags"""
@@ -166,30 +178,22 @@ class TCP(BaseObj):
         streamid = "%s:%d-%s:%d" % (ip.src, self.src_port, ip.dst, self.dst_port)
 
         if streamid not in pktt._tcp_stream_map:
-            # msfrag: Keep track of RPC packets spanning multiple TCP packets
-            # frag_off: Keep track of multiple RPC packets within
-            #           a single TCP packet
-            pktt._tcp_stream_map[streamid] = {
-                'msfrag':   '',
-                'frag_off': 0,
-                'last_seq': 0,
-                'seq_wrap': 0,
-                'seq_base': self.seq_number,
-            }
+            # Create TCP stream object
+            pktt._tcp_stream_map[streamid] = Stream(self.seq_number)
 
         # De-reference stream map
         stream = pktt._tcp_stream_map[streamid]
 
         if self.flags.SYN:
             # Reset seq_base on SYN
-            stream['seq_base'] = self.seq_number
-            stream['last_seq'] = stream['seq_wrap']
+            stream.seq_base = self.seq_number
+            stream.last_seq = stream.seq_wrap
 
         # Convert sequence numbers to relative numbers
-        seq = self.seq_number - stream['seq_base'] + stream['seq_wrap']
-        if seq < stream['seq_wrap']:
+        seq = self.seq_number - stream.seq_base + stream.seq_wrap
+        if seq < stream.seq_wrap:
             # Sequence number has reached the maximum and wrapped around
-            stream['seq_wrap'] += 4294967296
+            stream.seq_wrap += 4294967296
             seq += 4294967296
         self.seq = seq
 
@@ -209,14 +213,14 @@ class TCP(BaseObj):
         # Save length of TCP segment
         self.length = unpack.size()
 
-        if seq < stream['last_seq']:
+        if seq < stream.last_seq:
             # This is a re-transmission, do not process
             return
 
         self._decode_payload(pktt, stream)
 
         if self.length > 0:
-            stream['last_seq'] = seq
+            stream.last_seq = seq
 
     def __str__(self):
         """String representation of object
@@ -260,34 +264,34 @@ class TCP(BaseObj):
                 pkt.krb = krb
             return
 
-        if stream['frag_off'] > 0 and len(stream['msfrag']) == 0:
+        if stream.frag_off > 0 and len(stream.buffer) == 0:
             # This RPC packet lies within previous TCP packet,
             # Re-position the offset of the data
-            unpack.seek(unpack.tell() + stream['frag_off'])
+            unpack.seek(unpack.tell() + stream.frag_off)
 
         # Get the total size
         sid = unpack.save_state()
         size = unpack.size()
 
-        # Try decoding the RPC header before using the msfrag data
+        # Try decoding the RPC header before using the stream buffer data
         # to re-sync the stream
-        if len(stream['msfrag']) > 0:
+        if len(stream.buffer) > 0:
             rpc = RPC(pktt, proto=6)
             if not rpc:
                 unpack.restore_state(sid)
                 sid = unpack.save_state()
 
-        if rpc or (size == 0 and len(stream['msfrag']) > 0 and self.flags.rawflags != 0x10):
+        if rpc or (size == 0 and len(stream.buffer) > 0 and self.flags.rawflags != 0x10):
             # There has been some data lost in the capture,
             # to continue decoding next packets, reset stream
             # except if this packet is just a TCP ACK (flags = 0x10)
-            stream['msfrag'] = ''
-            stream['frag_off'] = 0
+            stream.buffer = ""
+            stream.frag_off = 0
 
         if not rpc:
-            if len(stream['msfrag']):
+            if len(stream.buffer):
                 # Concatenate previous fragment
-                unpack.insert(stream['msfrag'])
+                unpack.insert(stream.buffer)
             ldata = unpack.size() - 4
 
             # Get RPC header
@@ -304,11 +308,11 @@ class TCP(BaseObj):
         if truncbytes == 0 and ldata < rpcsize:
             # An RPC fragment is missing to decode RPC payload
             unpack.restore_state(sid)
-            stream['msfrag'] += unpack.getbytes()
+            stream.buffer += unpack.getbytes()
         else:
-            if len(stream['msfrag']) > 0 or ldata == rpcsize:
-                stream['frag_off'] = 0
-            stream['msfrag'] = ''
+            if len(stream.buffer) > 0 or ldata == rpcsize:
+                stream.frag_off = 0
+            stream.buffer = ""
             # Save RPC layer on packet object
             pkt.rpc = rpc
             if rpc.type:
@@ -324,7 +328,7 @@ class TCP(BaseObj):
             elif unpack.size():
                 # Save the offset of next RPC packet within this TCP packet
                 # Data offset is cumulative
-                stream['frag_off'] += size - unpack.size()
+                stream.frag_off += size - unpack.size()
                 sid = unpack.save_state()
                 ldata = unpack.size() - 4
                 try:
@@ -335,10 +339,10 @@ class TCP(BaseObj):
                     # Part of next RPC packet is within this TCP packet
                     # Save the multi-span fragment data
                     unpack.restore_state(sid)
-                    stream['msfrag'] += unpack.getbytes()
+                    stream.buffer += unpack.getbytes()
                 else:
                     # Next RPC packet is entirely within this TCP packet
                     # Re-position the file pointer to the current offset
                     pktt.seek(pktt.boffset)
             else:
-                stream['frag_off'] = 0
+                stream.frag_off = 0
