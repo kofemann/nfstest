@@ -61,7 +61,7 @@ from packet.link.ethernet import ETHERNET
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "2.2"
+__version__   = "2.3"
 
 BaseObj.debug_map(0x100000000, 'pkt1', "PKT1: ")
 BaseObj.debug_map(0x200000000, 'pkt2', "PKT2: ")
@@ -139,6 +139,8 @@ class Pktt(BaseObj, Unpack):
         self.frame   = 1      # Current frame number
         self.mindex  = 0      # Maximum packet index for current trace file
         self.findex  = 0      # Current tcpdump file index (used with self.live)
+        self.pindex  = 0      # Current packet index (for pktlist)
+        self.pktlist = None   # Match from this packet list instead
         self.fh      = None   # Current file handle
         self.eof     = False  # End of file marker for current packet trace
         self.serial  = False  # Processing trace files serially
@@ -407,6 +409,9 @@ class Pktt(BaseObj, Unpack):
            of packets processed so far.
         """
         self.dprint('PKT1', ">>> rewind(%d)" % index)
+        if self.pktlist is not None:
+            self.pindex = index
+            return True
         if index >= 0 and index < self.index:
             if len(self.pktt_list) > 1:
                 # Dealing with multiple trace files
@@ -666,6 +671,24 @@ class Pktt(BaseObj, Unpack):
         self.dprint('PKT2', "    %d: match_%s(%s) -> %r" % (self.pkt.record.index, layer, uargs, texpr))
         return texpr
 
+    def get_index(self):
+        """Get current packet index"""
+        if self.pktlist is None:
+            return self.index
+        else:
+            return self.pindex
+
+    def set_pktlist(self, pktlist=None):
+        """Set the current packet list for buffered matching in which the
+           match method will only use this list instead of getting the next
+           packet from the packet trace file.
+           This could be used when there is a lot of matching going back
+           and forth but only on a particular set of packets.
+           See the match() method for an example of buffered matching.
+        """
+        self.pindex  = 0
+        self.pktlist = pktlist
+
     def clear_xid_list(self):
         """Clear list of outstanding xids"""
         self._match_xid_list = []
@@ -763,7 +786,7 @@ class Pktt(BaseObj, Unpack):
            simply 'nfsobj.array[0].sequenceid == 25'.
 
            This approach makes the match expressions simpler at the expense of
-           having some ambiguities on where the actual matched occurred. If a
+           having some ambiguities on where the actual match occurred. If a
            match is desired on a specific operation, a more qualified name can
            be given. In the above example, in order to match the status of the
            PUTFH operation the match expression 'NFS.opputfh.status == 0' can
@@ -886,24 +909,59 @@ class Pktt(BaseObj, Unpack):
                if ("NFS.argop == 38" in x):
                    print x.pkt.nfs
 
+               # Get a list of all OPEN and CLOSE packets then use buffered
+               # matching to process each OPEN and its corresponding CLOSE
+               # at a time including both requests and replies
+               pktlist = []
+               while x.match("NFS.op in [4,18]"):
+                   pktlist.append(x.pkt)
+               # Enable buffered matching
+               x.set_pktlist(pktlist)
+               while x.match("NFS.argop == 18"): # Find OPEN request
+                   print x.pkt
+                   index = x.get_index()
+                   # Find OPEN reply
+                   x.match("RPC.xid == %d and NFS.resop == 18" % x.pkt.rpc.xid)
+                   print x.pkt
+                   # Find corresponding CLOSE request
+                   stid = x.escape(x.pkt.NFSop.stateid.other)
+                   x.match("NFS.argop == 4 and NFS.stateid == '%s'" % stid)
+                   print x.pkt
+                   # Find CLOSE reply
+                   x.match("RPC.xid == %d and NFS.resop == 4" % x.pkt.rpc.xid)
+                   print x.pkt
+                   # Rewind to right after the OPEN request
+                   x.rewind(index)
+               # Disable buffered matching
+               x.set_pktlist()
+
            See also:
                match_ethernet(), match_ip(), match_tcp(), match_rpc(), match_nfs()
         """
-        # Save current position
-        save_index = self.index
-
         # Parse match expression
         st = parser.expr(expr)
         smap = parser.st2list(st)
         pdata = self._convert_match(smap)
         self.dprint('PKT1', ">>> %d: match(%s)" % (self.index, expr))
         self.reply_matched = False
+        if self.pktlist is None:
+            pkt_list   = self
+            save_index = self.index
+        else:
+            pkt_list   = self.pktlist
+            save_index = self.pindex
 
         # Search one packet at a time
-        for pkt in self:
+        for pkt in pkt_list:
             if maxindex and self.index > maxindex:
                 # Hit maxindex limit
                 break
+            if self.pktlist is not None:
+                if pkt.record.index < self.pindex:
+                    continue
+                else:
+                    self.pindex = pkt.record.index + 1
+                    self.pkt = pkt
             try:
                 if reply and pkt == "rpc" and pkt.rpc.type == 1 and pkt.rpc.xid in self._match_xid_list:
                     self.dprint('PKT1', ">>> %d: match() -> True: reply" % pkt.record.index)
@@ -923,7 +981,10 @@ class Pktt(BaseObj, Unpack):
         if rewind:
             # No packet matched, re-position the file pointer back to where
             # the search started
-            self.rewind(save_index)
+            if self.pktlist is None:
+                self.rewind(save_index)
+            else:
+                self.pindex = save_index
         self.pkt = None
         self.dprint('PKT1', ">>> match() -> False")
         return None
