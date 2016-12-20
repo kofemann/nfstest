@@ -794,7 +794,7 @@ class NFSUtil(Host):
             dsmds = " since DS == MDS"
 
         if not ds:
-            save_index = self.pktt.index
+            save_index = self.pktt.get_index()
             # Find PUTROOTFH having a GETFH operation
             getfhmatch = "NFS.argop == %d" % OP_GETFH
             pktcall, pktreply = self.find_nfs_op(OP_PUTROOTFH, ipaddr, port, match=getfhmatch)
@@ -846,7 +846,7 @@ class NFSUtil(Host):
                     slotid = 0
                     fmsg = None
                     test_seq = True
-                    save_index = self.pktt.index
+                    save_index = self.pktt.get_index()
                     while True:
                         # Find first SEQUENCE request per slot id
                         (pktcall, pktreply) = self.find_nfs_op(OP_SEQUENCE, ipaddr, port, call_only=True, match="NFS.slotid == %d" % slotid)
@@ -889,7 +889,7 @@ class NFSUtil(Host):
                 self.test(False, "GETATTR reply was not found")
 
             self.verify_pnfs_supported(self.rootfh, server_type)
-            save_index = self.pktt.index
+            save_index = self.pktt.get_index()
 
             # Find if pNFS is supported for the mounted path including datadir
             path_list = []
@@ -1059,7 +1059,7 @@ class NFSUtil(Host):
             if port != None:
                 dst += "TCP.dst_port == %d and " % port
         fh = "NFS.fh == '%s'" % self.pktt.escape(filehandle)
-        save_index = self.pktt.index
+        save_index = self.pktt.get_index()
         xids = []
         offsets = {}
         good_pattern = 0
@@ -1226,7 +1226,7 @@ class NFSUtil(Host):
         """
         dst = self.pktt.ip_tcp_dst_expr(ipaddr, port)
         fh = "NFS.fh == '%s'" % self.pktt.escape(filehandle)
-        save_index = self.pktt.index
+        save_index = self.pktt.get_index()
         xids = []
         if init:
             self.test_commit_full = True
@@ -1349,7 +1349,7 @@ class NFSUtil(Host):
             self.stid_map[self.deleg_stateid] = "DELEG stateid"
         else:
             # Look for a lock stateid
-            save_index = self.pktt.index
+            save_index = self.pktt.get_index()
             mstr = "NFS.fh == '%s'" % self.pktt.escape(self.filehandle)
             ipaddr = kwargs.get("ipaddr", self.server_ipaddr)
             port   = kwargs.get("port", self.port)

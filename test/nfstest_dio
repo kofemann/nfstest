@@ -706,7 +706,7 @@ class DioTest(TestUtil):
             self.trace_open()
 
             (filehandle, open_stateid, deleg_stateid) = self.find_open(filename=file)
-            save_index = self.pktt.index
+            save_index = self.pktt.get_index()
             if deleg_stateid != None:
                 self.dprint('DBG3', "Delegation is granted")
             stateid = deleg_stateid if deleg_stateid else open_stateid
@@ -720,7 +720,7 @@ class DioTest(TestUtil):
             io_h = {}
             err_h = {}
             while self.pktt.match("NFS.argop == %d and NFS.stateid.other == '%s'" % (io_op, self.pktt.escape(stateid))):
-                save_index = self.pktt.index
+                save_index = self.pktt.get_index()
                 pkt     = self.pktt.pkt
                 roffset = pkt.NFSop.offset
                 ipaddr  = pkt.ip.dst
@@ -1037,7 +1037,7 @@ class DioTest(TestUtil):
             (filehandle, open_stateid, deleg_stateid) = self.find_open(filename=file, claimfh=self.file_handles[write], anyclaim=True)
             if filehandle:
                 self.file_handles[write] = filehandle
-                save_index = self.pktt.index
+                save_index = self.pktt.get_index()
                 self.stateid = deleg_stateid if deleg_stateid else open_stateid
                 (layoutget, layoutget_res, loc_body) = self.find_layoutget(filehandle)
                 self.layout = loc_body

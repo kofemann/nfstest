@@ -177,7 +177,7 @@ class pNFSTest(TestUtil):
                restricted by this [default: None]
         """
         # Save current packet index
-        save_index = self.pktt.index
+        save_index = self.pktt.get_index()
         self.writeverf        = None
         self.need_commit      = False
         self.need_lcommit     = False
@@ -594,7 +594,7 @@ class pNFSTest(TestUtil):
                     self.test(False, "GETDEVICEINFO reply was not found")
 
         # Save current packet index
-        save_index = self.pktt.index
+        save_index = self.pktt.get_index()
 
         if not nolayoutget or 'samefile' in openfh:
             self.verify_pnfs_functionality(openfh, iomode, filesize, multipath_ds_list, need_getdev, nocreate, nocreate_list, write_list, max_iosize, nmax_iosize)
@@ -608,7 +608,7 @@ class pNFSTest(TestUtil):
 
     def verify_close(self, openfh, delegreturn, noclose):
             # Save current packet index
-            save_index = self.pktt.index
+            save_index = self.pktt.get_index()
             filehandle    = openfh['filehandle']
             open_stateid  = openfh['open_stateid']
             deleg_stateid = openfh['deleg_stateid']
@@ -1159,7 +1159,7 @@ class pNFSTest(TestUtil):
                 ids0 = self.layout['first_stripe_index']
 
             if nds > 1:
-                save_index = self.pktt.index
+                save_index = self.pktt.get_index()
                 ids1 = (ids0 + 1) % nds
 
                 ipaddr = dslist[ids1]['ipaddr']
