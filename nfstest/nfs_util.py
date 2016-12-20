@@ -433,7 +433,6 @@ class NFSUtil(Host):
             str_list.append(file_str)
         if claimfh is not None:
             claimfh_str = "(NFS.fh == '%s' and NFS.claim.claim == %d)" % (self.pktt.escape(claimfh), CLAIM_FH)
-            claimfh_str = "(crc32(NFS.fh) == %s and NFS.claim.claim == %d)" % (self.format("{0:crc32}", claimfh), CLAIM_FH)
             str_list.append(claimfh_str)
         if deleg_stateid is not None:
             deleg_str  = "(NFS.claim.claim == %d" % CLAIM_DELEGATE_CUR
