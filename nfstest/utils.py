@@ -36,7 +36,7 @@ FTYPE_SP_DEALLOC = 3 # Sparse file (use deallocate to create holes)
 SR_ALLOCATE   = 0 # Allocate
 SR_DEALLOCATE = 3 # FALLOC_FL_KEEP_SIZE|FALLOC_FL_PUNCH_HOLE
 
-# Sparse file contants
+# Sparse file constants
 SP_HOLE = 0 # Hole segment
 SP_DATA = 1 # Data segment
 
@@ -47,6 +47,14 @@ SEEKmap = {
     SEEK_DATA: "SEEK_DATA",
     SEEK_HOLE: "SEEK_HOLE",
 }
+
+def split_path(path):
+    """Return list of components in path"""
+    ret = os.path.normpath(path).split(os.sep)
+    # Remove leading empty component and "." entry
+    while len(ret) and ret[0] in ("", "."):
+        ret.pop(0)
+    return ret
 
 class SparseFile(BaseObj):
     """SparseFile object
