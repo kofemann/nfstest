@@ -28,14 +28,15 @@ import time
 import subprocess
 from host import Host
 import nfstest_config as c
-from packet.pktt import Pktt
+from packet.pktt import Pktt,crc32
 from packet.nfs.nfs4_const import *
+from nfstest.utils import split_path
 
 # Module constants
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "2.3"
+__version__   = "2.4"
 
 class NFSUtil(Host):
     """NFSUtil object
@@ -122,6 +123,10 @@ class NFSUtil(Host):
         self.stateid = None
         self.rootfh  = None
         self.rootfsid = None
+        self.rootfh_map = {} # Root fh map {key:sessionid, value:rootfh}
+        self.sessionid_map = {} # Session id map {key:exchangeid, value:sessionid}
+        self.sessionid = None # Session ID returned from CREATE_SESSION
+        self.clientid = None # Client ID returned from EXCHANGE_ID
 
         # State id to string mapping
         self.stid_map = {}
@@ -1380,6 +1385,128 @@ class NFSUtil(Host):
                 self.stateid = self.open_stateid
             self.pktt.rewind(save_index)
         return self.stateid
+
+    def get_clientid(self, **kwargs):
+        """Return the client id for the given IP address and port number.
+
+           ipaddr:
+               Destination IP address [default: self.server_ipaddr]
+           port:
+               Destination port [default: self.port]
+        """
+        self.clientid = None
+        ipaddr = kwargs.get('ipaddr', self.server_ipaddr)
+        port   = kwargs.get('port',   self.port)
+        # Find the EXCHANGE_ID packets
+        self.find_nfs_op(OP_EXCHANGE_ID, ipaddr, port)
+        if self.pktreply:
+            self.clientid = self.pktreply.NFSop.clientid
+            return self.clientid
+
+    def get_sessionid(self, **kwargs):
+        """Return the session id for the given IP address and port number.
+
+           clientid:
+               Search the CREATE_SESSION tied to this client id [default: None]
+           ipaddr:
+               Destination IP address [default: self.server_ipaddr]
+           port:
+               Destination port [default: self.port]
+        """
+        self.sessionid = None
+        clientid = kwargs.get('clientid', None)
+        ipaddr   = kwargs.get('ipaddr', self.server_ipaddr)
+        port     = kwargs.get('port',   self.port)
+        if clientid is None:
+            mstr = ""
+        else:
+            # Get the session id tied to the client id from the cache
+            self.sessionid = self.sessionid_map.get(clientid)
+            mstr = "NFS.clientid == %d" % clientid
+        # Find the CREATE_SESSION packets for the exchange id if given
+        self.find_nfs_op(OP_CREATE_SESSION, ipaddr, port, match=mstr)
+        if self.pktreply:
+            # Save the session id from the reply
+            self.sessionid = self.pktreply.NFSop.sessionid
+            self.sessionid_map[clientid] = self.sessionid
+        return self.sessionid
+
+    def get_rootfh(self, **kwargs):
+        """Return the root file handle from PUTROOTFH
+
+           sessionid:
+               Search the PUTROOTFH tied to this session id [default: None]
+           ipaddr:
+               Destination IP address [default: self.server_ipaddr]
+           port:
+               Destination port [default: self.port]
+        """
+        self.rootfh = None
+        ipaddr    = kwargs.get('ipaddr',    self.server_ipaddr)
+        port      = kwargs.get('port',      self.port)
+        sessionid = kwargs.get('sessionid', None)
+        if sessionid is None:
+            mstr = ""
+        else:
+            fh = self.rootfh_map.get(sessionid)
+            if fh is not None:
+                # Return root fh found in the cache
+                self.rootfh = fh
+                return fh
+            mstr = "str(NFS.sessionid) == '%s'" % sessionid
+        # Find the PUTROOTFH packets for the session id if given
+        self.find_nfs_op(OP_PUTROOTFH, ipaddr, port, match=mstr)
+        if self.pktreply:
+            # Get the GETFH object from the packet
+            getfh = self.getop(self.pktreply, OP_GETFH)
+            if getfh:
+                self.rootfh = getfh.fh
+                return getfh.fh
+
+    def get_pathfh(self, path, dirfh=None):
+        """Return the file handle for the given path by searching the packet
+           trace for every component in the path.
+           The file handle for each component is used to search for the file
+           handle in the next component.
+
+           path:
+               File system path
+           dirfh:
+               Directory file handle to start with [default: None]
+        """
+        self.pktcall  = None
+        self.pktreply = None
+        # Break path into its directory components
+        path_list = split_path(path)
+        while len(path_list):
+            # Get next path component
+            name = path_list.pop(0)
+            if dirfh is None:
+                dirmatch = ""
+            else:
+                dirmatch = "crc32(nfs.fh) == %d and " % crc32(dirfh)
+            # Match any operation with a name attribute,
+            # e.g., LOOKUP, CREATE, etc.
+            mstr = "%snfs.name == '%s'" % (dirmatch, name)
+            while self.pktt.match(mstr, rewind=False, reply=True):
+                pkt = self.pktt.pkt
+                if pkt.rpc.type == 0:
+                    # Save packet call
+                    self.pktcall = pkt
+                else:
+                    # Save packet reply
+                    self.pktreply = pkt
+                    if hasattr(pkt.nfs, "status") and pkt.nfs.status == 0:
+                        # Get GETFH from the packet reply where name was matched
+                        getfh = self.getop(pkt, OP_GETFH)
+                        if getfh:
+                            # Set file handle for next iteration
+                            dirfh = getfh.fh
+                            break
+            if self.pktt.pkt is None:
+                # The name was not matched, so return None
+                return
+        return dirfh
 
     def stid_str(self, stateid):
         """Display the state id in CRC16 format"""
