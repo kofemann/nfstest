@@ -103,6 +103,8 @@ class NFSUtil(Host):
         self._nfsdebug = False
         self.pktcall   = None
         self.pktreply  = None
+        self.opencall  = None
+        self.openreply = None
 
         # Initialize object variables
         self.dbgidx = 1
@@ -333,7 +335,9 @@ class NFSUtil(Host):
     def find_nfs_op(self, op, ipaddr, port=None, match='', status=0, src_ipaddr=None, maxindex=None, call_only=False):
         """Find the call and its corresponding reply for the specified NFSv4
            operation going to the server specified by the ipaddr and port.
-           The reply must also match the given status.
+           The reply must also match the given status. Also the following
+           object attributes are defined: pktcall referencing the packet call
+           while pktreply referencing the packet reply.
 
            op:
                NFS operation to find
@@ -381,6 +385,9 @@ class NFSUtil(Host):
     def find_open(self, **kwargs):
         """Find the call and its corresponding reply for the NFSv4 OPEN of the
            given file going to the server specified by the ipaddr and port.
+           The following object attributes are defined: opencall and pktcall
+           both referencing the packet call while openreply and pktreply both
+           referencing the packet reply.
 
            filename:
                Find open call and reply for this file [default: None]
@@ -420,6 +427,8 @@ class NFSUtil(Host):
         anyclaim      = kwargs.pop('anyclaim', False)
         self.pktcall  = None
         self.pktreply = None
+        self.opencall  = None
+        self.openreply = None
 
         src = "IP.src == '%s' and " % src_ipaddr if src_ipaddr is not None else ''
         dst = self.pktt.ip_tcp_dst_expr(ipaddr, port)
@@ -493,6 +502,8 @@ class NFSUtil(Host):
 
             self.pktcall  = pktcall
             self.pktreply = pktreply
+            self.opencall  = pktcall
+            self.openreply = pktreply
             return (filehandle, open_stateid, deleg_stateid)
 
     def find_layoutget(self, filehandle):
@@ -1334,6 +1345,13 @@ class NFSUtil(Host):
            be used by I/O operations. The second is a dictionary table
            which maps the state id to a string identifying if the state
            id is an open, lock or delegation state id.
+
+           ipaddr:
+               Destination IP address [default: self.server_ipaddr]
+           port:
+               Destination port [default: self.port]
+           noreset:
+               Do not reset the state id map [default: False]
         """
         noreset = kwargs.pop("noreset", False)
         if not noreset:
