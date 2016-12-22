@@ -365,7 +365,7 @@ class NFSUtil(Host):
         """
         mstatus = "" if status is None else "NFS.status == %d and " % status
         src = "IP.src == '%s' and " % src_ipaddr if src_ipaddr != None else ''
-        dst = "IP.dst == '%s' and " % ipaddr
+        dst = "IP.dst == '%s' and " % ipaddr if ipaddr is not None else ""
         if len(match):
             match += " and "
         if port != None:
