@@ -409,7 +409,8 @@ class NFSUtil(Host):
                Delegation stateid expected on call in delegate_cur_info [default: None]
            fh:
                Find open call and reply for this file handle when using
-               deleg_stateid [default: None]
+               deleg_stateid or as the directory FH when deleg_stateid
+               is not set [default: None]
            src_ipaddr:
                Source IP address [default: any IP address]
            maxindex:
@@ -456,6 +457,10 @@ class NFSUtil(Host):
                 deleg_str += " or (NFS.claim.claim == %d" % CLAIM_DELEG_CUR_FH
                 deleg_str += " and NFS.fh == '%s' and NFS.claim.stateid == '%s')" % (self.pktt.escape(fh), self.pktt.escape(deleg_stateid))
             str_list.append("(" + deleg_str + ")")
+        if claimfh is None and deleg_stateid is None and fh is not None:
+            dirfh_str = "NFS.fh == '%s'" % self.pktt.escape(fh)
+            file_str = dirfh_str + " and " + file_str
+            str_list.append(dirfh_str)
 
         if anyclaim:
             file_str = " or ".join(str_list)
