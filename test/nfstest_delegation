@@ -361,7 +361,7 @@ class DelegTest(TestUtil):
             if stat:
                 # Find the LOOKUP for the file under test
                 while True:
-                    (lookupcall, lookupreply) = self.find_nfs_op(OP_LOOKUP, self.server_ipaddr, self.port, src_ipaddr=self.client_ipaddr)
+                    (lookupcall, lookupreply) = self.find_nfs_op(OP_LOOKUP, src_ipaddr=self.client_ipaddr)
                     if lookupcall is None or lookupcall.NFSop.name == self.filename:
                         # Found LOOKUP for the filename or the end of the
                         # trace file has been reached
@@ -418,7 +418,7 @@ class DelegTest(TestUtil):
             if lock:
                 # Rewind trace file
                 self.pktt.rewind()
-                (lockcall, lockreply) = self.find_nfs_op(OP_LOCK, self.server_ipaddr, self.port, src_ipaddr=self.client_ipaddr)
+                (lockcall, lockreply) = self.find_nfs_op(OP_LOCK, src_ipaddr=self.client_ipaddr)
                 self.test(lockcall is None, "LOCK should not be sent to the server")
         except Exception:
             self.test(False, traceback.format_exc())
@@ -545,7 +545,7 @@ class DelegTest(TestUtil):
             if deleg_type == OPEN_DELEGATE_READ:
                 self.pktt.rewind(save_index)
                 # Verify no CB_RECALL is sent to client under test
-                (cbcall, cbreply) = self.find_nfs_op(OP_CB_RECALL, self.client_ipaddr, src_ipaddr=self.server_ipaddr, maxindex=conflict_index)
+                (cbcall, cbreply) = self.find_nfs_op(OP_CB_RECALL, ipaddr=self.client_ipaddr, port=None, src_ipaddr=self.server_ipaddr, maxindex=conflict_index)
                 self.test(cbcall is None, "CB_RECALL should not be sent to the client after a READ OPEN is received from a second client")
                 if deleg_stid1 != None:
                     self.test(cbcall is None, "CB_RECALL should not be sent to the client after a second client is granted a READ delegation")
@@ -554,17 +554,17 @@ class DelegTest(TestUtil):
             if lock:
                 self.pktt.rewind(save_index)
                 # Verify no CB_RECALL is sent to client under test
-                (cbcall, cbreply) = self.find_nfs_op(OP_CB_RECALL, self.client_ipaddr, src_ipaddr=self.server_ipaddr, maxindex=conflict_index)
+                (cbcall, cbreply) = self.find_nfs_op(OP_CB_RECALL, ipaddr=self.client_ipaddr, port=None, src_ipaddr=self.server_ipaddr, maxindex=conflict_index)
                 self.test(cbcall is None, "%s delegation should not be recalled after locking the file" % mode_str)
 
-                (lockcall, lockreply) = self.find_nfs_op(OP_LOCK, self.server_ipaddr, self.port, src_ipaddr=self.client_ipaddr, maxindex=conflict_index)
+                (lockcall, lockreply) = self.find_nfs_op(OP_LOCK, src_ipaddr=self.client_ipaddr, maxindex=conflict_index)
                 self.test(lockcall is None, "LOCK should not be sent to the server when holding a %s delegation on the file" % mode_str)
                 self.pktt.rewind(conflict_index)
 
             self.test(opencall != None, "%s should be sent from second client" % conflict_str)
 
             # Find CB_RECALL sent to client under test
-            (cbcall, cbreply) = self.find_nfs_op(OP_CB_RECALL, self.client_ipaddr, src_ipaddr=self.server_ipaddr)
+            (cbcall, cbreply) = self.find_nfs_op(OP_CB_RECALL, ipaddr=self.client_ipaddr, port=None, src_ipaddr=self.server_ipaddr)
             self.test(cbcall != None, "CB_RECALL should be sent to the client after a conflicting %s is received from a second client" % conflict_str)
             if cbcall is None:
                 return
@@ -594,14 +594,14 @@ class DelegTest(TestUtil):
                 self.pktt.rewind(open_index)
 
             # Find DELEGRETURN request and reply
-            (delegreturncall, delegreturnreply) = self.find_nfs_op(OP_DELEGRETURN, self.server_ipaddr, self.port, src_ipaddr=self.client_ipaddr)
+            (delegreturncall, delegreturnreply) = self.find_nfs_op(OP_DELEGRETURN, src_ipaddr=self.client_ipaddr)
             if delegreturncall:
                 delegreturn_index = delegreturncall.record.index
 
             if lock and delegreturncall:
                 self.pktt.rewind(open_index)
                 # Find the LOCK before DELEGRETURN
-                (lockcall, lockreply) = self.find_nfs_op(OP_LOCK, self.server_ipaddr, self.port, src_ipaddr=self.client_ipaddr, maxindex=delegreturn_index)
+                (lockcall, lockreply) = self.find_nfs_op(OP_LOCK, src_ipaddr=self.client_ipaddr, maxindex=delegreturn_index)
                 self.test(lockcall != None, "LOCK is sent to the server right before returning the %s delegation" % mode_str)
 
             self.test(delegreturncall != None, "DELEGRETURN should be sent from client right after re-opening the file")

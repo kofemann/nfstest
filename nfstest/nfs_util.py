@@ -36,7 +36,7 @@ from nfstest.utils import split_path
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "2.4"
+__version__   = "2.5"
 
 class NFSUtil(Host):
     """NFSUtil object
@@ -337,7 +337,7 @@ class NFSUtil(Host):
                     fdw.close()
                 os.system(self.sudo_cmd("chmod %o %s" % (self.dbgmode, self.messages)))
 
-    def find_nfs_op(self, op, ipaddr, port=None, match='', status=0, src_ipaddr=None, maxindex=None, call_only=False):
+    def find_nfs_op(self, op, **kwargs):
         """Find the call and its corresponding reply for the specified NFSv4
            operation going to the server specified by the ipaddr and port.
            The reply must also match the given status. Also the following
@@ -347,22 +347,35 @@ class NFSUtil(Host):
            op:
                NFS operation to find
            ipaddr:
-               Destination IP address
+               Destination IP address [default: self.server_ipaddr]
+               A value of None matches any IP address
            port:
-               Destination port [default: any destination port]
+               Destination port [default: self.port]
+               A value of None matches any destination port
            match:
                Match string to include [default: '']
            status:
                Match the status of the operation [default: 0]
+               A value of None matches any status.
            src_ipaddr:
-               Source IP address [default: any IP address]
+               Source IP address [default: None]
+               A value of None matches any IP address
            maxindex:
-               The match fails if packet index hits this limit [default: no limit]
+               The match fails if packet index hits this limit [default: None]
+               A value of None means there is no limit
            call_only:
                Find the call only [default: False]
 
            Return a tuple: (pktcall, pktreply).
         """
+        ipaddr       = kwargs.get("ipaddr",       self.server_ipaddr)
+        port         = kwargs.get("port",         self.port)
+        match        = kwargs.get("match",        "")
+        status       = kwargs.get("status",       0)
+        src_ipaddr   = kwargs.get("src_ipaddr",   None)
+        maxindex     = kwargs.get("maxindex",     None)
+        call_only    = kwargs.get("call_only",    False)
+
         mstatus = "" if status is None else "NFS.status == %d and " % status
         src = "IP.src == '%s' and " % src_ipaddr if src_ipaddr != None else ''
         dst = "IP.dst == '%s' and " % ipaddr if ipaddr is not None else ""
@@ -594,7 +607,7 @@ class NFSUtil(Host):
         dslist = []
         # Find GETDEVICEINFO request and reply
         match = "NFS.deviceid == '%s'" % self.pktt.escape(deviceid) if deviceid is not None else ''
-        (pktcall, pktreply) = self.find_nfs_op(OP_GETDEVICEINFO, self.server_ipaddr, self.port, match=match, status=None)
+        (pktcall, pktreply) = self.find_nfs_op(OP_GETDEVICEINFO, match=match, status=None)
         if pktreply and pktreply.nfs.status == 0:
             self.gdir_device = pktreply.NFSop.device_addr
             if self.gdir_device.type == LAYOUT4_NFSV4_1_FILES:
@@ -630,10 +643,8 @@ class NFSUtil(Host):
 
            Return a tuple: (pktcall, pktreply).
         """
-        ipaddr = kwargs.pop('ipaddr', self.server_ipaddr)
-        port   = kwargs.pop('port', self.port)
         # Find EXCHANGE_ID request and reply
-        (pktcall, pktreply) = self.find_nfs_op(OP_EXCHANGE_ID, ipaddr, port)
+        (pktcall, pktreply) = self.find_nfs_op(OP_EXCHANGE_ID, **kwargs)
         self.src_ipaddr = pktcall.ip.src
         self.src_port   = pktcall.tcp.src_port
         self.cb_dst     = self.pktt.ip_tcp_dst_expr(self.src_ipaddr, self.src_port)
@@ -751,7 +762,7 @@ class NFSUtil(Host):
         fhstr = self.pktt.escape(filehandle)
         # Find packet having a GETATTR asking for FATTR4_SUPPORTED_ATTRS(bit 0)
         attrmatch = "NFS.fh == '%s' and NFS.request & %s != 0" % (fhstr, hex(1 << FATTR4_SUPPORTED_ATTRS))
-        pktcall, pktreply = self.find_nfs_op(OP_GETATTR, self.server_ipaddr, self.port, match=attrmatch)
+        pktcall, pktreply = self.find_nfs_op(OP_GETATTR, match=attrmatch)
         self.test(pktcall, "GETATTR should be sent to %s asking for FATTR4_SUPPORTED_ATTRS%s" % (server_type, pmsg))
         if pktreply:
             supported_attrs = pktreply.NFSop.attributes[FATTR4_SUPPORTED_ATTRS]
@@ -762,7 +773,7 @@ class NFSUtil(Host):
 
         # Find packet having a GETATTR asking for FATTR4_FS_LAYOUT_TYPES(bit 62)
         attrmatch = "NFS.fh == '%s' and NFS.request & %s != 0" % (fhstr, hex(1 << FATTR4_FS_LAYOUT_TYPES))
-        pktcall, pktreply = self.find_nfs_op(OP_GETATTR, self.server_ipaddr, self.port, match=attrmatch)
+        pktcall, pktreply = self.find_nfs_op(OP_GETATTR, match=attrmatch)
         self.test(pktcall, "GETATTR should be sent to %s asking for FATTR4_FS_LAYOUT_TYPES%s" % (server_type, pmsg))
         if pktreply:
             # Get list of fs layout types supported by the server
@@ -817,7 +828,7 @@ class NFSUtil(Host):
             save_index = self.pktt.get_index()
             # Find PUTROOTFH having a GETFH operation
             getfhmatch = "NFS.argop == %d" % OP_GETFH
-            pktcall, pktreply = self.find_nfs_op(OP_PUTROOTFH, ipaddr, port, match=getfhmatch)
+            pktcall, pktreply = self.find_nfs_op(OP_PUTROOTFH, ipaddr=ipaddr, port=port, match=getfhmatch)
             self.rootfh = getattr(self.getop(pktreply, OP_GETFH), "fh", None)
             attributes  = getattr(self.getop(pktreply, OP_GETATTR), "attributes", None)
             if attributes:
@@ -825,7 +836,7 @@ class NFSUtil(Host):
             self.pktt.rewind(save_index)
 
         # Find EXCHANGE_ID request and reply
-        (pktcall, pktreply) = self.find_nfs_op(OP_EXCHANGE_ID, ipaddr, port, status=exchid_status)
+        (pktcall, pktreply) = self.find_nfs_op(OP_EXCHANGE_ID, ipaddr=ipaddr, port=port, status=exchid_status)
         if nocreate:
             self.test(not pktcall, "EXCHANGE_ID should not be sent to %s%s" % (server_type, dsmds))
         else:
@@ -846,7 +857,7 @@ class NFSUtil(Host):
                 self.test(False, "EXCHANGE_ID reply was not found")
 
         # Find CREATE_SESSION request
-        (pktcall, pktreply) = self.find_nfs_op(OP_CREATE_SESSION, ipaddr, port, status=cs_status)
+        (pktcall, pktreply) = self.find_nfs_op(OP_CREATE_SESSION, ipaddr=ipaddr, port=port, status=cs_status)
         if nocreate:
             self.test(not pktcall, "CREATE_SESSION should not be sent to %s%s" % (server_type, dsmds))
         else:
@@ -869,7 +880,7 @@ class NFSUtil(Host):
                     save_index = self.pktt.get_index()
                     while True:
                         # Find first SEQUENCE request per slot id
-                        (pktcall, pktreply) = self.find_nfs_op(OP_SEQUENCE, ipaddr, port, call_only=True, match="NFS.slotid == %d" % slotid)
+                        (pktcall, pktreply) = self.find_nfs_op(OP_SEQUENCE, ipaddr=ipaddr, port=port, call_only=True, match="NFS.slotid == %d" % slotid)
                         if pktcall is None:
                             break
                         self.pktt.rewind(save_index)
@@ -887,7 +898,7 @@ class NFSUtil(Host):
                 self.test(False, "CREATE_SESSION reply was not found")
 
         # Find RECLAIM_COMPLETE request
-        (pktcall, pktreply) = self.find_nfs_op(OP_RECLAIM_COMPLETE, ipaddr, port, status=None)
+        (pktcall, pktreply) = self.find_nfs_op(OP_RECLAIM_COMPLETE, ipaddr=ipaddr, port=port, status=None)
         if nocreate:
             self.test(not pktcall, "RECLAIM_COMPLETE should not be sent to %s%s" % (server_type, dsmds))
         else:
@@ -900,7 +911,7 @@ class NFSUtil(Host):
         if not ds:
             # Find packet having a GETATTR asking for FATTR4_LEASE_TIME(bit 10)
             attrmatch = "NFS.request & %s != 0" % hex(1 << FATTR4_LEASE_TIME)
-            (pktcall, pktreply) = self.find_nfs_op(OP_GETATTR, self.server_ipaddr, self.port, match=attrmatch)
+            (pktcall, pktreply) = self.find_nfs_op(OP_GETATTR, match=attrmatch)
             self.test(pktcall, "GETATTR should be sent to %s asking for FATTR4_LEASE_TIME" % server_type)
             if pktreply:
                 lease_time = pktreply.NFSop.attributes[FATTR4_LEASE_TIME]
@@ -931,7 +942,7 @@ class NFSUtil(Host):
                 # Find the LOOKUP
                 fullpath = os.path.join(fullpath, path)
                 match = "NFS.name == '%s'" % path
-                pktcall, pktreply = self.find_nfs_op(OP_LOOKUP, self.server_ipaddr, self.port, match=match)
+                pktcall, pktreply = self.find_nfs_op(OP_LOOKUP, match=match)
                 if pktreply:
                     getfh_obj   = self.getop(pktreply, OP_GETFH)
                     getattr_obj = self.getop(pktreply, OP_GETATTR)
@@ -1377,10 +1388,10 @@ class NFSUtil(Host):
         else:
             # Look for a lock stateid
             save_index = self.pktt.get_index()
-            mstr = "NFS.fh == '%s'" % self.pktt.escape(self.filehandle)
-            ipaddr = kwargs.get("ipaddr", self.server_ipaddr)
-            port   = kwargs.get("port", self.port)
-            (pktcall, pktreply) = self.find_nfs_op(OP_LOCK, ipaddr, port, match=mstr)
+            argl = ("ipaddr", "port")
+            args = dict((k, kwargs[k]) for k in kwargs if k in argl)
+            args["match"] = "NFS.fh == '%s'" % self.pktt.escape(self.filehandle)
+            (pktcall, pktreply) = self.find_nfs_op(OP_LOCK, **args)
             if pktreply:
                 self.lock_stateid = pktreply.NFSop.stateid.other
                 self.stid_map[self.lock_stateid] = "LOCK stateid"
@@ -1400,10 +1411,8 @@ class NFSUtil(Host):
                Destination port [default: self.port]
         """
         self.clientid = None
-        ipaddr = kwargs.get('ipaddr', self.server_ipaddr)
-        port   = kwargs.get('port',   self.port)
         # Find the EXCHANGE_ID packets
-        self.find_nfs_op(OP_EXCHANGE_ID, ipaddr, port)
+        self.find_nfs_op(OP_EXCHANGE_ID, **kwargs)
         if self.pktreply:
             self.clientid = self.pktreply.NFSop.clientid
             return self.clientid
@@ -1419,17 +1428,13 @@ class NFSUtil(Host):
                Destination port [default: self.port]
         """
         self.sessionid = None
-        clientid = kwargs.get('clientid', None)
-        ipaddr   = kwargs.get('ipaddr', self.server_ipaddr)
-        port     = kwargs.get('port',   self.port)
-        if clientid is None:
-            mstr = ""
-        else:
+        clientid = kwargs.pop('clientid', None)
+        if clientid is not None:
             # Get the session id tied to the client id from the cache
             self.sessionid = self.sessionid_map.get(clientid)
-            mstr = "NFS.clientid == %d" % clientid
+            kwargs["match"] = "NFS.clientid == %d" % clientid
         # Find the CREATE_SESSION packets for the exchange id if given
-        self.find_nfs_op(OP_CREATE_SESSION, ipaddr, port, match=mstr)
+        self.find_nfs_op(OP_CREATE_SESSION, **kwargs)
         if self.pktreply:
             # Save the session id from the reply
             self.sessionid = self.pktreply.NFSop.sessionid
@@ -1447,20 +1452,16 @@ class NFSUtil(Host):
                Destination port [default: self.port]
         """
         self.rootfh = None
-        ipaddr    = kwargs.get('ipaddr',    self.server_ipaddr)
-        port      = kwargs.get('port',      self.port)
-        sessionid = kwargs.get('sessionid', None)
-        if sessionid is None:
-            mstr = ""
-        else:
+        sessionid = kwargs.pop('sessionid', None)
+        if sessionid is not None:
             fh = self.rootfh_map.get(sessionid)
             if fh is not None:
                 # Return root fh found in the cache
                 self.rootfh = fh
                 return fh
-            mstr = "str(NFS.sessionid) == '%s'" % sessionid
+            kwargs["match"] = "str(NFS.sessionid) == '%s'" % sessionid
         # Find the PUTROOTFH packets for the session id if given
-        self.find_nfs_op(OP_PUTROOTFH, ipaddr, port, match=mstr)
+        self.find_nfs_op(OP_PUTROOTFH, **kwargs)
         if self.pktreply:
             # Get the GETFH object from the packet
             getfh = self.getop(self.pktreply, OP_GETFH)

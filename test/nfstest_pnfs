@@ -257,7 +257,7 @@ class pNFSTest(TestUtil):
                 if len(ds_list) > 1:
                     # Mulipath DS, so find out if any address on given
                     # DS has any traffic
-                    (pktcall, pktreply) = self.find_nfs_op(io_op, ipaddr, port)
+                    (pktcall, pktreply) = self.find_nfs_op(io_op, ipaddr=ipaddr, port=port)
                     if pktcall:
                         ds_traffic = True
                         self.pktt.rewind(save_index)
@@ -480,7 +480,7 @@ class pNFSTest(TestUtil):
 
         lock_stateid = None
         if lock:
-            (pktcall, pktreply) = self.find_nfs_op(OP_LOCK, self.server_ipaddr, self.port)
+            (pktcall, pktreply) = self.find_nfs_op(OP_LOCK)
             if deleg_stateid is None:
                 self.test(pktcall, "LOCK should be sent")
                 if pktcall:
@@ -616,14 +616,14 @@ class pNFSTest(TestUtil):
 
             if delegreturn:
                 # Find DELEGRETURN request
-                (pktcall, pktreply) = self.find_nfs_op(OP_DELEGRETURN, self.server_ipaddr, self.port, match=fhandlestr)
+                (pktcall, pktreply) = self.find_nfs_op(OP_DELEGRETURN, match=fhandlestr)
                 if pktcall:
                     self.test(pktcall.NFSop.stateid == deleg_stateid, "DELEGRETURN should use the delegation stateid")
                 else:
                     self.test(False, "DELEGRETURN should be sent")
             elif not noclose:
                 # Find CLOSE request
-                (pktcall, pktreply) = self.find_nfs_op(OP_CLOSE, self.server_ipaddr, self.port, match=fhandlestr)
+                (pktcall, pktreply) = self.find_nfs_op(OP_CLOSE, match=fhandlestr)
                 if pktcall:
                     self.test(pktcall.NFSop.stateid == open_stateid, "CLOSE should use the open stateid")
                 else:
@@ -631,7 +631,7 @@ class pNFSTest(TestUtil):
 
                 # Find if there is a DELEGRETURN
                 self.pktt.rewind(save_index)
-                (pktcall, pktreply) = self.find_nfs_op(OP_DELEGRETURN, self.server_ipaddr, self.port, match=fhandlestr)
+                (pktcall, pktreply) = self.find_nfs_op(OP_DELEGRETURN, match=fhandlestr)
                 if pktcall:
                     # Delegation has been returned
                     self.test(pktcall.NFSop.stateid == deleg_stateid, "DELEGRETURN should use the delegation stateid")
@@ -967,7 +967,7 @@ class pNFSTest(TestUtil):
         (multipath_ds_list, openfh) = self.verify_file(filename, iomode=LAYOUTIOMODE4_RW, nolayoutget=True, lock=haslock, verify_close=False)
 
         fhandle_str = "NFS.fh == '%s'" % self.pktt.escape(openfh['filehandle'])
-        (pktcall, pktreply) = self.find_nfs_op(OP_SETATTR, self.server_ipaddr, self.port, status=None, match=fhandle_str)
+        (pktcall, pktreply) = self.find_nfs_op(OP_SETATTR, status=None, match=fhandle_str)
         self.test(pktcall, "SETATTR should be sent to MDS")
         if pktcall:
             sent_stateid = pktcall.NFSop.stateid.other
@@ -1165,14 +1165,14 @@ class pNFSTest(TestUtil):
                 ipaddr = dslist[ids1]['ipaddr']
                 port   = dslist[ids1]['port']
                 # Find WRITE call and reply
-                (pktcall, pktreply) = self.find_nfs_op(OP_WRITE, ipaddr, port)
+                (pktcall, pktreply) = self.find_nfs_op(OP_WRITE, ipaddr=ipaddr, port=port)
                 self.test(pktreply, "Client should send a WRITE to the second DS")
                 self.pktt.rewind(save_index)
 
                 ipaddr = dslist[ids0]['ipaddr']
                 port   = dslist[ids0]['port']
                 # Find WRITE call and reply
-                (pktcall, pktreply) = self.find_nfs_op(OP_WRITE, ipaddr, port)
+                (pktcall, pktreply) = self.find_nfs_op(OP_WRITE, ipaddr=ipaddr, port=port)
                 self.test(not pktreply, "Client should not send a WRITE to the first DS")
                 self.pktt.rewind(save_index)
 
@@ -1180,7 +1180,7 @@ class pNFSTest(TestUtil):
                 # Find READ call and reply
                 ipaddr = dslist[ids0]['ipaddr']
                 port   = dslist[ids0]['port']
-                (pktcall, pktreply) = self.find_nfs_op(OP_READ, ipaddr, port)
+                (pktcall, pktreply) = self.find_nfs_op(OP_READ, ipaddr=ipaddr, port=port)
                 self.test(pktreply, "Client should send a READ to the first DS")
                 if pktreply:
                     self.test(pktreply.NFSop.eof and len(data) == self.rsize, "Client should ignore EOF marker in READ reply for hole")

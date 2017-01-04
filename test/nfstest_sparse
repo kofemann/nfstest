@@ -212,7 +212,7 @@ class SparseTest(TestUtil):
                 offset = file_size - 1
 
             self.trace_open()
-            (pktcall, pktreply) = self.find_nfs_op(OP_SEEK, self.server_ipaddr, self.port, status=None)
+            (pktcall, pktreply) = self.find_nfs_op(OP_SEEK, status=None)
             self.dprint('DBG7', str(pktcall))
             self.dprint('DBG7', str(pktreply))
             self.test(pktcall, "SEEK should be sent to the server")
@@ -385,7 +385,7 @@ class SparseTest(TestUtil):
         try:
             self.trace_open()
             self.get_stateid(sfile.filename)
-            (pktcall, pktreply) = self.find_nfs_op(OP_SEEK, self.server_ipaddr, self.port, status=None)
+            (pktcall, pktreply) = self.find_nfs_op(OP_SEEK, status=None)
             self.dprint('DBG7', str(pktcall))
             self.dprint('DBG7', str(pktreply))
             if pktcall:
