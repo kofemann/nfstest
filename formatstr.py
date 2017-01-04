@@ -133,7 +133,7 @@ def crc16(value):
     """Convert string to its crc16 representation"""
     return binascii.crc_hqx(value, 0xa5a5) & 0xffff
 
-def hex(value):
+def hexstr(value):
     """Convert string to its hex representation"""
     return "0x" + value.encode("hex")
 
