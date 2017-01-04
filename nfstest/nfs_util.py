@@ -23,12 +23,9 @@ Furthermore, methods for finding specific NFSv4 operations within the packet
 trace are also included.
 """
 import os
-import re
-import time
-import subprocess
 from host import Host
+from formatstr import *
 import nfstest_config as c
-from packet.pktt import Pktt,crc32
 from packet.nfs.nfs4_const import *
 from nfstest.utils import split_path
 
@@ -36,7 +33,7 @@ from nfstest.utils import split_path
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "2.5"
+__version__   = "2.6"
 
 class NFSUtil(Host):
     """NFSUtil object
@@ -49,73 +46,62 @@ class NFSUtil(Host):
            # Create object for local host
            x = NFSUtil()
 
-           # Start packet trace
-           x.trace_start()
+           # Create client host object
+           clientobj = x.create_host('192.168.0.11')
 
-           # Stop packet trace
-           x.trace_stop()
+           # Get the next LOOKUP packets
+           pktcall, pktreply = x.find_nfs_op(OP_LOOKUP)
 
-           # Open packet trace
-           x.trace_open()
+           # Get OPEN information for the given file name
+           fh, open_stid, deleg_stid = x.find_open(filename="file1")
 
-           # Enable NFS kernel debug
-           x.nfs_debug_enable(nfsdebug='all'):
+           # Get address and port number from universal address string
+           ipaddr, port = x.get_addr_port(addr)
 
-           # Stop NFS kernel debug
-           x.nfs_debug_reset()
+           # Get packets and DS list for GETDEVICEINFO
+           pktcall, pktreply, dslist = x.find_getdeviceinfo()
+
+           # Get packets for EXCHANGE_ID
+           pktcall, pktreply = x.find_exchange_id()
+
+           # Get the NFS operation object from the given packet
+           getfh = x.getop(x.pktreply, OP_GETFH)
+
+           # Get the stateid which must be used by I/O operations
+           stateid = x.get_stateid("file1")
+
+           # Get the client id
+           clientid = x.get_clientid()
+
+           # Get the session id for the given clientid
+           sessionid = x.get_sessionid(clientid=clientid)
+
+           # Get the root file handle from PUTROOTFH for the given session id
+           x.get_rootfh(sessionid=sessionid)
+
+           # Get the file handle for the given path
+           dirfh = x.get_pathfh("/vol1/data")
+
+           # Display the state id in CRC16 format
+           stidstr = x.stid_str(stateid)
+
+           # Get the number of bytes available in the given directory
+           freebytes = x.get_freebytes("/mnt/t")
     """
     def __init__(self, **kwargs):
         """Constructor
 
            Initialize object's private data.
-
-           rpcdebug:
-               Set RPC kernel debug flags and save log messages [default: '']
-           nfsdebug:
-               Set NFS kernel debug flags and save log messages [default: '']
-           dbgname:
-               Base name for log messages files to create [default: 'dbgfile']
-           tracename:
-               Base name for trace files to create [default: 'tracefile']
-           trcdelay:
-               Seconds to delay before stopping packet trace [default: 0.0]
-           notrace:
-               Debug option so a trace is not actually started [default: False]
-           tcpdump:
-               Tcpdump command [default: '/usr/sbin/tcpdump']
-           messages:
-               Location of file for system messages [default: '/var/log/messages']
-           tmpdir:
-               Temporary directory where trace files are created [default: '/tmp']
-           tbsize:
-               Capture buffer size in kB [default: 50000]
         """
         # Arguments
-        self.rpcdebug  = kwargs.pop("rpcdebug",  '')
-        self.nfsdebug  = kwargs.pop("nfsdebug",  '')
-        self.dbgname   = kwargs.pop("dbgname",   'dbgfile')
-        self.tracename = kwargs.pop("tracename", 'tracefile')
-        self.trcdelay  = kwargs.pop("trcdelay",  0.0)
-        self.notrace   = kwargs.pop("notrace",   False)
-        self.tcpdump   = kwargs.pop("tcpdump",   c.NFSTEST_TCPDUMP)
-        self.messages  = kwargs.pop("messages",  c.NFSTEST_MESSAGESLOG)
-        self.tmpdir    = kwargs.pop("tmpdir",    c.NFSTEST_TMPDIR)
-        self.tbsize    = kwargs.pop("tbsize",    50000)
-        self._nfsdebug = False
         self.pktcall   = None
         self.pktreply  = None
         self.opencall  = None
         self.openreply = None
 
         # Initialize object variables
-        self.dbgidx = 1
-        self.dbgfile = ''
-        self.traceidx = 1
-        self.tracefile = ''
-        self.tracefiles = []
         self.clients = []
         self.clientobj = None
-        self.traceproc = None
         self.nii_name = ''    # nii_name for the client
         self.nii_server = ''  # nii_name for the server
         self.device_info = {}
@@ -154,10 +140,9 @@ class NFSUtil(Host):
     def __del__(self):
         """Destructor
 
-           Gracefully stop the packet trace and unreference all client
+           Gracefully stop the packet trace and un-reference all client
            objects
         """
-        self.trace_stop()
         self.clientobj = None
         while self.clients:
             self.clients.pop()
@@ -179,163 +164,22 @@ class NFSUtil(Host):
             datadir      = kwargs.pop("datadir",      self.datadir),
             mtopts       = kwargs.pop("mtopts",       self.mtopts),
             nomount      = kwargs.pop("nomount",      self.nomount),
+            tracename    = kwargs.pop("tracename",    self.tracename),
+            trcdelay     = kwargs.pop("trcdelay",     self.trcdelay),
+            tcpdump      = kwargs.pop("tcpdump",      self.tcpdump),
+            tbsize       = kwargs.pop("tbsize",       self.tbsize),
+            notrace      = kwargs.pop("notrace",      self.notrace),
+            rpcdebug     = kwargs.pop("rpcdebug",     self.rpcdebug),
+            nfsdebug     = kwargs.pop("nfsdebug",     self.nfsdebug),
+            dbgname      = kwargs.pop("dbgname",      self.dbgname),
+            messages     = kwargs.pop("messages",     self.messages),
+            tmpdir       = kwargs.pop("tmpdir",       self.tmpdir),
+            iptables     = kwargs.pop("iptables",     self.iptables),
             sudo         = kwargs.pop("sudo",         self.sudo),
         )
 
         self.clients.append(self.clientobj)
         return self.clientobj
-
-    def trace_start(self, tracefile=None, interface=None, capsize=None, clients=None):
-        """Start trace on interface given
-
-           tracefile:
-               Name of trace file to create, default is a unique name
-               created in the temporary directory using self.tracename as the
-               base name.
-           capsize:
-               Use the -C option of tcpdump to split the trace files every
-               1000000*capsize bytes. See documentation for tcpdump for more
-               information
-           clients:
-               List of Host() objects to monitor
-
-           Return the name of the trace file created.
-        """
-        self.trace_stop()
-        if tracefile:
-            self.tracefile = tracefile
-        else:
-            self.tracefile = "%s/%s_%d.cap" % (self.tmpdir, self.tracename, self.traceidx)
-            self.traceidx += 1
-        if not self.notrace:
-            if len(self.nfsdebug) or len(self.rpcdebug):
-                self.nfs_debug_enable()
-            self.tracefiles.append(self.tracefile)
-
-            if clients is None:
-                clients = self.clients
-
-            if interface is None:
-                interface = self.interface
-
-            opts = ""
-            if interface is not None:
-                opts += " -i %s" % interface
-
-            if capsize:
-                opts += " -C %d" % capsize
-
-            hosts = self.ipaddr
-            for cobj in clients:
-                hosts += " or %s" % cobj.ipaddr
-
-            cmd = "%s%s -n -B %d -s 0 -w %s host %s" % (self.tcpdump, opts, self.tbsize, self.tracefile, hosts)
-            self.run_cmd(cmd, sudo=True, dlevel='DBG2', msg="Trace start: ", wait=False)
-            self.traceproc = self.process
-
-            # Make sure tcpdump has started
-            out = self.traceproc.stderr.readline()
-            if not re.search('listening on', out):
-                time.sleep(1)
-                if self.process.poll() is not None:
-                    raise Exception(out)
-        return self.tracefile
-
-    def trace_stop(self):
-        """Stop the trace started by trace_start()."""
-        try:
-            if self.traceproc:
-                self.dprint('DBG2', "Trace stop")
-                time.sleep(self.trcdelay)
-                self.run_cmd("killall tcpdump", sudo=True, dlevel='DBG2')
-                self.stop_cmd(self.traceproc)
-                self.traceproc = None
-            if not self.notrace and self._nfsdebug:
-                self.nfs_debug_reset()
-        except:
-            return
-
-    def trace_open(self, tracefile=None, **kwargs):
-        """Open the trace file given or the trace file started by trace_start().
-
-           All extra options are passed directly to the packet trace object.
-
-           Return the packet trace object created, the packet trace object
-           is also stored in the object attribute pktt.
-        """
-        if tracefile is None:
-            tracefile = self.tracefile
-        self.dprint('DBG1', "trace_open [%s]" % tracefile)
-        self.pktt = Pktt(tracefile, **kwargs)
-        return self.pktt
-
-    def nfs_debug_enable(self, **kwargs):
-        """Enable NFS debug messages.
-
-           rpcdebug:
-               Set RPC kernel debug flags and save log messages [default: self.rpcdebug]
-           nfsdebug:
-               Set NFS kernel debug flags and save log messages [default: self.nfsdebug]
-           dbgfile:
-               Name of log messages file to create, default is a unique name
-               created in the temporary directory using self.dbgname as the
-               base name.
-        """
-        modmsgs = {
-            'nfs': kwargs.pop('nfsdebug', self.nfsdebug),
-            'rpc': kwargs.pop('rpcdebug', self.rpcdebug),
-        }
-        dbgfile = kwargs.pop('dbgfile', None)
-        if dbgfile is not None:
-            self.dbgfile = dbgfile
-        else:
-            self.dbgfile = "%s/%s_%d.msg" % (self.tmpdir, self.dbgname, self.dbgidx)
-            self.dbgidx += 1
-
-        if modmsgs['nfs'] is None and modmsgs['rpc'] is None:
-            return
-
-        if os.path.exists(self.messages):
-            fstat = os.stat(self.messages)
-            self.dbgoffset = fstat.st_size
-            self.dbgmode = fstat.st_mode & 0777
-            for mod in modmsgs.keys():
-                if len(modmsgs[mod]):
-                    self._nfsdebug = True
-                    cmd = "rpcdebug -v -m %s -s %s" % (mod, modmsgs[mod])
-                    self.run_cmd(cmd, sudo=True, dlevel='DBG2', msg="NFS debug enable: ")
-
-    def nfs_debug_reset(self):
-        """Reset NFS debug messages."""
-        for mod in ('nfs', 'rpc'):
-            try:
-                cmd = "rpcdebug -v -m %s -c" % mod
-                self.run_cmd(cmd, sudo=True, dlevel='DBG2', msg="NFS debug reset: ")
-            except:
-                pass
-
-        if self.dbgoffset != None:
-            try:
-                fd = None
-                fdw = None
-                os.system(self.sudo_cmd("chmod %o %s" % (self.dbgmode|0444, self.messages)))
-                self.dprint('DBG2', "Creating log messages file [%s]" % self.dbgfile)
-                fdw = open(self.dbgfile, "w")
-                fd = open(self.messages, "r")
-                fd.seek(self.dbgoffset)
-                while True:
-                    data = fd.read(self.rsize)
-                    if len(data) == 0:
-                        break
-                    fdw.write(data)
-            except Exception as e:
-                raise
-            finally:
-                if fd:
-                    fd.close()
-                if fdw:
-                    fdw.close()
-                os.system(self.sudo_cmd("chmod %o %s" % (self.dbgmode, self.messages)))
 
     def find_nfs_op(self, op, **kwargs):
         """Find the call and its corresponding reply for the specified NFSv4
@@ -635,7 +479,7 @@ class NFSUtil(Host):
            going to the server specified by the ipaddr and port.
 
            ipaddr:
-               Destination IP address [default: self.server]
+               Destination IP address [default: self.server_ipaddr]
            port:
                Destination port [default: self.port]
 
