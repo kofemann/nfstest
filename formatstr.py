@@ -30,7 +30,7 @@ from string import Formatter
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.4"
+__version__   = "1.5"
 
 # Display variables
 CRC16 = True
@@ -200,8 +200,18 @@ class FormatStr(Formatter):
            out = x.format("{0:@3}", "hello") # out = "lo"
            out = x.format("{0:.2}", "hello") # out = "he"
 
+           # Conditionally display the first format if argument is not None,
+           # else the second format is displayed
+           # Format: {0:?format1:format2}
+           out = x.format("{0:?tuple({0}, {1})}", 1, 2)    # out = "tuple(1, 2)"
+           out = x.format("{0:?tuple({0}, {1})}", None, 2) # out = ""
+           # Using 'else' format (including the escaping of else character):
+           out = x.format("{0:?sid\:{0}:NONE}", 5)    # out = "sid:5"
+           out = x.format("{0:?sid\:{0}:NONE}", None) # out = "NONE"
+
            # Nested formatting for strings, where processing is done in
            # reversed order -- process the last format first
+           # Format: {0:fmtN:...:fmt2:fmt1}
            #   Display substring of 4 bytes as hex (substring then hex)
            out = x.format("{0:#x:.4}", "hello") # out = "0x68656c6c"
            #   Display first 4 bytes of string in hex (hex then substring)
@@ -243,6 +253,14 @@ class FormatStr(Formatter):
     """
     def format_field(self, value, format_spec):
         """Override original method to include modifier extensions"""
+        if len(format_spec) > 1 and format_spec[0] == "?":
+            # Conditional directive
+            # Format {0:?format1:format2}
+            data = re.split(r"(?<!\\):", format_spec)
+            if value is not None:
+                return data[0][1:].replace("\\:", ":")
+            elif len(data) > 1:
+                return data[1].replace("\\:", ":")
         if value is None:
             # No value is given
             return ""
