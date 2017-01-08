@@ -3154,9 +3154,9 @@ struct COPY4args {
     netloc4         src_servers<>;
 };
 
-/* STRFMT1: stid:{0} len:{1:umax64} verf:{3} {2} */
+/* STRFMT1: {0:?stid\:{0} }len:{1:umax64} verf:{3} {2} */
 struct write_response4 {
-    stateid4        callback_id<1>;
+    stateid4        stateid<1>;
     length4         count;
     stable_how4     committed;
     verifier4       verifier;
@@ -3170,8 +3170,8 @@ struct copy_requirements4 {
 
 /* STRFMT1: {0} {1} */
 struct COPY4resok {
-    write_response4         response;
-    copy_requirements4      requirements;
+    write_response4         response;     /* FLATATTR:1 */
+    copy_requirements4      requirements; /* FLATATTR:1 */
 };
 
 /* STRFMT1: {1} */
@@ -4234,18 +4234,20 @@ struct CB_NOTIFY_DEVICEID4res {
  * CB_OFFLOAD: Report Results of an Asynchronous Operation
  * ======================================================================
  */
+/* STRFMT1: {1} */
 union offload_info4 switch (nfsstat4 status) {
     case NFS4_OK:
         write_response4 resok;
     default:
+        /* STRFMT1: len:{1} {0} */
         length4         count;
 };
 
-/* STRFMT1: FH:{0:crc32} stid:{1} */
+/* STRFMT1: FH:{0:crc32} stid:{1} {2} */
 struct CB_OFFLOAD4args {
     nfs_fh4         fh;
     stateid4        stateid;
-    offload_info4   info;
+    offload_info4   info; /* FLATATTR:1 */
 };
 
 /* STRFMT1: "" */
