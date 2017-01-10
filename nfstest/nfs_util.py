@@ -718,22 +718,23 @@ class NFSUtil(Host):
                     self.dprint('DBG2', "CREATE_SESSION sessionid: %s" % self.sessionid)
                     self.dprint('DBG2', "CREATE_SESSION ca_maxrespsz: %s" % self.ca_maxrespsz)
 
-                    slotid = 0
                     fmsg = None
                     test_seq = True
+                    slotid_map = {}
                     save_index = self.pktt.get_index()
-                    while True:
-                        # Find first SEQUENCE request per slot id
-                        (pktcall, pktreply) = self.find_nfs_op(OP_SEQUENCE, ipaddr=ipaddr, port=port, call_only=True, match="NFS.slotid == %d" % slotid)
-                        if pktcall is None:
+                    while self.find_nfs_op(OP_SEQUENCE, ipaddr=ipaddr, port=port, call_only=True):
+                        if self.pktcall is None:
                             break
-                        self.pktt.rewind(save_index)
-                        slotid += 1
-                        if pktcall.NFSop.sequenceid != 1:
-                            fmsg = ", slot id %d starts with sequence id %d" % (slotid-1, pktcall.NFSop.sequenceid)
-                            test_seq = False
-                            break
-                    if slotid > 0:
+                        slotid = self.pktcall.NFSop.slotid
+                        seqid  = self.pktcall.NFSop.sequenceid
+                        if slotid_map.get(slotid) is None:
+                            # First occurrence of slot id
+                            slotid_map[slotid] = seqid
+                            if seqid != 1:
+                                fmsg = ", slot id %d starts with sequence id %d" % (slotid, seqid)
+                                test_seq = False
+                                break
+                    if len(slotid_map) > 0:
                         self.test(test_seq, "SEQUENCE request should start with a sequence id of 1", failmsg=fmsg)
                     else:
                         self.test(False, "SEQUENCE request was not found")
