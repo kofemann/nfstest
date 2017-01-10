@@ -52,6 +52,7 @@ import struct
 import inspect
 import textwrap
 from utils import *
+from formatstr import *
 from rexec import Rexec
 import nfstest_config as c
 from baseobj import BaseObj
@@ -361,8 +362,8 @@ class TestUtil(NFSUtil):
         self.cap_opgroup = OptionGroup(self.opts, "Packet trace options")
         hmsg = "Create a packet trace for each test"
         self.cap_opgroup.add_option("--createtraces", action="store_true", default=False, help=hmsg)
-        hmsg = "Capture buffer size for tcpdump [default: '%default']"
-        self.cap_opgroup.add_option("--tbsize", type="int", default=self.tbsize, help=hmsg)
+        hmsg = "Capture buffer size for tcpdump [default: %default]"
+        self.cap_opgroup.add_option("--tbsize", default="192k", help=hmsg)
         hmsg = "Seconds to delay before stopping packet trace [default: %default]"
         self.cap_opgroup.add_option("--trcdelay", type="float", default=0.0, help=hmsg)
         hmsg = "Do not remove any trace files [default: remove trace files if no errors]"
@@ -377,15 +378,15 @@ class TestUtil(NFSUtil):
         hmsg = "Number of files to create [default: %default]"
         self.file_opgroup.add_option("--nfiles", type="int", default=2, help=hmsg)
         hmsg = "File size to use for test files [default: %default]"
-        self.file_opgroup.add_option("--filesize", type="int", default=65536, help=hmsg)
+        self.file_opgroup.add_option("--filesize", default="64k", help=hmsg)
         hmsg = "Read size to use when reading files [default: %default]"
-        self.file_opgroup.add_option("--rsize", type="int", default=4096, help=hmsg)
+        self.file_opgroup.add_option("--rsize", default="4k", help=hmsg)
         hmsg = "Write size to use when writing files [default: %default]"
-        self.file_opgroup.add_option("--wsize", type="int", default=4096, help=hmsg)
+        self.file_opgroup.add_option("--wsize", default="4k", help=hmsg)
         hmsg = "Seconds to delay I/O operations [default: %default]"
         self.file_opgroup.add_option("--iodelay", type="float", default=0.1, help=hmsg)
         hmsg = "Read/Write offset delta [default: %default]"
-        self.file_opgroup.add_option("--offset-delta", type="int", default=4096, help=hmsg)
+        self.file_opgroup.add_option("--offset-delta", default="4k", help=hmsg)
         self.opts.add_option_group(self.file_opgroup)
 
         self.path_opgroup = OptionGroup(self.opts, "Path options")
@@ -693,6 +694,13 @@ class TestUtil(NFSUtil):
             self.tverbose = _tverbose_map.get(self.tverbose)
             if self.tverbose is None:
                 self.opts.error("invalid value for tverbose option")
+
+            # Convert units
+            self.filesize     = int_units(self.filesize)
+            self.rsize        = int_units(self.rsize)
+            self.wsize        = int_units(self.wsize)
+            self.offset_delta = int_units(self.offset_delta)
+            self.tbsize       = int_units(self.tbsize)
 
             if len(self.basename) > 0:
                 self._name      = self.basename
