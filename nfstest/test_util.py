@@ -63,7 +63,7 @@ from optparse import OptionParser, OptionGroup, IndentedHelpFormatter
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.4"
+__version__   = "1.5"
 
 # Constants
 PASS = 0
@@ -956,6 +956,10 @@ class TestUtil(NFSUtil):
             for tid in _test_map:
                 gcounts[tid] = 0
             for item in self.test_msgs[-1]:
+                if item[3]:
+                    # This message has already been displayed
+                    continue
+                item[3] = 1
                 if len(item[2]) > 0:
                     # Include all subtest results on the counts
                     for subitem in item[2]:
@@ -964,26 +968,31 @@ class TestUtil(NFSUtil):
                     # No subtests, include just the test results
                     gcounts[item[0]] += 1
             (total, tmsg) = self._total_counts(gcounts)
-            # Fail the current test group if at least one of the tests within
-            # this group fails
-            tid = FAIL if gcounts[FAIL] > 0 else PASS
-            # Just add the test group as a single test entity in the total count
-            self._msg_count[tid] += 1
-            # Just display the test group message with the count of tests
-            # that passed and failed within this test group
-            msg = self.test_msgs[-1][0][1].replace("\n", "\n          ")
-            self._print_msg(msg + tmsg, tid)
-            sys.stdout.flush()
+            if total > 1:
+                # Fail the current test group if at least one of the tests within
+                # this group fails
+                tid = FAIL if gcounts[FAIL] > 0 else PASS
+                # Just add the test group as a single test entity in the total count
+                self._msg_count[tid] += 1
+                # Just display the test group message with the count of tests
+                # that passed and failed within this test group
+                msg = self.test_msgs[-1][0][1].replace("\n", "\n          ")
+                self._print_msg(msg + tmsg, tid)
+                sys.stdout.flush()
         elif self.tverbose == 1 and len(self.test_msgs) > 0:
             # Process all sub-groups within the current test group
             group = self.test_msgs[-1]
-            for subroup in group:
-                sgtid = subroup[0]
-                msg = subroup[1]
-                subtests = subroup[2]
-                if len(subtests) == 0:
+            for subgroup in group:
+                sgtid = subgroup[0]
+                msg = subgroup[1]
+                subtests = subgroup[2]
+                disp = subgroup[3]
+                if len(subtests) == 0 or disp:
                     # Nothing to process, there are no subtests
+                    # or have already been displayed
                     continue
+                # Do not display message again
+                subgroup[3] = 1
                 # Get the count for each type of message within this
                 # test sub-group
                 gcounts = {}
@@ -1023,7 +1032,7 @@ class TestUtil(NFSUtil):
             # Sub-group not found, add it
             # [tid, test-message, list-of-subtest-results]
             grpid = len(group)
-            group.append([tid, subgroup, []])
+            group.append([tid, subgroup, [], 0])
         return grpid
 
     def _test_msg(self, tid, msg, subtest=None, failmsg=None):
