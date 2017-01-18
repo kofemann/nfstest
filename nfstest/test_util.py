@@ -63,7 +63,7 @@ from optparse import OptionParser, OptionGroup, IndentedHelpFormatter
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.5"
+__version__   = "1.6"
 
 # Constants
 PASS = 0
@@ -193,6 +193,9 @@ class TestUtil(NFSUtil):
         self.nocleanup = True
         self.isatty = _isatty
         self.test_time = [time.time()]
+        self._disp_time = 0
+        self._disp_msgs = 0
+        self._empty_msg = 0
         self._fileopt = True
         self.remove_list = []
         self.fileidx = 1
@@ -235,27 +238,34 @@ class TestUtil(NFSUtil):
         """
         self.debug_repr(0)
         self._tverbose()
-        self._print_msg("")
+        self._print_msg("", single=1)
+        count = self.dprint_count()
         self.dprint('DBG7', "Calling %s() destructor" % self.__class__.__name__)
         self.trace_stop()
         self.cleanup(newline=False)
         # Call base destructor
         NFSUtil.__del__(self)
+        if self.dprint_count() > count:
+            self._empty_msg = 0
 
         if len(self.test_msgs) > 0:
             if getattr(self, 'logfile', None):
-                print "\nLogfile: %s" % self.logfile
+                if not self._empty_msg:
+                    print ""
+                print "Logfile: %s" % self.logfile
+                self._empty_msg = 0
             ntests, tmsg = self._total_counts(self._msg_count)
             if ntests > 0:
+                self._print_msg("", single=1)
                 msg = "%d tests%s" % (ntests, tmsg)
-                self.write_log("\n" + msg)
+                self.write_log(msg)
                 if self._msg_count[FAIL] > 0:
                     msg = "\033[31m" + msg + "\033[m" if self.isatty else msg
                 elif self._msg_count[WARN] > 0:
                     msg = "\033[33m" + msg + "\033[m" if self.isatty else msg
                 else:
                     msg = "\033[32m" + msg + "\033[m" if self.isatty else msg
-                print "\n" + msg
+                print msg
         if self._opts_done:
             self.total_time = time.time() - self.test_time[0]
             total_str = "\nTotal time: %s" % self._print_time(self.total_time)
@@ -802,7 +812,7 @@ class TestUtil(NFSUtil):
 
         if newline:
             self._tverbose()
-            self._print_msg("")
+            self._print_msg("", single=1)
         self.dprint('DBG7', "CLEANUP starts")
         if not self.mounted and self.remove_list:
             self.mount()
@@ -902,8 +912,11 @@ class TestUtil(NFSUtil):
                 # Execute test
                 getattr(self, testmethod)(**kwargs)
 
-    def _print_msg(self, msg, tid=None):
+    def _print_msg(self, msg, tid=None, single=0):
         """Display message to the screen and to the log file."""
+        if single and self._empty_msg:
+            # Display only a single empty line
+            return
         tidmsg_l = '' if tid is None else _test_map[tid]
         self.write_log(tidmsg_l + msg)
         if self.isatty:
@@ -918,6 +931,11 @@ class TestUtil(NFSUtil):
             tidmsg_s = tidmsg_l
         print tidmsg_s + msg
         sys.stdout.flush()
+        if len(msg) > 0:
+            self._empty_msg = 0
+            self._disp_msgs += 1
+        else:
+            self._empty_msg = 1
 
     def _print_time(self, sec):
         """Return the given time in the format [[%dh]%dm]%fs."""
@@ -1075,10 +1093,13 @@ class TestUtil(NFSUtil):
         """Add an INFO message having the time difference between the current
            time and the time of the last call to this method.
         """
+        if self._disp_time >= self._disp_msgs + self.dprint_count():
+            return
         self.test_time.append(time.time())
         if self._opts_done and len(self.test_time) > 1:
             ttime = self.test_time[-1] - self.test_time[-2]
             self._test_msg(INFO, "TIME: %s" % self._print_time(ttime))
+        self._disp_time = self._disp_msgs + self.dprint_count()
 
     def exit(self):
         """Terminate script with an exit value of 0 when all tests passed
