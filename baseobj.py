@@ -30,13 +30,14 @@ from formatstr import FormatStr
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.1"
+__version__   = "1.2"
 
 # Module variables
 _dindent = ""
 _sindent = "    "
 _dlevel = 0
 _rlevel = 1
+_dcount = 0
 _strsize = 0
 _logfh = None
 _tstamp = True
@@ -565,6 +566,11 @@ class BaseObj(object):
         if _logfh != None:
             _logfh.flush()
 
+    @staticmethod
+    def dprint_count():
+        """Return the number of dprint messages actually displayed."""
+        return _dcount
+
     def format(self, fmt, *kwts, **kwds):
         """Format the arguments and return the string using the format given.
            If no arguments are given either positional or named then object
@@ -616,3 +622,5 @@ class BaseObj(object):
                 ret = ret.replace("\n", "\n"+sp)
             print ret
             self.write_log(ret)
+            global _dcount
+            _dcount += 1
