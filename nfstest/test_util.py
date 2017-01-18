@@ -95,8 +95,8 @@ _test_map = {
 _test_map_c = {
     HEAD: "\n*** ",
     INFO: "    ",
-    PASS: "    \033[32mPASS\033[m: ",
-    FAIL: "    \033[31mFAIL\033[m: ",
+    PASS: "    \033[102mPASS\033[m: ",
+    FAIL: "    \033[41m\033[37mFAIL\033[m: ",
     WARN: "    \033[33mWARN\033[m: ",
     BUG:  "    \033[33mBUG\033[m:  ",
     IGNR: "    \033[33mIGNR\033[m: ",
