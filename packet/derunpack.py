@@ -361,7 +361,7 @@ class DERunpack(Unpack):
             if self.tag == INTEGER:
                 ret = self.der_integer(size)
             elif self.tag == BIT_STRING:
-                # The first octet in value gives the number of unsued bits
+                # The first octet in value gives the number of unused bits
                 nbits = self.unpack_uchar()
                 ret = self.der_integer(size-1, unsigned=True) >> nbits
             elif self.tag == NULL:
