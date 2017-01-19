@@ -26,6 +26,7 @@ import os
 from host import Host
 from formatstr import *
 import nfstest_config as c
+from packet.nfs.nfs3_const import *
 from packet.nfs.nfs4_const import *
 from nfstest.utils import split_path
 
@@ -33,7 +34,7 @@ from nfstest.utils import split_path
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "2.6"
+__version__   = "2.7"
 
 class NFSUtil(Host):
     """NFSUtil object
@@ -48,6 +49,9 @@ class NFSUtil(Host):
 
            # Create client host object
            clientobj = x.create_host('192.168.0.11')
+
+           # Use buffered matching on packets
+           x.set_pktlist()
 
            # Get the next LOOKUP packets
            pktcall, pktreply = x.find_nfs_op(OP_LOOKUP)
@@ -180,6 +184,90 @@ class NFSUtil(Host):
 
         self.clients.append(self.clientobj)
         return self.clientobj
+
+    def set_pktlist(self, ops=None, cbs=None, procs=None, maxindex=None, pktdisp=False):
+        """Set the current packet list for buffered matching in which the
+           match method will only use this list instead of getting the next
+           packet from the packet trace file. The default is to get all
+           packets unless any of the arguments is given.
+
+           NOTE: all READ reply data and all WRITE request data is discarded
+           to avoid having memory issues.
+
+           ops:
+               List of NFSv4 operations to include in the packet list
+           cbs:
+               List of NFSv4 callback operations to include in the packet list
+           procs:
+               List of NFSv3 procedures to include in the packet list
+           maxindex:
+               Include packets up to but not including the packet indexed
+               by this argument [default: None]
+               A value of None means there is no limit
+           pktdisp:
+               Display all cached packets [default: False]
+        """
+        pktlist = []
+        # Default behavior when no list is given
+        defexpr = ops is None and cbs is None and procs is None
+        # Boolean expressions for each of the lists
+        ops_expr   = not defexpr and ops   is not None
+        cbs_expr   = not defexpr and cbs   is not None
+        procs_expr = not defexpr and procs is not None
+        for pkt in self.pktt:
+            # Get list of NFS packets
+            if pkt == "nfs":
+                if maxindex is not None and pkt.record.index >= maxindex:
+                    break
+
+                rpc = pkt.rpc
+                if rpc.procedure == 0:
+                    # NULL procedure
+                    if not defexpr and (not procs_expr or 0 not in procs):
+                        continue
+                elif (rpc.version == 4 and not pkt.nfs.callback) or \
+                     (rpc.version == 1 and pkt.nfs.callback):
+                    # NFSv4 COMPOUND and callback
+                    incl_pkt = False
+                    for item in pkt.nfs.array:
+                        op = item.op
+                        # Discard data from read and write packets so memory
+                        # is not an issue. Do this before selecting operations
+                        # in case a READ or WRITE packet is selected by any
+                        # of the other operations in the array
+                        if op == OP_READ and rpc.type == 1:
+                            item.opread.resok.data = ""
+                        elif op == OP_WRITE and rpc.type == 0:
+                            item.opwrite.data = ""
+                        if not defexpr:
+                            # If any of the lists is given, make sure to
+                            # include only operations in the given lists
+                            if pkt.nfs.callback:
+                                if not cbs_expr or op not in cbs:
+                                    continue
+                            else:
+                                if not ops_expr or op not in ops:
+                                    continue
+                        incl_pkt = True
+                    if not incl_pkt:
+                        continue
+                elif rpc.version == 3:
+                    # NFSv3 procedures
+                    procedure = pkt.nfs.procedure
+                    # If the procs list is given, make sure to include only
+                    # procedures given in the list
+                    if not defexpr and (not procs_expr or procedure not in procs):
+                        continue
+                    # Discard data from read and write packets
+                    # so memory is not an issue
+                    if procedure == NFSPROC3_READ and rpc.type == 1:
+                        pkt.nfs.opread.resok.data = ""
+                    elif procedure == NFSPROC3_WRITE and rpc.type == 0:
+                        pkt.nfs.opwrite.data = ""
+                pktlist.append(pkt)
+                if pktdisp:
+                    self.test_info(str(pkt))
+        self.pktt.set_pktlist(pktlist)
 
     def find_nfs_op(self, op, **kwargs):
         """Find the call and its corresponding reply for the specified NFSv4
@@ -982,15 +1070,13 @@ class NFSUtil(Host):
             # Get real file offset
             file_offset = self.get_abs_offset(nfsop.offset, ds_index)
 
-            if iomode == LAYOUTIOMODE4_READ:
-                size = nfsop.count
-            else:
+            size = nfsop.count
+            if iomode != LAYOUTIOMODE4_READ:
                 data = self.data_pattern(file_offset, len(nfsop.data), pattern=pattern)
                 if data != nfsop.data:
                     bad_pattern += 1
                 else:
                     good_pattern += 1
-                size = len(nfsop.data)
             if self.max_iosize < size:
                 self.max_iosize = size
 
