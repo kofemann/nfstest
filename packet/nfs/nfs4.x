@@ -848,6 +848,12 @@ struct sec_label4 {
     opaque                  data<>;
 };
 
+/* STRFMT1: mode:{0} umask:{1} */
+struct mode_umask4 {
+    mode4  mode;
+    mode4  umask;
+};
+
 /* Used in RPCSEC_GSSv3 */
 struct copy_from_auth_priv {
     secret4             secret;
@@ -963,6 +969,7 @@ typedef uint64_t                fattr4_clone_blksize;
 typedef uint64_t                fattr4_space_freed;
 typedef change_attr_type4       fattr4_change_attr_type;
 typedef sec_label4              fattr4_sec_label;
+typedef mode_umask4             fattr4_mode_umask;
 
 /* FMAP:1 */
 enum nfs_fattr4 {
@@ -1062,6 +1069,7 @@ enum nfs_fattr4 {
     FATTR4_SPACE_FREED        = 78,
     FATTR4_CHANGE_ATTR_TYPE   = 79,
     FATTR4_SEC_LABEL          = 80,
+    FATTR4_MODE_UMASK         = 81, /* draft-bfields-nfsv4-umask-01 */
 };
 
 /*
