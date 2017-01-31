@@ -205,11 +205,7 @@ class AllocTest(TestUtil):
                 # Default size to allocate or deallocate
                 size = self.filesize
 
-            if dealloc:
-                tname = "dealloc01"
-            else:
-                tname = "alloc01"
-            self.test_info("====  %s test %02d%s" % (tname, self.testidx, msg))
+            self.test_info("====  %s test %02d%s" % (self.testname, self.testidx, msg))
             self.testidx += 1
             self.umount()
 
@@ -648,7 +644,7 @@ class AllocTest(TestUtil):
             offset = 0
             size = self.filesize
 
-            self.test_info("====  alloc06 test %02d%s" % (self.testidx, msg))
+            self.test_info("====  %s test %02d%s" % (self.testname, self.testidx, msg))
             self.testidx += 1
 
             self.umount()
@@ -952,7 +948,7 @@ class AllocTest(TestUtil):
             fd = None
             rmfile = None
 
-            self.test_info("====  dealloc06 test %02d%s" % (self.testidx, msg))
+            self.test_info("====  %s test %02d%s" % (self.testname, self.testidx, msg))
             self.testidx += 1
 
             self.umount()
@@ -1203,7 +1199,7 @@ class AllocTest(TestUtil):
         self.mount()
         self.testidx = 1
         while True:
-            self.test_info("====  perf01 test %02d" % (self.testidx))
+            self.test_info("====  %s test %02d" % (self.testname, self.testidx))
             self.testidx += 1
             tstart = time.time()
             self.perftest(filesize)
