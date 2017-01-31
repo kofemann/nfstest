@@ -25,7 +25,7 @@ from nfstest.test_util import TestUtil
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.2"
+__version__   = "1.3"
 
 USAGE = """%prog --server <server> [options]
 
@@ -791,6 +791,7 @@ class pNFSTest(TestUtil):
             self.umount()
             self.trace_stop()
             self.trace_open()
+            self.set_pktlist()
 
             self.find_getdeviceinfo()
             self.pktt.rewind()
@@ -853,6 +854,7 @@ class pNFSTest(TestUtil):
 
             # Verify network traffic
             self.trace_open(trace1)
+            self.set_pktlist()
             self.find_getdeviceinfo()
             self.pktt.rewind()
             (multipath_ds_list, openfh) = self.verify_file(filename, iomode=iomode)
@@ -876,6 +878,7 @@ class pNFSTest(TestUtil):
                 openfh['samefile'] = True
                 openfh['dtcached'] = True
                 self.trace_open(trace2)
+                self.set_pktlist()
                 self.verify_file(filename, iomode=siomode, nocreate=True, multipath_ds_list=multipath_ds_list, openfh=openfh, delegreturn=delegreturn)
 
             self.session_ids = session_ids
@@ -927,6 +930,7 @@ class pNFSTest(TestUtil):
 
         if haslock:
             self.trace_open()
+            self.set_pktlist()
             self.find_getdeviceinfo()
             self.pktt.rewind()
             self.test_group("Verify traffic for locked file using pNFS - %s" % mode_str)
@@ -962,6 +966,7 @@ class pNFSTest(TestUtil):
         self.trace_stop()
 
         self.trace_open()
+        self.set_pktlist()
         self.find_getdeviceinfo()
         self.pktt.rewind()
         (multipath_ds_list, openfh) = self.verify_file(filename, iomode=LAYOUTIOMODE4_RW, nolayoutget=True, lock=haslock, verify_close=False)
@@ -1042,6 +1047,7 @@ class pNFSTest(TestUtil):
             self.trace_stop()
 
             self.trace_open()
+            self.set_pktlist()
             self.test_group("Verify traffic for file opened for read and write: reading file first")
             self.find_getdeviceinfo()
             self.pktt.rewind()
@@ -1090,6 +1096,7 @@ class pNFSTest(TestUtil):
             self.trace_stop()
 
             self.trace_open()
+            self.set_pktlist()
             self.test_group("Verify traffic for file opened for read and write: writing file first")
             self.find_getdeviceinfo()
             self.pktt.rewind()
@@ -1146,6 +1153,7 @@ class pNFSTest(TestUtil):
             self.umount()
             self.trace_stop()
             self.trace_open()
+            self.set_pktlist()
 
             self.test(data == '\000' * self.rsize, "Client should read a hole at the beginning of the file after writing")
 
@@ -1235,6 +1243,7 @@ class pNFSTest(TestUtil):
 
             # Verify network traffic
             self.trace_open()
+            self.set_pktlist()
             self.find_getdeviceinfo()
             self.pktt.rewind()
             self.test_info("Verify READ traffic ========================================")
@@ -1268,6 +1277,7 @@ try:
     for i in xrange(NFILES):
         try:
             x.trace_open()
+            x.set_pktlist()
             (pktcall, pktreply) = x.find_exchange_id()
             x.dprint('INFO', "Client implementation: %s" % x.nii_name)
             x.dprint('INFO', "Server implementation: %s" % x.nii_server)
