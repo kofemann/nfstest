@@ -704,7 +704,6 @@ class DioTest(TestUtil):
 
         try:
             self.trace_open()
-
             (filehandle, open_stateid, deleg_stateid) = self.find_open(filename=file)
             save_index = self.pktt.get_index()
             if deleg_stateid != None:
@@ -726,7 +725,7 @@ class DioTest(TestUtil):
                 ipaddr  = pkt.ip.dst
                 port    = pkt.tcp.dst_port
                 xid     = pkt.rpc.xid
-                pktr    = self.pktt.match("RPC.type and RPC.xid == %d" % xid)
+                pktr    = self.pktt.match("RPC.type == 1 and RPC.xid == %d" % xid)
                 self.pktt.rewind(save_index)
                 if xids.get(xid, None) is None:
                     # Save xid to keep track of re-transmitted packets
@@ -741,10 +740,9 @@ class DioTest(TestUtil):
                         err_h[errstr] = 1
                     else:
                         err_h[errstr] += 1
-                if write:
-                    rsize = len(pkt.NFSop.data)
-                else:
-                    rsize = pkt.NFSop.count
+
+                # Get size of I/O data
+                rsize = pkt.NFSop.count
 
                 if io_h.get(roffset) == rsize:
                     # This (offset, size) has already been processed
@@ -805,10 +803,7 @@ class DioTest(TestUtil):
                     else:
                         # Skip re-transmitted packets
                         continue
-                    if buffered_write:
-                        rsize = len(self.pktt.pkt.NFSop.data)
-                    else:
-                        rsize = self.pktt.pkt.NFSop.count
+                    rsize = self.pktt.pkt.NFSop.count
                     if rsize != bsize:
                         rmatch = False
                     total_size += rsize
@@ -1066,10 +1061,7 @@ class DioTest(TestUtil):
                 else:
                     # Skip re-transmitted packets
                     continue
-                if write:
-                    rsize = len(self.pktt.pkt.NFSop.data)
-                else:
-                    rsize = self.pktt.pkt.NFSop.count
+                rsize = self.pktt.pkt.NFSop.count
                 if self.ispnfs:
                     rserver = MDS if (ipaddr == self.server_ipaddr and port == self.port) else DS
                 else:
