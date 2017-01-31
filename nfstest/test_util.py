@@ -324,7 +324,7 @@ class TestUtil(NFSUtil):
 
     def _init_options(self):
         """Initialize command line options parsing and definitions."""
-        self.opts = OptionParser("%prog [options]", formatter = IndentedHelpFormatter(2, 25), version = "%prog " + __version__)
+        self.opts = OptionParser("%prog [options]", formatter = IndentedHelpFormatter(2, 10), version = "%prog " + __version__)
         hmsg = "File where options are specified besides the system wide " + \
                "file /etc/nfstest, user wide file $HOME/.nfstest or in " + \
                "the current directory .nfstest file"
