@@ -131,7 +131,7 @@ class Pkt(BaseObj):
                     else:
                         sps = " " * (_maxlen - len(key))
                         out += "    %s:%s %s\n" % (key.upper(), sps, str(value))
-                        if index == lastkey and hasattr(value, "data") and value.data is not None:
+                        if index == lastkey and hasattr(value, "data") and value.data is not None and key != "nfs":
                             sps = " " * (_maxlen - 4)
                             out += "    DATA:%s 0x%s\n" % (sps, value.data.encode("hex"))
                 index += 1
