@@ -97,9 +97,12 @@ class GSS_Verifier(BaseObj):
         """Constructor which takes the Unpack object as input"""
         self.gss_token = unpack.unpack_opaque()
         self.size      = len(self.gss_token)
-        krb5 = gss.GSS_API(self.gss_token)
-        if krb5:
-            self.gss_token = krb5
+        try:
+            krb5 = gss.GSS_API(self.gss_token)
+            if krb5:
+                self.gss_token = krb5
+        except:
+            pass
 
 def rpc_credential(unpack, verifier=False):
     """Process and return the credential or verifier"""
