@@ -1086,6 +1086,8 @@ class pNFSTest(TestUtil):
                 self.dprint('DBG3', "Writing %d@%d" % (wsize, wsize))
                 os.lseek(fd, wsize, 0)
                 os.write(fd, self.data_pattern(wsize, wsize))
+                # Flush data to make sure the client sends the write first
+                os.fsync(fd)
 
                 self.dprint('DBG3', "Reading file @0")
                 os.lseek(fd, 0, 0)
