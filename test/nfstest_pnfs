@@ -25,7 +25,7 @@ from nfstest.test_util import TestUtil
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.3"
+__version__   = "1.4"
 
 USAGE = """%prog --server <server> [options]
 
@@ -897,6 +897,7 @@ class pNFSTest(TestUtil):
             open_type = os.O_WRONLY|os.O_CREAT|os.O_SYNC
             lock_type = fcntl.F_WRLCK
 
+        self.test_group("Verify traffic for locked file using pNFS - %s" % mode_str)
         self.umount()
         self.trace_start()
         self.mount()
@@ -933,7 +934,6 @@ class pNFSTest(TestUtil):
             self.set_pktlist()
             self.find_getdeviceinfo()
             self.pktt.rewind()
-            self.test_group("Verify traffic for locked file using pNFS - %s" % mode_str)
             (multipath_ds_list, openfh) = self.verify_file(filename, iomode=iomode, lock=True)
 
     def do_setattr(self, size=0, lock=False):
@@ -1027,6 +1027,7 @@ class pNFSTest(TestUtil):
     def rw_read_test(self):
         """Verify traffic for file opened for read and write: reading file first."""
         try:
+            self.test_group("Verify traffic for file opened for read and write: reading file first")
             self.umount()
             self.trace_start()
             self.mount()
@@ -1048,7 +1049,6 @@ class pNFSTest(TestUtil):
 
             self.trace_open()
             self.set_pktlist()
-            self.test_group("Verify traffic for file opened for read and write: reading file first")
             self.find_getdeviceinfo()
             self.pktt.rewind()
             (multipath_ds_list, openfh) = self.verify_file(filename, iomode=LAYOUTIOMODE4_READ, noclose=True)
@@ -1075,6 +1075,7 @@ class pNFSTest(TestUtil):
     def rw_write_test(self):
         """Verify traffic for file opened for read and write: writing file first."""
         try:
+            self.test_group("Verify traffic for file opened for read and write: writing file first")
             self.umount()
             self.trace_start()
             self.mount()
@@ -1099,7 +1100,6 @@ class pNFSTest(TestUtil):
 
             self.trace_open()
             self.set_pktlist()
-            self.test_group("Verify traffic for file opened for read and write: writing file first")
             self.find_getdeviceinfo()
             self.pktt.rewind()
             (multipath_ds_list, openfh) = self.verify_file(filename, iomode=LAYOUTIOMODE4_RW, noclose=True)
