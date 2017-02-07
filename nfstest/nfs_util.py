@@ -960,8 +960,8 @@ class NFSUtil(Host):
         # Test LAYOUTGET reply for correct iomode
         if riomode is not None:
             self.test(layout.iomode == riomode, "LAYOUTGET reply iomode is %s when asking for a %s layout" % (self.iomode_str(riomode), self.iomode_str(iomode)))
-        elif iomode == 1 and layoutget.iomode in [LAYOUTIOMODE4_READ, LAYOUTIOMODE4_RW]:
-            self.test(True, "LAYOUTGET reply iomode is %s when asking for a IOMODE_READ layout" % self.iomode_str(layoutget.iomode))
+        elif iomode == LAYOUTIOMODE4_READ and layoutget.iomode in [LAYOUTIOMODE4_READ, LAYOUTIOMODE4_RW]:
+            self.test(True, "LAYOUTGET reply iomode is %s when asking for a LAYOUTIOMODE4_READ layout" % self.iomode_str(layoutget.iomode))
         else:
             self.test(layout.iomode == iomode, "LAYOUTGET reply iomode should be %s" % self.iomode_str(iomode))
 
