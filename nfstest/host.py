@@ -531,7 +531,7 @@ class Host(BaseObj):
             except:
                 pass
 
-            if self.returncode == 0 or re.search('not (mounted|found)', self.perror):
+            if self.returncode == 0 or re.search('not (mounted|found)|Invalid argument', self.perror):
                 # Unmount succeeded or directory not mounted
                 self.mounted = False
                 break
