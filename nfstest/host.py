@@ -525,7 +525,6 @@ class Host(BaseObj):
         # Try to umount 5 times
         cmd = "umount -f %s" % self.mtpoint
         for i in range(5):
-            time.sleep(1)
             try:
                 self.run_cmd(cmd, sudo=True, dlevel='DBG2', msg="Unmount volume: ")
             except:
@@ -536,6 +535,7 @@ class Host(BaseObj):
                 self.mounted = False
                 break
             self.dprint('DBG2', self.perror)
+            time.sleep(1)
 
     def trace_start(self, tracefile=None, interface=None, capsize=None, clients=None):
         """Start trace on interface given
