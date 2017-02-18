@@ -244,6 +244,11 @@ class PosixTest(TestUtil):
         self.scan_options()
 
         # Function prototypes for system calls in libc
+        self.libc.opendir.restype  = ctypes.c_void_p
+        self.libc.closedir.argtypes= ctypes.c_void_p,
+        self.libc.rewinddir.argtypes = ctypes.c_void_p,
+        self.libc.readdir.argtypes = ctypes.c_void_p,
+        self.libc.readdir.restype  = ctypes.POINTER(DirEnt)
         self.libc.telldir.argtypes = ctypes.c_void_p,
         self.libc.telldir.restype  = ctypes.c_long
         self.libc.seekdir.argtypes = ctypes.c_void_p, ctypes.c_long
@@ -409,7 +414,7 @@ class PosixTest(TestUtil):
         self.test(out == 0, "closedir - closedir() should succeed")
 
         dirent = self.libc.readdir(fd)
-        self.test(dirent == 0, "closedir - readdir after closedir should return an error")
+        self.test(not bool(dirent), "closedir - readdir after closedir should return an error")
 
     def creat_test(self):
         """Verify POSIX API creat(path, mode) is equivalent to
@@ -1254,9 +1259,9 @@ class PosixTest(TestUtil):
         self.create_dir()
         fd = self.libc.opendir(self.absdir)
         self.libc.closedir(fd)
-        self.test(fd > 0, "opendir - opendir() on an existent directory should succeed")
+        self.test(fd != None, "opendir - opendir() on an existent directory should succeed")
         fd = self.libc.opendir(self.absdir+'bogus')
-        self.test(fd == 0, "opendir - opendir() on a non-existent directory should fail")
+        self.test(fd == None, "opendir - opendir() on a non-existent directory should fail")
 
     def read_test(self):
         """Verify POSIX API read() by reading data from a file. Verify that
@@ -1291,10 +1296,9 @@ class PosixTest(TestUtil):
         fd = self.libc.opendir(self.absdir)
         dirlist = []
         while True:
-            c_dirent = self.libc.readdir(fd)
-            if c_dirent == 0:
+            dirent = self.libc.readdir(fd)
+            if not bool(dirent):
                 break
-            dirent = ctypes.cast(c_dirent, ctypes.POINTER(DirEnt))
             dirlist.append(dirent[0].d_name)
         self.libc.closedir(fd)
 
@@ -1521,17 +1525,15 @@ class PosixTest(TestUtil):
         while True:
             offset = self.libc.telldir(fd)
             offsets.append(offset)
-            c_dirent = self.libc.readdir(fd)
-            if c_dirent == 0:
+            dirent = self.libc.readdir(fd)
+            if not bool(dirent):
                 break
-            dirent = ctypes.cast(c_dirent, ctypes.POINTER(DirEnt))
             dirlist.append(dirent[0].d_name)
 
         if objtype == 'rewinddir':
             self.libc.rewinddir(fd)
             self.test(True, "%s - directory rewind should succeed after reaching end of list" % objtype)
-            c_dirent = self.libc.readdir(fd)
-            dirent = ctypes.cast(c_dirent, ctypes.POINTER(DirEnt))
+            dirent = self.libc.readdir(fd)
             self.test(dirent[0].d_name == dirlist[0], "%s - directory entry is correct after rewind" % objtype)
             index = int(N/2)
             name = self._readdir(fd, index)
