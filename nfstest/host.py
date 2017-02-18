@@ -279,9 +279,9 @@ class Host(BaseObj):
            exit status is stored in the object attribute 'self.returncode'.
         """
         self.process = None
-        self.pstdout = '' 
-        self.pstderr = '' 
-        self.perror  = '' 
+        self.pstdout = ''
+        self.pstderr = ''
+        self.perror  = ''
         self.returncode = 0
         if self.user is not None and len(self.user) > 0:
             user = self.user + '@'
@@ -732,19 +732,24 @@ class Host(BaseObj):
         """Get IP address associated with the given host name.
            This could be run as an instance or class method.
         """
-        lstr = ""
-        ipstr = "v6" if ipv6 else "v4"
-        family = socket.AF_INET6 if ipv6 else socket.AF_INET
-        if len(host) == 0:
-            lstr = "local "
-            host = socket.gethostname()
-
-        try:
-            infolist = socket.getaddrinfo(host, 2049, 0, 0, socket.SOL_TCP)
-        except Exception as e:
-            infolist = []
-        for info in infolist:
-            # Ignore loopback addresses
-            if info[0] == family and info[4][0] not in ('127.0.0.1', '::1'):
-                return info[4][0]
-        raise Exception("Unable to get IP%s address for %shost '%s'" % (ipstr, lstr, host))
+        if len(host) != 0:
+            ipstr = "v6" if ipv6 else "v4"
+            family = socket.AF_INET6 if ipv6 else socket.AF_INET
+            try:
+                infolist = socket.getaddrinfo(host, 2049, 0, 0, socket.SOL_TCP)
+            except Exception:
+                infolist = []
+            for info in infolist:
+                # Ignore loopback addresses
+                if info[0] == family and info[4][0] not in ('127.0.0.1', '::1'):
+                    return info[4][0]
+            raise Exception("Unable to get IP%s address for host '%s'" % (ipstr, host))
+        else:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            if ipv6:
+                s.connect(("2001:4860:4860::8888", 53))
+            else:
+                s.connect(("8.8.8.8", 53))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
