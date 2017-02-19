@@ -1267,7 +1267,7 @@ class PosixTest(TestUtil):
         """
         self.test_group("Verify POSIX API read() on %s" % self.nfsstr())
 
-        absfile = self.abspath(self.files[0])
+        absfile = self.abspath(self.files[1])
         self.dprint('DBG3', "Open file %s for reading" % absfile)
         fd = posix.open(absfile, posix.O_RDONLY)
         fstat_b = os.stat(absfile)
