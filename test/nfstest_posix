@@ -794,7 +794,8 @@ class PosixTest(TestUtil):
             fstat = posix.fstat(fd)
             posix.close(fd)
 
-        self.test(fstat.st_mode & 0777 == mode, "%s - %s permissions should be correct" % (op_str, type), failmsg=", expecting %05o and got %05o" % (mode, fstat.st_mode & 0777))
+        if type != "symbolic link":
+            self.test(fstat.st_mode & 0777 == mode, "%s - %s permissions should be correct" % (op_str, type), failmsg=", expecting %05o and got %05o" % (mode, fstat.st_mode & 0777))
         self.test(is_func(fstat.st_mode), "%s - object type should be a %s%s" % (op_str, reg, type))
         self.test(fstat.st_nlink == nlink, "%s - %s st_nlink should be equal to %d" % (op_str, type, nlink), failmsg=", expecting %d and got %d" % (nlink, fstat.st_nlink))
         self.test(fstat.st_uid == os.getuid(), "%s - %s st_uid should be correct" % (op_str, type), failmsg=", expecting %d and got %d" % (os.getuid(), fstat.st_uid))
@@ -1447,7 +1448,6 @@ class PosixTest(TestUtil):
         rlink = os.readlink(self.absfile)
         self.test(lstat != None, "symlink - symbolic link should be created")
         self.test(stat.S_ISLNK(lstat.st_mode), "symlink - object type should be a symbolic link")
-        self.test(lstat.st_mode & 0777 == 0777, "symlink - symbolic link should be created with correct mode 0777")
         self.test(rlink == srcfile, "symlink - symbolic link data should be the name of the source file")
 
     def _sync(self, objtype):
