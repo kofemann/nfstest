@@ -402,8 +402,7 @@ class PosixTest(TestUtil):
         self.test(e != None and e.errno == 9, "close - read after close should return an error")
 
     def closedir_test(self):
-        """Verify POSIX API closedir() works and that reading to a closed file
-           descriptor returns an error.
+        """Verify POSIX API closedir() works
         """
         self.test_group("Verify POSIX API closedir() on %s" % self.nfsstr())
 
@@ -412,9 +411,6 @@ class PosixTest(TestUtil):
         fd = self.libc.opendir(self.absdir)
         out = self.libc.closedir(fd)
         self.test(out == 0, "closedir - closedir() should succeed")
-
-        dirent = self.libc.readdir(fd)
-        self.test(not bool(dirent), "closedir - readdir after closedir should return an error")
 
     def creat_test(self):
         """Verify POSIX API creat(path, mode) is equivalent to
