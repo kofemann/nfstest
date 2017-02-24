@@ -323,7 +323,9 @@ class NFSUtil(Host):
             if pktcall and not call_only:
                 # Find reply
                 xid = pktcall.rpc.xid
-                pktreply = self.pktt.match("RPC.xid == %d and %s NFS.resop == %d" % (xid, mstatus, op), maxindex=maxindex)
+                # Include OP_ILLEGAL in case server does not know about the
+                # operation in question
+                pktreply = self.pktt.match("RPC.xid == %d and %s NFS.resop in (%d,%d)" % (xid, mstatus, op, OP_ILLEGAL), maxindex=maxindex)
                 if pktreply:
                     break
             else:
