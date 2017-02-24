@@ -987,7 +987,7 @@ class SSCTest(TestUtil):
             args = {"ipaddr": self.server_ipaddr, "port": self.port, "noreset":True}
 
             # Save packets from mount command to use buffered matching
-            oplist = [OP_EXCHANGE_ID, OP_CREATE_SESSION, OP_PUTROOTFH, OP_CREATE, OP_LOOKUP]
+            oplist = [OP_EXCHANGE_ID, OP_CREATE_SESSION, OP_PUTROOTFH, OP_CREATE, OP_LOOKUP, OP_SETCLIENTID]
             self.set_pktlist(ops=oplist)
 
             # Get attributes from mount packets (source server)
@@ -1020,7 +1020,7 @@ class SSCTest(TestUtil):
             self.pktt.rewind()
 
             # Get list of operations to test and enable buffered matching
-            oplist = [OP_OPEN, OP_COPY, OP_COPY_NOTIFY, OP_CLONE, OP_LOCK, OP_COMMIT, OP_CLOSE]
+            oplist = [OP_OPEN, OP_COPY, OP_COPY_NOTIFY, OP_CLONE, OP_LOCK, OP_COMMIT, OP_CLOSE, OP_ILLEGAL]
             cblist = [OP_CB_OFFLOAD]
             pclist = [NFSPROC3_LOOKUP, NFSPROC3_CREATE]
             self.set_pktlist(ops=oplist, cbs=cblist, procs=pclist, pktdisp=self.pktdisp)
