@@ -1344,11 +1344,17 @@ class NFSUtil(Host):
                Destination port [default: self.port]
         """
         self.clientid = None
-        # Find the EXCHANGE_ID packets
-        self.find_nfs_op(OP_EXCHANGE_ID, **kwargs)
-        if self.pktreply:
-            self.clientid = self.pktreply.NFSop.clientid
-            return self.clientid
+        if self.nfsversion > 4:
+            # Find the EXCHANGE_ID packets
+            self.find_nfs_op(OP_EXCHANGE_ID, **kwargs)
+            if self.pktreply:
+                self.clientid = self.pktreply.NFSop.clientid
+        elif self.nfsversion == 4:
+            # Find the SETCLIENTID packets
+            self.find_nfs_op(OP_SETCLIENTID, **kwargs)
+            if self.pktreply:
+                self.clientid = self.pktreply.NFSop.clientid
+        return self.clientid
 
     def get_sessionid(self, **kwargs):
         """Return the session id for the given IP address and port number.
@@ -1360,6 +1366,8 @@ class NFSUtil(Host):
            port:
                Destination port [default: self.port]
         """
+        if self.nfsversion < 4.1:
+            return
         self.sessionid = None
         clientid = kwargs.pop('clientid', None)
         if clientid is not None:
