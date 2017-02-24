@@ -1063,7 +1063,8 @@ class SSCTest(TestUtil):
                 args["port"]   = self.dst.port
                 for i in range(ncopies):
                     (pktcall, pktreply) = self.find_nfs_op(OP_COPY_NOTIFY, status=None)
-                    self.test(pktcall, "COPY_NOTIFY should be sent to source server")
+                    if nbytes > 0 or pktcall:
+                        self.test(pktcall, "COPY_NOTIFY should be sent to source server")
                     if pktcall:
                         save_index = pktcall.record.index + 1
                         stateid = pktcall.NFSop.stateid.other
