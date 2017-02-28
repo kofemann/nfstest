@@ -1255,14 +1255,14 @@ class SSCTest(TestUtil):
 
                         if not clone:
                             expcount = None
-                            expr = pktreply.NFSop.synchronous
+                            expr      = pktreply.NFSop.synchronous
+                            expcount  = pktreply.NFSop.count
+                            committed = pktreply.NFSop.committed
+                            verifier  = pktreply.NFSop.verifier
                             if pktreply.NFSop.stateid is None:
                                 # This is a synchronous copy,
                                 # use results from the COPY reply
                                 opstr = "COPY"
-                                expcount  = pktreply.NFSop.count
-                                committed = pktreply.NFSop.committed
-                                verifier  = pktreply.NFSop.verifier
                                 self.test(expr, "COPY should return synchronous=1 when no callback id is returned")
                             else:
                                 # This is an asynchronous copy,
@@ -1284,18 +1284,19 @@ class SSCTest(TestUtil):
                                     fhandle = pktcall.NFSop.fh
                                     fmsg = ", expecting 0x%08x but got 0x%08x" % (crc32(ehandle), crc32(fhandle))
                                     self.test(ehandle == fhandle, "CB_OFFLOAD should return the correct file handle", failmsg=fmsg)
-                                    status = pktcall.NFSop.status
-                                    fmsg = ", expecting NFS4_OK but got %s" % status
-                                    self.test(status == NFS4_OK, "CB_OFFLOAD should return the correct COPY status", failmsg=fmsg)
-                                    cbid = pktcall.NFSop.info.stateid
-                                    fmsg = ""
-                                    if cbid is not None:
-                                        fmsg = " but got 0x%04x" % crc16(cbid.other)
-                                    self.test(cbid is None, "CB_OFFLOAD should not return a callback id", failmsg=fmsg)
-                                    if pktcall.NFSop.status == NFS4_OK:
-                                        expcount  = pktcall.NFSop.count
+                                    status   = pktcall.NFSop.status
+                                    expcount = pktcall.NFSop.count
+                                    if status == NFS4_OK or copyobj.count == 0:
+                                        fmsg = ", expecting NFS4_OK but got %s" % status
+                                        self.test(status == NFS4_OK, "CB_OFFLOAD should return the correct COPY status", failmsg=fmsg)
+                                    if status == NFS4_OK:
                                         committed = pktcall.NFSop.committed
                                         verifier  = pktcall.NFSop.verifier
+                                        cbid      = pktcall.NFSop.info.stateid
+                                        fmsg = ""
+                                        if cbid is not None:
+                                            fmsg = " but got 0x%04x" % crc16(cbid.other)
+                                        self.test(cbid is None, "CB_OFFLOAD should not return a callback id", failmsg=fmsg)
                                     if pktreply:
                                         status = pktreply.NFSop.status
                                         fmsg = ", expecting NFS4_OK but got %s" % status
@@ -1460,7 +1461,7 @@ class SSCTest(TestUtil):
         """
         self.test_group("Verify intra server side COPY fails when source offset plus count is beyond the end of the file")
         msg = "source offset plus count is beyond the end of the file"
-        self.basic_ssc(src_off=self.s_offset, nbytes=self.filesize, failure=errno.EINVAL, copymsg=msg)
+        self.basic_ssc(src_off=self.s_offset, nbytes=self.filesize, copymsg=msg)
 
     def intra13_test(self):
         """Verify intra server side COPY fails when both source and destination
@@ -1561,7 +1562,7 @@ class SSCTest(TestUtil):
         """
         self.test_group("Verify inter server side COPY fails when source offset plus count is beyond the end of the file")
         msg = "source offset plus count is beyond the end of the file"
-        self.basic_ssc(src_off=self.s_offset, nbytes=self.filesize, failure=errno.EINVAL, copymsg=msg, inter=1)
+        self.basic_ssc(src_off=self.s_offset, nbytes=self.filesize, copymsg=msg, inter=1)
 
     def inter13_test(self):
         """Verify inter server side COPY succeeds when both source and destination
