@@ -24,7 +24,7 @@ from optparse import OptionParser, IndentedHelpFormatter
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.2"
+__version__   = "1.3"
 
 USAGE = """%prog [options] <xdrfile1.x> [<xdrfile2.x> ...]
 
@@ -70,6 +70,8 @@ using the following syntax:
         Include the file and add it in-line to be processed
     COMMENT: comment
         Include the comment in both the decoding and constants modules
+    IMPORT: name[ as alias]
+        Add import statement
     INHERIT: name
         Create class inheriting from the given base class name. The name is
         is given as a full path including the package and class name, e.g.:
@@ -212,6 +214,7 @@ valid_tags = {
     "COPYRIGHT" : 1,
     "VERSION"   : 1,
     "INCLUDE"   : 1,
+    "IMPORT"    : 1,
     "COMMENT"   : 1,
     "XARG"      : 1,
     "CLASSATTR" : 1,
@@ -320,6 +323,9 @@ class XDRobject:
         # List of bitmap typedefs
         self.bitmap_defs = []
 
+        # List of imports
+        self.import_list = []
+
         # Tags dictionary
         self.tags = {}
 
@@ -366,6 +372,9 @@ class XDRobject:
                 for incl_line in open(incl_file, "r"):
                     self.xdr_lines.append(incl_line)
                 continue
+            imp_str = self.tags.pop("IMPORT", None)
+            if imp_str is not None:
+                self.import_list.append("import %s\n" % imp_str)
             self.xdr_lines.append(line)
 
     def reset_defvars(self):
@@ -1559,7 +1568,6 @@ class XDRobject:
         else:
             sname = re.sub(r"(\d)", r"v\1", self.bname.upper())
             fd.write('"""\n%s decoding module\n"""\n' % sname)
-        import_list = []
         import_dict = {
             "packet.utils":  ["*"],
             "baseobj":       ["BaseObj"],
@@ -1576,15 +1584,15 @@ class XDRobject:
                 import_dict[objpath].append(objdef)
 
         if self.modversion is not None:
-            import_list.append("import nfstest_config as c\n")
+            self.import_list.append("import nfstest_config as c\n")
         if self.enum_data:
-            import_list.append("import %s_const as const\n" % self.bname)
+            self.import_list.append("import %s_const as const\n" % self.bname)
 
         for objpath in import_dict:
             import_str = "from %s import %s\n" % (objpath, ", ".join(import_dict[objpath]))
-            import_list.append(import_str)
+            self.import_list.append(import_str)
 
-        for line in sorted(import_list, key=len):
+        for line in sorted(self.import_list, key=len):
             fd.write(line)
 
         self.set_modconst(fd)
