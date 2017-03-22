@@ -20,6 +20,7 @@ import struct
 import traceback
 from gss import GSS
 from rpc_const import *
+from packet.utils import *
 import nfstest_config as c
 from baseobj import BaseObj
 from packet.nfs.nfs import NFS
@@ -33,7 +34,19 @@ from packet.nfs.portmap2 import PORTMAP2args,PORTMAP2res
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.3"
+__version__   = "1.4"
+
+class accept_stat_enum(Enum):
+    """enum accept_stat"""
+    _enumdict = accept_stat
+
+class reject_stat_enum(Enum):
+    """enum reject_stat"""
+    _enumdict = reject_stat
+
+class auth_stat_enum(Enum):
+    """enum auth_stat"""
+    _enumdict = auth_stat
 
 class Header(BaseObj):
     """Header object"""
@@ -48,6 +61,8 @@ class Header(BaseObj):
 class Prog(BaseObj):
     """Prog object"""
     # Class attributes
+    _strfmt1  = "{0},{1}"
+    _strfmt2  = "{0},{1}"
     _attrlist = ("low", "high")
 
     def __init__(self, unpack):
@@ -214,18 +229,18 @@ class RPC(GSS):
                 self.verifier = rpc_credential(unpack, True)
                 if not self.verifier:
                     return
-                self.accepted_status = unpack.unpack_uint()
+                self.accepted_status = accept_stat_enum(unpack)
                 if self.accepted_status == PROG_MISMATCH:
                     self.prog_mismatch = Prog(unpack)
                 elif accept_stat.get(self.accepted_status) is None:
                     # Invalid accept_stat
                     return
             elif self.reply_status == MSG_DENIED:
-                self.rejected_status = unpack.unpack_uint()
+                self.rejected_status = reject_stat_enum(unpack)
                 if self.rejected_status == RPC_MISMATCH:
                     self.rpc_mismatch = Prog(unpack)
                 elif self.rejected_status == AUTH_ERROR:
-                    self.auth_status = unpack.unpack_uint()
+                    self.auth_status = auth_stat_enum(unpack)
                     if auth_stat.get(self.auth_status) is None:
                         # Invalid auth_status
                         return
@@ -283,6 +298,7 @@ class RPC(GSS):
            If set to 2 the representation of the object is as follows:
                'CALL(0), program: 100003, version: 4, procedure: 0, xid: 0xe37d3d5'
         """
+        errstr = ""
         rdebug = self.debug_repr()
         if rdebug > 0:
             prog = ''
@@ -290,15 +306,29 @@ class RPC(GSS):
                 value = getattr(self, item, None)
                 if value != None:
                     prog += " %s: %d," % (item, value)
+        if rdebug in (1,2):
+            if self.reply_status == MSG_DENIED:
+                if self.rejected_status == RPC_MISMATCH:
+                    errstr = ", %s(%s)" % (self.rejected_status, self.rpc_mismatch)
+                elif self.rejected_status == AUTH_ERROR:
+                    errstr = ", %s(%s)" % (self.rejected_status, self.auth_status)
+            elif self.accepted_status != SUCCESS:
+                if self.accepted_status == PROG_MISMATCH:
+                    errstr = ", %s(%s)" % (self.accepted_status, self.prog_mismatch)
+                else:
+                    errstr = ", %s" % self.accepted_status
         if rdebug == 1:
             rtype = "%-5s" % msg_type.get(self.type, 'Unknown').lower()
-            out = "RPC %s %s xid: %s" % (rtype, prog, self.xid)
+            out = "RPC %s %s xid: %s%s" % (rtype, prog, self.xid, errstr)
         elif rdebug == 2:
             rtype = "%-5s(%d)" % (msg_type.get(self.type, 'Unknown'), self.type)
             if self.type == CALL:
                 creds = ", %s" % self.credential
             else:
-                creds = ", %s" % self.verifier
+                if len(errstr):
+                    creds = errstr
+                else:
+                    creds = ", %s" % self.verifier
             out = "%s,%s xid: %s%s" % (rtype, prog, self.xid, creds)
         else:
             out = BaseObj.__str__(self)
