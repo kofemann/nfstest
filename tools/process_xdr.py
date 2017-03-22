@@ -88,8 +88,9 @@ using the following syntax:
         Add extra arguments to the object constructor __init__()
         The disp modifier is to make it a displayable attribute, e.g.:
         /* XARG: arg1, arg2;disp */
-    CLASSATTR: name=value[,...]
+    CLASSATTR: name[;disp]=value[,...]
         Add name as a class attribute
+        The disp modifier is to make it a displayable attribute
     OBJATTR: name=value[,...]
         Add extra attribute having the given value. If value is the name of
         another attribute in the object a "self." is added to the value, e.g.:
@@ -958,6 +959,24 @@ class XDRobject:
                 raise Exception, "BITDICT tag is used incorrectly in definition for '%s'" % defname
         return isbitdict
 
+    def process_classattr(self, deftags):
+        """Process the CLASSATTR tag
+
+           deftags:
+               Tags dictionary for given object
+        """
+        attrs = []
+        classattr = []
+        cattrs = deftags.get("CLASSATTR")
+        if cattrs is not None:
+            for cattr in cattrs.split(","):
+                attr, value = cattr.split("=")
+                data = attr.split(";")
+                classattr.append([data[0], value])
+                if len(data) > 1 and data[1] == "disp":
+                    attrs.append(data[0])
+        return classattr, attrs
+
     def set_copyright(self, fd):
         """Write copyright information"""
         if self.copyright is not None:
@@ -1121,14 +1140,9 @@ class XDRobject:
                     xarg_nodisp_names.append(xarg[0])
 
         if not isbitdict:
-            # Class attributes
-            classattr = []
-
             # Process CLASSATTR
-            cattrs = deftags.get("CLASSATTR")
-            if cattrs is not None:
-                for cattr in cattrs.split(","):
-                    classattr.append(cattr.split("="))
+            classattr, attrlist = self.process_classattr(deftags)
+            dnames = attrlist + dnames
 
             # Process _fattrs
             out = []
@@ -1623,11 +1637,8 @@ class XDRobject:
             if deftype is None:
                 deftype, defname, deftags, defcomments = self.process_def(line)
                 # Process CLASSATTR
-                classattr = []
-                cattrs = deftags.get("CLASSATTR")
-                if cattrs is not None:
-                    for cattr in cattrs.split(","):
-                        classattr.append(cattr.split("="))
+                classattr, attrlist = self.process_classattr(deftags)
+
                 if deftype is None:
                     regex = re.search(r"^\s*typedef\s" + vardefstr, line)
                     if regex:
