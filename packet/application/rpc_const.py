@@ -19,10 +19,10 @@ Provide constant values and mapping dictionaries for the RPC layer.
 import nfstest_config as c
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
-__version__   = '1.0.1'
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2013 NetApp, Inc."
 __license__   = "GPL v2"
+__version__   = "1.1"
 
 # msg_type
 CALL  = 0
@@ -49,10 +49,10 @@ GARBAGE_ARGS  = 4  # procedure can't decode params
 SYSTEM_ERR    = 5  # e.g. memory allocation failure
 accept_stat = {
     0: 'SUCCESS',
-    1: 'PROG_UNAVAIL',
-    2: 'PROG_MISMATCH',
-    3: 'PROC_UNAVAIL',
-    4: 'GARBAGE_ARGS',
+    1: 'PROG_UNAVAIL_ERR',
+    2: 'PROG_MISMATCH_ERR',
+    3: 'PROC_UNAVAIL_ERR',
+    4: 'GARBAGE_ARGS_ERR',
     5: 'SYSTEM_ERR',
 }
 
@@ -60,7 +60,7 @@ accept_stat = {
 RPC_MISMATCH = 0, # RPC version number != 2
 AUTH_ERROR   = 1  # remote can't authenticate caller
 reject_stat = {
-    0: 'RPC_MISMATCH',
+    0: 'RPC_MISMATCH_ERR',
     1: 'AUTH_ERROR',
 }
 
