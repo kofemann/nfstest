@@ -1311,12 +1311,24 @@ class SSCTest(TestUtil):
                                 fmsg = ", expecting <= %s but got %s" % (copyobj.nbytes, expcount)
                                 self.test(expcount <= copyobj.nbytes, "%s should return at most the number of bytes requested" % opstr, failmsg=fmsg)
 
-                                mstr = "crc32(nfs.fh) == %d" % crc32(dst_fhandle)
-                                (pcall, preply) = self.find_nfs_op(OP_COMMIT, ipaddr=args["ipaddr"], port=args["port"], match=mstr)
-                                if committed == UNSTABLE4:
-                                    self.test(pcall, "COMMIT should be sent to %sserver when %s returns UNSTABLE4" % (svrstr, opstr))
+                                ccall = self.getop(pktcall, OP_COMMIT)
+                                if ccall:
+                                    # COMMIT is in the same compound as COPY/CB_OFFLOAD
+                                    pcall  = pktcall
+                                    preply = pktreply
+                                    self.test(True, "COMMIT is sent to %sserver in the same compound as %s" % (svrstr, opstr))
+                                    creply = self.getop(pktreply, OP_COMMIT)
+                                    pcall.NFSop  = ccall
+                                    preply.NFSop = creply
                                 else:
-                                    self.test(not pcall, "COMMIT should not be sent to %sserver when %s does not return UNSTABLE4" % (svrstr, opstr))
+                                    # Search for COMMIT after the COPY/CB_OFFLOAD
+                                    mstr = "crc32(nfs.fh) == %d" % crc32(dst_fhandle)
+                                    (pcall, preply) = self.find_nfs_op(OP_COMMIT, ipaddr=args["ipaddr"], port=args["port"], match=mstr)
+                                    if committed == UNSTABLE4:
+                                        self.test(pcall, "COMMIT should be sent to %sserver when %s returns UNSTABLE4" % (svrstr, opstr))
+                                    else:
+                                        self.test(not pcall, "COMMIT should not be sent to %sserver when %s does not return UNSTABLE4" % (svrstr, opstr))
+
                                 if preply:
                                     expr = preply.NFSop.verifier == verifier
                                     self.test(expr, "COMMIT should return the same verifier as the %s" % opstr)
