@@ -34,7 +34,7 @@ from packet.derunpack import DERunpack
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2013 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.4"
+__version__   = "1.5"
 
 # Token Identifier TOK_ID
 KRB_AP_REQ       = 0x0100
@@ -97,35 +97,46 @@ class GSS_API(BaseObj):
        END
     """
     # Class attributes
-    _strfmt2  = "GSS_API(OID:{0}, {2})"
+    _strfmt2  = "GSS_API({2})"
     _attrlist = ("oid", "tok_id", "krb5")
 
     def __init__(self, data):
+        krbobj = None
+        has_oid = False
         self._valid = False
         derunpack = DERunpack(data)
         # Get the Kerberos 5 OID only -- from application 0
-        krbobj = derunpack.get_item(oid="1.2.840.113554.1.2.2").get(0)
-        if krbobj is not None and len(krbobj) > 0:
-            self.oid    = krbobj.get(0)
-            self.tok_id = derunpack.unpack_ushort()
+        if data[0] == "\x60":
+            has_oid = True
+            krbobj = derunpack.get_item(oid="1.2.840.113554.1.2.2").get(0)
+        if (krbobj is not None and len(krbobj) > 0) or not has_oid:
+            if has_oid:
+                self.oid = krbobj.get(0)
+            else:
+                self.oid = None
+            self.tok_id = ShortHex(derunpack.unpack_ushort())
             self.krb5   = None
 
-            if self.tok_id == KRB_AP_REQ:
-                krbobj = derunpack.get_item()
-                self.krb5 = krb5.AP_REQ(krbobj)
-                self.krb5.set_strfmt(2, "{1}, opts:{2}, Ticket({3})")
-                self.krb5.ticket.set_strfmt(2, "{2}@{1}({2.ntype}), {3.etype}")
-                self.krb5.ticket.sname.set_strfmt(2, "{1:/:}")
-            elif self.tok_id == KRB_AP_REP:
-                krbobj = derunpack.get_item()
-                self.krb5 = krb5.AP_REP(krbobj)
-                self.krb5.set_strfmt(2, "{1}, {2.etype}")
-            elif self.tok_id == KRB_ERROR:
-                krbobj = derunpack.get_item()
-                self.krb5 = krb5.KRB_ERROR(krbobj.get(30))
-            elif self.tok_id == KRB_TOKEN_GETMIC:
-                self.krb5 = GetMIC(derunpack)
-            else:
+            try:
+                if self.tok_id == KRB_AP_REQ:
+                    krbobj = derunpack.get_item()
+                    self.krb5 = krb5.AP_REQ(krbobj)
+                    self.krb5.set_strfmt(2, "{1}, opts:{2}, Ticket({3})")
+                    self.krb5.ticket.set_strfmt(2, "{2}@{1}({2.ntype}), {3.etype}")
+                    self.krb5.ticket.sname.set_strfmt(2, "{1:/:}")
+                elif self.tok_id == KRB_AP_REP:
+                    krbobj = derunpack.get_item()
+                    self.krb5 = krb5.AP_REP(krbobj)
+                    self.krb5.set_strfmt(2, "{1}, {2.etype}")
+                elif self.tok_id == KRB_ERROR:
+                    krbobj = derunpack.get_item()
+                    self.krb5 = krb5.KRB_ERROR(krbobj.get(30))
+                elif self.tok_id == KRB_TOKEN_GETMIC:
+                    self.krb5 = GetMIC(derunpack)
+            except:
+                pass
+
+            if self.krb5 is None:
                 self.krb5 = StrHex(derunpack.getbytes())
             self._valid = True
 
