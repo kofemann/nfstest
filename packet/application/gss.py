@@ -59,10 +59,10 @@ class gss_minor_status(Enum):
 
 class GetMIC(BaseObj):
     """struct GSS_GetMIC {
-           unsigned short sgn_alg;      /* Integrity algorithm indicator */
-           opaque         filler[4];    /* Filler bytes: 0xffffffff */
-           opaque         snd_seq[8];   /* Sequence number field */
-           opaque         sgn_cksum[8]; /* Checksum of "to-be-signed data" */
+           unsigned short      sgn_alg;      /* Integrity algorithm indicator */
+           opaque              filler[4];    /* Filler bytes: 0xffffffff */
+           unsigned long long  snd_seq;      /* Sequence number field */
+           opaque              sgn_cksum[8]; /* Checksum of "to-be-signed data" */
        };
     """
     # Class attributes
@@ -70,10 +70,10 @@ class GetMIC(BaseObj):
     _attrlist = ("sgn_alg", "snd_seq", "sgn_cksum")
 
     def __init__(self, unpack):
-        ulist = unpack.unpack(22, "!H4s8s8s")
+        ulist = unpack.unpack(22, "!H4sQ8s")
         self.sgn_alg   = gss_sgn_alg(ulist[0])
         self.filler    = ulist[1]
-        self.snd_seq   = StrHex(ulist[2])
+        self.snd_seq   = LongHex(ulist[2])
         self.sgn_cksum = StrHex(ulist[3])
 
 class GSS_API(BaseObj):
