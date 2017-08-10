@@ -37,10 +37,11 @@ __license__   = "GPL v2"
 __version__   = "1.5"
 
 # Token Identifier TOK_ID
-KRB_AP_REQ       = 0x0100
-KRB_AP_REP       = 0x0200
-KRB_ERROR        = 0x0300
-KRB_TOKEN_GETMIC = 0x0101
+KRB_AP_REQ            = 0x0100
+KRB_AP_REP            = 0x0200
+KRB_ERROR             = 0x0300
+KRB_TOKEN_GETMIC      = 0x0101
+KRB_TOKEN_CFX_GETMIC  = 0x0404
 
 # Integrity algorithm indicator
 class gss_sgn_alg(Enum):
@@ -75,6 +76,25 @@ class GetMIC(BaseObj):
         self.filler    = ulist[1]
         self.snd_seq   = LongHex(ulist[2])
         self.sgn_cksum = StrHex(ulist[3])
+
+class GetCfxMIC(BaseObj):
+    """struct GSS_GetCfxMIC {
+           unsigned char       flags;        /* Attributes field */
+           opaque              filler[5];    /* Filler bytes: 0xffffffffff */
+           unsigned long long  snd_seq;      /* Sequence number field */
+           unsigned char       sgn_cksum[];  /* Checksum of "to-be-signed data" */
+       };
+    """
+    # Class attributes
+    _strfmt2  = "GetCfxMIC(flags:{0:#02x}, snd_seq:{1}, sgn_cksum:{2})"
+    _attrlist = ("flags", "snd_seq", "sgn_cksum")
+
+    def __init__(self, unpack):
+        ulist = unpack.unpack(14, "!B5sQ")
+        self.flags     = ulist[0]
+        self.filler    = ulist[1]
+        self.snd_seq   = LongHex(ulist[2])
+        self.sgn_cksum = StrHex(unpack.getbytes())
 
 class GSS_API(BaseObj):
     """GSS-API DEFINITIONS ::=
@@ -133,6 +153,8 @@ class GSS_API(BaseObj):
                     self.krb5 = krb5.KRB_ERROR(krbobj.get(30))
                 elif self.tok_id == KRB_TOKEN_GETMIC:
                     self.krb5 = GetMIC(derunpack)
+                elif self.tok_id == KRB_TOKEN_CFX_GETMIC:
+                    self.krb5 = GetCfxMIC(derunpack)
             except:
                 pass
 
