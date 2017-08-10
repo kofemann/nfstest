@@ -137,7 +137,7 @@ class IPv4(BaseObj):
         """
         rdebug = self.debug_repr()
         if rdebug == 1:
-            out = "%s -> %s " % (self.src, self.dst)
+            out = "%-13s -> %-13s " % (self.src, self.dst)
         elif rdebug == 2:
             proto = _IP_map.get(self.protocol, self.protocol)
             out = "%s -> %s, protocol: %s, len: %d" % (self.src, self.dst, proto, self.total_size)
