@@ -254,15 +254,13 @@ class GSS(BaseObj):
             if unpack.size() < 4:
                 # Not a GSS encoded packet
                 return
-            gss = None
+            pktt.pkt.gssc = None
             if self.type == rpc_const.CALL:
                 cred = self.credential
             else:
                 cred = self.verifier
             if cred.flavor == rpc_const.RPCSEC_GSS and cred.gss_proc == const.RPCSEC_GSS_DATA:
                 if cred.gss_service == const.rpc_gss_svc_integrity:
-                    gss = GSS_checksum(unpack)
-            if gss is not None:
-                pktt.pkt.gssc = gss
+                    pktt.pkt.gssc = GSS_checksum(unpack)
         except:
             pass
