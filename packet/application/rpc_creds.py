@@ -95,8 +95,8 @@ class GSS_Verifier(BaseObj):
 
     def __init__(self, unpack):
         """Constructor which takes the Unpack object as input"""
-        self.gss_token = unpack.unpack_opaque()
-        self.size      = len(self.gss_token)
+        self.size      = unpack.unpack_uint()
+        self.gss_token = unpack.unpack_fopaque(self.size)
         try:
             krb5 = gss.GSS_API(self.gss_token)
             if krb5:
