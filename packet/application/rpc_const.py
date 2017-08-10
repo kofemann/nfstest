@@ -37,7 +37,7 @@ MSG_ACCEPTED = 0
 MSG_DENIED   = 1
 reply_stat = {
     0: 'MSG_ACCEPTED',
-    1: 'MSG_DENIED',
+    1: 'MSG_DENIED_ERR',
 }
 
 # accept_stat
@@ -86,20 +86,20 @@ RPCSEC_GSS_CREDPROBLEM = 13  # no credentials for user
 RPCSEC_GSS_CTXPROBLEM  = 14  # problem with context
 auth_stat = {
      0: 'AUTH_OK',
-     1: 'AUTH_BADCRED',
-     2: 'AUTH_REJECTEDCRED',
-     3: 'AUTH_BADVERF',
-     4: 'AUTH_REJECTEDVERF',
-     5: 'AUTH_TOOWEAK',
-     6: 'AUTH_INVALIDRESP',
-     7: 'AUTH_FAILED',
-     8: 'AUTH_KERB_GENERIC',
-     9: 'AUTH_TIMEEXPIRE',
-    10: 'AUTH_TKT_FILE',
-    11: 'AUTH_DECODE',
-    12: 'AUTH_NET_ADDR',
-    13: 'RPCSEC_GSS_CREDPROBLEM',
-    14: 'RPCSEC_GSS_CTXPROBLEM',
+     1: 'AUTH_BADCRED_ERR',
+     2: 'AUTH_REJECTEDCRED_ERR',
+     3: 'AUTH_BADVERF_ERR',
+     4: 'AUTH_REJECTEDVERF_ERR',
+     5: 'AUTH_TOOWEAK_ERR',
+     6: 'AUTH_INVALIDRESP_ERR',
+     7: 'AUTH_FAILED_ERR',
+     8: 'AUTH_KERB_GENERIC_ERR',
+     9: 'AUTH_TIMEEXPIRE_ERR',
+    10: 'AUTH_TKT_FILE_ERR',
+    11: 'AUTH_DECODE_ERR',
+    12: 'AUTH_NET_ADDR_ERR',
+    13: 'RPCSEC_GSS_CREDPROBLEM_ERR',
+    14: 'RPCSEC_GSS_CTXPROBLEM_ERR',
 }
 
 # authentication flavor numbers
