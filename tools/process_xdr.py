@@ -24,7 +24,7 @@ from optparse import OptionParser, IndentedHelpFormatter
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.3"
+__version__   = "1.4"
 
 USAGE = """%prog [options] <xdrfile1.x> [<xdrfile2.x> ...]
 
@@ -1376,8 +1376,6 @@ class XDRobject:
                     fd.write("%sunpack.unpack_array(%s)%s\n" % (setattr_str, astr, swstr))
             elif dname[:7] == "Unpack.":
                 fd.write("%sunpack.%s()%s\n" % (setattr_str, dname[7:], swstr))
-            elif dname in (int32_list + uint32_list + int64_list + uint64_list + string_list):
-                fd.write("%s%s%s\n" % (setattr_str, astr, swstr))
             elif dname == "void":
                 if need_if:
                     self.set_vars(fd, tag, dnames, indent+tindent+cindent)
@@ -1389,7 +1387,7 @@ class XDRobject:
                 if dname == "bool":
                     # Rename "bool" definition
                     dname = "nfs_bool"
-                fd.write("%s%s(unpack)%s\n" % (setattr_str, dname, swstr))
+                fd.write("%s%s%s\n" % (setattr_str, astr, swstr))
 
             self.set_vars(fd, deftags, dnames, indent+tindent, post=True, vname=vname)
             self.set_objattr(fd, tag, dnames, indent+tindent+cindent)
