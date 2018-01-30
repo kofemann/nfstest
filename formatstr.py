@@ -192,6 +192,9 @@ class FormatStr(Formatter):
            # Display string in crc16
            out = x.format("{0:crc16}", "hello") # out = "0x9c62"
 
+           # Display length of item
+           out = x.format("{0:len}", "hello") # out = 5
+
            # Substring using "@" format modifier
            # Format {0:@sindex[,eindex]} is like value[sindex:eindex]
            #   {0:@3} is like value[3:]
@@ -261,6 +264,10 @@ class FormatStr(Formatter):
                 return data[0][1:].replace("\\:", ":")
             elif len(data) > 1:
                 return data[1].replace("\\:", ":")
+        elif format_spec == "len":
+            if value is None:
+                return "0"
+            return str(len(value))
         if value is None:
             # No value is given
             return ""
