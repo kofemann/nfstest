@@ -703,7 +703,7 @@ enum fs4_status_type {
 
 struct fs4_status {
     bool             absent;
-    fs4_status_type  type;   /* STRHEX:1 */
+    fs4_status_type  type;
     utf8str_cs       source;
     utf8str_cs       current;
     int32_t          age;
