@@ -39,7 +39,7 @@ from baseobj import BaseObj
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.1"
+__version__   = "1.2"
 
 # The order in which to display all layers in the packet
 PKT_layers = [
@@ -129,8 +129,13 @@ class Pkt(BaseObj):
                         else:
                             out += str(value)
                     else:
-                        sps = " " * (_maxlen - len(key))
-                        out += "    %s:%s %s\n" % (key.upper(), sps, str(value))
+                        if getattr(value, "_strname", None) is not None:
+                            # Use object's name as layer name
+                            name = value._strname
+                        else:
+                            name = key.upper()
+                        sps = " " * (_maxlen - len(name))
+                        out += "    %s:%s %s\n" % (name, sps, str(value))
                         if index == lastkey and hasattr(value, "data") and value.data is not None and key != "nfs":
                             sps = " " * (_maxlen - 4)
                             out += "    DATA:%s 0x%s\n" % (sps, value.data.encode("hex"))
