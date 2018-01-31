@@ -129,7 +129,7 @@ class BitmapInval(Exception):
     """Exception for an invalid bit number"""
     pass
 
-def bitmap_dict(unpack, bitmap, func_map, name_map=None):
+def bitmap_dict(unpack, bitmap, func_map, key_enum=None):
     """Returns a dictionary where the key is the bit number given by bitmap
        and the value is the decoded value by evaluating the function used
        for that specific bit number
@@ -143,10 +143,9 @@ def bitmap_dict(unpack, bitmap, func_map, name_map=None):
            Dictionary which maps a bit number to the function to be used for
            decoding the value for that bit number. The function must have
            the "unpack" object as the only argument
-       name_map:
-           Dictionary which maps a bit number to a bit name. If this is given
-           the resulting dictionary will have a bit name for a key instead
-           of the bit number
+       key_enum:
+           Use Enum for bit number so the key could be displayed as the bit
+           name instead of the bit number
     """
     ret = {}
     bitnum = 0
@@ -158,10 +157,9 @@ def bitmap_dict(unpack, bitmap, func_map, name_map=None):
             if func is None:
                 raise BitmapInval, "decoding function not found for bit number %d" % bitnum
             else:
-                if name_map:
-                    # Use the bit number name instead of the bit number
-                    # for the key
-                    ret[name_map.get(bitnum, bitnum)] = func(unpack)
+                if key_enum:
+                    # Use Enum as the key instead of a plain number
+                    ret[key_enum(bitnum)] = func(unpack)
                 else:
                     ret[bitnum] = func(unpack)
         bitmap = bitmap >> 1
