@@ -205,6 +205,8 @@ opts.add_option_group(pktdisp)
 debug = OptionGroup(opts, "Debug")
 hhelp = "If set to True, enums are strictly enforced [default: %default]"
 debug.add_option("--enum-check", default=str(utils.ENUM_CHECK), help=hhelp)
+hhelp = "If set to True, enums are displayed as numbers [default: %default]"
+debug.add_option("--enum-repr", default=str(utils.ENUM_REPR), help=hhelp)
 hhelp = "Set debug level messages"
 debug.add_option("--debug-level", default="", help=hhelp)
 opts.add_option_group(debug)
@@ -232,6 +234,7 @@ utils.LOAD_body    = eval(vopts.load_body)
 record.FRAME       = eval(vopts.frame)
 record.INDEX       = eval(vopts.index)
 utils.ENUM_CHECK   = eval(vopts.enum_check)
+utils.ENUM_REPR    = eval(vopts.enum_repr)
 formatstr.CRC16    = eval(vopts.crc16)
 formatstr.CRC32    = eval(vopts.crc32)
 
