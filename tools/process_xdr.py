@@ -1196,9 +1196,10 @@ class XDRobject:
         #===========================================================
         if isbitdict:
             nindent = 4
+            bitdict = deftags.get("BITDICT")
             fd.write("    bitmap = bitmap4(unpack)\n")
             fd.write("    unpack.unpack_uint()  # size of opaque\n")
-            fd.write("    return bitmap_dict(unpack, bitmap, %s_f)\n" % deftags.get("BITDICT"))
+            fd.write("    return bitmap_dict(unpack, bitmap, %s_f, %s)\n" % (bitdict, bitdict))
         elif not self.item_dlist:
             fd.write("    pass\n")
             nindent = 4
