@@ -29,7 +29,7 @@ from baseobj import BaseObj, fstrobj
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.3"
+__version__   = "1.4"
 
 # RPC type constants
 RPC_CALL  = 0
@@ -47,7 +47,8 @@ NFS_mainop = False # Display only the main operation in an NFS COMPOUND
 LOAD_body  = True  # Display the body of layer/procedure/operation
 
 # Module variables for Enum
-ENUM_CHECK = False
+ENUM_CHECK = False  # If True, Enums are strictly enforced
+ENUM_REPR  = False  # If True, Enums are displayed as numbers
 
 class ShortHex(int):
     """Short integer object which is displayed in hex"""
@@ -113,6 +114,16 @@ class Enum(int):
             return super(Enum, self).__str__()
         else:
             return value[self._offset:]
+
+    def __repr__(self):
+        """Official string representation, display value using the mapping
+           dictionary provided as a class attribute when ENUM_REPR is False
+        """
+        if ENUM_REPR:
+            # Use base object representation
+            return super(Enum, self).__repr__()
+        else:
+            return self.__str__()
 
 class BitmapInval(Exception):
     """Exception for an invalid bit number"""
