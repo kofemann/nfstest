@@ -44,7 +44,7 @@ __version__   = "1.2"
 # The order in which to display all layers in the packet
 PKT_layers = [
     'record',
-    'ethernet',
+    'ethernet', 'erf',
     'ip', 'arp', 'rarp',
     'tcp', 'udp',
     'rpc', 'ntp', 'dns', 'krb',

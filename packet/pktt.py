@@ -52,6 +52,7 @@ import termios
 from formatstr import *
 import nfstest_config as c
 from baseobj import BaseObj
+from packet.link.erf import ERF
 from packet.unpack import Unpack
 from packet.record import Record
 from packet.pkt import Pkt, PKT_layers
@@ -61,7 +62,7 @@ from packet.link.ethernet import ETHERNET
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "2.3"
+__version__   = "2.4"
 
 BaseObj.debug_map(0x100000000, 'pkt1', "PKT1: ")
 BaseObj.debug_map(0x200000000, 'pkt2', "PKT2: ")
@@ -391,6 +392,9 @@ class Pktt(BaseObj, Unpack):
         if self.header.link_type == 1:
             # Decode ethernet layer
             ETHERNET(self)
+        elif self.header.link_type == 197:
+            # Decode extensible record format layer
+            ERF(self)
         else:
             # Unknown link layer
             record.data = self.unpack.getbytes()

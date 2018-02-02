@@ -148,6 +148,7 @@ NFSTEST_ALLMODS = [
     'packet/internet/ipv4.py',
     'packet/internet/ipv6.py',
     'packet/internet/ipv6addr.py',
+    'packet/link/erf.py',
     'packet/link/ethernet.py',
     'packet/link/macaddr.py',
     'packet/nfs/mount3.py',
