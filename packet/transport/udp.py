@@ -19,6 +19,7 @@ Decode UDP layer.
 import nfstest_config as c
 from baseobj import BaseObj
 from packet.utils import ShortHex
+from packet.transport.ib import IB
 from packet.application.dns import DNS
 from packet.application.rpc import RPC
 from packet.application.ntp4 import NTP
@@ -28,7 +29,7 @@ from packet.application.krb5 import KRB5
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.1"
+__version__   = "1.2"
 
 class UDP(BaseObj):
     """UDP object
@@ -93,6 +94,10 @@ class UDP(BaseObj):
             krb = KRB5(pktt, proto=17)
             if krb:
                 pktt.pkt.krb = krb
+            return
+        elif 4791 in [self.src_port, self.dst_port]:
+            # InfiniBand RoCEv2 (RDMA over Converged Ethernet)
+            IB(pktt)
             return
 
         # Get RPC header

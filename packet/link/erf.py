@@ -20,6 +20,7 @@ Reference: ERF Types Reference Guide, EDM11-01 - Version 21
 import time
 import nfstest_config as c
 from baseobj import BaseObj
+from packet.transport.ib import IB
 
 # Module constants
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
@@ -91,6 +92,10 @@ class ERF(BaseObj):
                 break
 
         pktt.pkt.erf = self
+
+        if self.rtype == 21:
+            # Decode InfiniBand
+            IB(pktt)
 
     def __str__(self):
         """String representation of object
