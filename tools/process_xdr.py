@@ -930,7 +930,13 @@ class XDRobject:
         for item in self.item_dlist:
             if item[1] == defname:
                 # This is a linked list
-                self.linkedlist[defname] = True
+                if len(self.item_dlist) == 2:
+                    # There is only one attribute (other than *next)
+                    # so convert it to a list of this attribute type
+                    # instead of a list of this struct
+                    self.linkedlist[defname] = self.item_dlist[0][1]
+                else:
+                    self.linkedlist[defname] = defname
                 self.item_dlist.pop(index)
                 break
             index += 1
@@ -1357,7 +1363,7 @@ class XDRobject:
                 fd.write("%sunpack.unpack_conditional(%s)%s\n" % (setattr_str, dname, swstr))
             elif self.linkedlist.get(dname) and pdef == "*":
                 # Pointer to a linked list
-                fd.write("%sunpack.unpack_list(%s)%s\n" % (setattr_str, dname, swstr))
+                fd.write("%sunpack.unpack_list(%s)%s\n" % (setattr_str, self.linkedlist.get(dname), swstr))
             elif isarray:
                 cond = False
                 if len(adef):
