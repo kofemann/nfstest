@@ -86,15 +86,15 @@ union MNT3res switch (mountstat3 status) {
 /*
  * mountlist MOUNTPROC3_DUMP(void) = 2;
  */
-struct mountentry {
-    name3       hostname;
-    dirpath3    directory;
-    mountentry  *next;
+struct mountentry3 {
+    name3        hostname;
+    dirpath3     directory;
+    mountentry3 *next;
 };
 
 /* STRFMT1: "" */
 struct DUMP3res {
-    mountentry *mountlist;
+    mountentry3 *mountlist;
 };
 
 /*
