@@ -1352,7 +1352,10 @@ class XDRobject:
                 setattr_str = '%s%s%sself.set_attr("%s", %s' % (tindent, cindent, indent, vname, sps)
                 swstr += ")"
 
-            if self.linkedlist.get(dname) or pdef == "*":
+            if pdef == "*" and not self.linkedlist.get(dname):
+                # Conditional: has a pointer definition "*" but it is not a linked list
+                fd.write("%sunpack.unpack_conditional(%s)%s\n" % (setattr_str, dname, swstr))
+            elif self.linkedlist.get(dname) and pdef == "*":
                 # Pointer to a linked list
                 fd.write("%sunpack.unpack_list(%s)%s\n" % (setattr_str, dname, swstr))
             elif isarray:
