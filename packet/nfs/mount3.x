@@ -112,9 +112,14 @@ struct UMNT3args {
 /*
  * EXPORT3res MOUNTPROC3_EXPORT(void) = 5;
  */
+struct groupnode3 {
+    name3       name;
+    groupnode3 *next;
+};
+
 struct exportnode3 {
-    dirpath3    dir;
-    name3       *groups;
+    dirpath3     dir;
+    groupnode3  *groups;
     exportnode3 *next;
 };
 
