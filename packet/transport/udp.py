@@ -82,34 +82,19 @@ class UDP(BaseObj):
             ntp = NTP(pktt)
             if ntp:
                 pktt.pkt.ntp = ntp
-            return
         elif 53 in [self.src_port, self.dst_port]:
             # DNS on port 53
             dns = DNS(pktt, proto=17)
             if dns:
                 pktt.pkt.dns = dns
-            return
         elif 88 in [self.src_port, self.dst_port]:
             # KRB5 on port 88
             krb = KRB5(pktt, proto=17)
             if krb:
                 pktt.pkt.krb = krb
-            return
         elif 4791 in [self.src_port, self.dst_port]:
             # InfiniBand RoCEv2 (RDMA over Converged Ethernet)
             IB(pktt)
-            return
-
-        # Get RPC header
-        rpc = RPC(pktt, proto=17)
-
-        if rpc:
-            # Save RPC layer on packet object
-            pktt.pkt.rpc = rpc
-            if rpc.type:
-                # Remove packet call from the xid map since reply has
-                # already been decoded
-                pktt._rpc_xid_map.pop(rpc.xid, None)
-
-            # Decode NFS layer
-            rpc.decode_payload()
+        else:
+            # Decode RPC layer
+            RPC(pktt, proto=17)

@@ -34,7 +34,7 @@ from packet.nfs.portmap2 import PORTMAP2args,PORTMAP2res
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.4"
+__version__   = "1.5"
 
 class accept_stat_enum(Enum):
     """enum accept_stat"""
@@ -173,6 +173,17 @@ class RPC(GSS):
 
         try:
             self._rpc_header()
+
+            if self._rpc and proto == 17:
+                # Save RPC layer on packet object
+                pktt.pkt.rpc = self
+                if self.type:
+                    # Remove packet call from the xid map since reply has
+                    # already been decoded
+                    pktt._rpc_xid_map.pop(self.xid, None)
+
+                # Decode NFS layer
+                self.decode_payload()
         except:
             pass
 
