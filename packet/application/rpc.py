@@ -438,7 +438,8 @@ class RPC(GSS):
                 if self._proto == 6:
                     self.data = unpack.read(self.fragment_hdr.data_size)
                 else:
-                    self.data = unpack.read(unpack.size())
+                    # Just get the bytes but leave them in the buffer
+                    self.data = unpack.getbytes()
 
             if ret:
                 ret._rpc = self
