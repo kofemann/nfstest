@@ -143,6 +143,8 @@ NFSTEST_ALLMODS = [
     'packet/application/rpc.py',
     'packet/application/rpc_const.py',
     'packet/application/rpc_creds.py',
+    'packet/application/rpcordma.py',
+    'packet/application/rpcordma_const.py',
     'packet/internet/arp.py',
     'packet/internet/arp_const.py',
     'packet/internet/ipv4.py',

@@ -21,7 +21,10 @@ import nfstest_config as c
 from packet.utils import *
 from baseobj import BaseObj
 from packet.unpack import Unpack
+from packet.application.rpc import RPC
 from packet.internet.ipv6addr import IPv6Addr
+from packet.application.rpcordma import RPCoRDMA
+import packet.application.rpcordma_const as rdma
 
 # Module constants
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
@@ -649,6 +652,26 @@ class IB(BaseObj):
                 unpack = Unpack(data[:-crc_bytes])
                 pktt.unpack = unpack
 
+        # Decode InfiniBand payload
+        self._decode_payload(pktt)
+
     def __nonzero__(self):
         """Truth value testing for the built-in operation bool()"""
         return self._ib
+
+    def _decode_payload(self, pktt):
+        """Decode InifiniBand payload"""
+        pkt    = pktt.pkt
+        unpack = pktt.unpack
+        offset = unpack.tell()
+
+        if self.opcode in (RC + SEND_Only, RC + SEND_Only_Invalidate):
+            rpcordma = RPCoRDMA(unpack)
+            if rpcordma and rpcordma.vers == 1 and rdma.rdma_proc.get(rpcordma.proc):
+                pkt.rpcordma = rpcordma
+                if rpcordma.proc == rdma.RDMA_MSG:
+                    # Decode RPC layer
+                    RPC(pktt, proto=17)
+            else:
+                # RPCoRDMA is not valid so rewind Unpack object
+                unpack.seek(offset)
