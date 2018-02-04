@@ -51,7 +51,7 @@ PKT_layers = [
     'gssd', 'nfs', 'mount', 'portmap', 'nlm', 'gssc',
 ]
 # Required layers for debug_repr(1)
-_PKT_rlayers = ['record', 'ip']
+_PKT_rlayers = ['record', 'ip', 'ib']
 # Do not display these layers for debug_repr(1)
 _PKT_nlayers = ['gssd', 'gssc']
 # Packet layers to display as debug_repr(2) for debug_repr(1) if last layer

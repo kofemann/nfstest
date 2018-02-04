@@ -653,7 +653,20 @@ class IB(BaseObj):
                 pktt.unpack = unpack
 
         # Decode InfiniBand payload
+        offset = unpack.tell()
         self._decode_payload(pktt)
+
+        if unpack.tell() > offset:
+            # Payload was processed so set STRFMT1 to display either the
+            # IB link or network layer
+            if self.grh:
+                # Display InfiniBand network layer
+                self._strfmt1 = "{1} "
+            elif self.lrh:
+                # Display InfiniBand link layer
+                self._strfmt1 = "{0} "
+            else:
+                self._strfmt1 = ""
 
     def __nonzero__(self):
         """Truth value testing for the built-in operation bool()"""
