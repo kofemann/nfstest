@@ -27,7 +27,7 @@ from packet.internet.arp import ARP,RARP
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.1"
+__version__   = "1.2"
 
 _ETHERNET_map = {
     0x0800: 'IPv4',
@@ -102,6 +102,10 @@ class ETHERNET(BaseObj):
         rdebug = self.debug_repr()
         if rdebug == 1:
             out = "%s -> %s " % (self.src, self.dst)
+            if self._pkt.get_layers()[-1] == "ethernet":
+                etype = _ETHERNET_map.get(self.type, None)
+                etype = "" if etype is None else "(%s)" % etype
+                out += " ETHERNET  type: 0x%04x%s" % (self.type, etype)
         elif rdebug == 2:
             etype = _ETHERNET_map.get(self.type, None)
             etype = hex(self.type) if etype is None else "%s(%s)" % (hex(self.type), etype)

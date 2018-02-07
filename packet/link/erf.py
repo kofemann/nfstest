@@ -111,7 +111,12 @@ class ERF(BaseObj):
         """
         rdebug = self.debug_repr()
         if rdebug == 1:
-            out = "rtype=%s rlen=%d wlen=%d " % (self.rtype, self.rlen, self.wlen)
+            if self._pkt.get_layers()[-1] == "erf":
+                rtype = ERF_type.get(self.rtype, None)
+                rtype = self.rtype if rtype is None else "%s(%s)" % (self.rtype, rtype)
+                out = "ERF  rtype: %s, rlen: %d, wlen: %d" % (rtype, self.rlen, self.wlen)
+            else:
+                out = "rtype=%s rlen=%d wlen=%d " % (self.rtype, self.rlen, self.wlen)
         elif rdebug == 2:
             rtype = ERF_type.get(self.rtype, None)
             rtype = self.rtype if rtype is None else "%s(%s)" % (self.rtype, rtype)

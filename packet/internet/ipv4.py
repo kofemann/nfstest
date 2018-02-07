@@ -27,7 +27,7 @@ from packet.transport.udp import UDP
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.1"
+__version__   = "1.2"
 
 # Name of different protocols
 _IP_map = {1:'ICMP(1)', 2:'IGMP(2)', 6:'TCP(6)', 17:'UDP(17)'}
@@ -138,6 +138,9 @@ class IPv4(BaseObj):
         rdebug = self.debug_repr()
         if rdebug == 1:
             out = "%-13s -> %-13s " % (self.src, self.dst)
+            if self._pkt.get_layers()[-1] == "ip":
+                proto = _IP_map.get(self.protocol, self.protocol)
+                out += " IPv%d  protocol: %s, len: %d" % (self.version, proto, self.total_size)
         elif rdebug == 2:
             proto = _IP_map.get(self.protocol, self.protocol)
             out = "%s -> %s, protocol: %s, len: %d" % (self.src, self.dst, proto, self.total_size)

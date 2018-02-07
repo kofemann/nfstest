@@ -54,8 +54,6 @@ PKT_layers = [
 _PKT_rlayers = ['record', 'ip', 'ib']
 # Do not display these layers for debug_repr(1)
 _PKT_nlayers = ['gssd', 'gssc']
-# Packet layers to display as debug_repr(2) for debug_repr(1) if last layer
-_PKT_mlayers = ['record', 'ethernet', 'ip']
 _maxlen = len(max(PKT_layers, key=len))
 
 class Pkt(BaseObj):
@@ -123,13 +121,7 @@ class Pkt(BaseObj):
                 value = getattr(self, key, None)
                 if value is not None and (rdebug > 1 or index == lastkey or key in _PKT_rlayers or (self != "ip" and key == "ethernet")):
                     if rdebug == 1:
-                        if index == lastkey and key in _PKT_mlayers:
-                            # Display level 2 if last layer is in _PKT_mlayers
-                            self.debug_repr(2)
-                            out += str(value)
-                            self.debug_repr(1)
-                        else:
-                            out += str(value)
+                        out += str(value)
                     else:
                         if getattr(value, "_strname", None) is not None:
                             # Use object's name as layer name

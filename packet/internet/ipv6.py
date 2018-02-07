@@ -24,10 +24,10 @@ from packet.transport.tcp import TCP
 from packet.transport.udp import UDP
 
 # Module constants
-__author__    = 'Jorge Mora (%s)' % c.NFSTEST_AUTHOR_EMAIL
+__author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = '1.0.4'
+__version__   = "1.1"
 
 class IPv6(IPv4):
     """IPv6 object
