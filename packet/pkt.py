@@ -51,9 +51,9 @@ PKT_layers = [
     'gssd', 'nfs', 'mount', 'portmap', 'nlm', 'gssc',
 ]
 # Required layers for debug_repr(1)
-_PKT_rlayers = ['record', 'ip', 'ib']
+_PKT_rlayers = set(['record', 'ip', 'ib'])
 # Do not display these layers for debug_repr(1)
-_PKT_nlayers = ['gssd', 'gssc']
+_PKT_nlayers = set(['gssd', 'gssc'])
 _maxlen = len(max(PKT_layers, key=len))
 
 class Pkt(BaseObj):
@@ -119,10 +119,10 @@ class Pkt(BaseObj):
             lastkey = len(layer_list) - 1
             for key in layer_list:
                 value = getattr(self, key, None)
-                if value is not None and (rdebug > 1 or index == lastkey or key in _PKT_rlayers or (self != "ip" and key == "ethernet")):
-                    if rdebug == 1:
+                if value is not None:
+                    if rdebug == 1 and (index == lastkey or key in _PKT_rlayers or (not self.ip and key == "ethernet")):
                         out += str(value)
-                    else:
+                    elif rdebug == 2:
                         if getattr(value, "_strname", None) is not None:
                             # Use object's name as layer name
                             name = value._strname
@@ -130,7 +130,7 @@ class Pkt(BaseObj):
                             name = key.upper()
                         sps = " " * (_maxlen - len(name))
                         out += "    %s:%s %s\n" % (name, sps, str(value))
-                        if index == lastkey and hasattr(value, "data") and value.data is not None and key != "nfs":
+                        if index == lastkey and getattr(value, "data", "") and key != "nfs":
                             sps = " " * (_maxlen - 4)
                             out += "    DATA:%s 0x%s\n" % (sps, value.data.encode("hex"))
                 index += 1
