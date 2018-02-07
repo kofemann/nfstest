@@ -39,7 +39,7 @@ from baseobj import BaseObj
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.2"
+__version__   = "1.3"
 
 # The order in which to display all layers in the packet
 PKT_layers = [
@@ -70,11 +70,13 @@ class Pkt(BaseObj):
            if x == 'nfs':
                print x.nfs
     """
+    # Class attributes
     _attrlist = tuple(PKT_layers)
 
     # Do not use BaseObj constructor to have a little bit of
     # performance improvement
-    def __init__(self): pass
+    def __init__(self):
+        self._layers = ["record"]
 
     def __eq__(self, other):
         """Comparison method used to determine if object has a given layer"""
@@ -111,13 +113,13 @@ class Pkt(BaseObj):
         rdebug = self.debug_repr()
         if rdebug > 0:
             out = "Pkt(\n" if rdebug == 2 else ''
-            klist = []
-            for key in PKT_layers:
-                if getattr(self, key, None) is not None and (rdebug > 1 or key not in _PKT_nlayers):
-                    klist.append(key)
             index = 0
-            lastkey = len(klist) - 1
-            for key in klist:
+            if rdebug == 1:
+                layer_list = [x for x in self._layers if x not in _PKT_nlayers]
+            else:
+                layer_list = self._layers
+            lastkey = len(layer_list) - 1
+            for key in layer_list:
                 value = getattr(self, key, None)
                 if value is not None and (rdebug > 1 or index == lastkey or key in _PKT_rlayers or (self != "ip" and key == "ethernet")):
                     if rdebug == 1:
@@ -144,3 +146,14 @@ class Pkt(BaseObj):
         else:
             out = BaseObj.__str__(self)
         return out
+
+    def add_layer(self, name, layer):
+        """Add layer to name and object to the packet"""
+        layer._pkt = self
+        setattr(self, name, layer)
+        self._layers.append(name)
+
+    def get_layers(self):
+        """Return the list of layers currently in the packet"""
+        # Return a tuple instead of the list so it cannot be modified
+        return tuple(self._layers)

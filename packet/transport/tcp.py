@@ -224,7 +224,7 @@ class TCP(BaseObj):
         self.checksum    = ShortHex(ulist[6])
         self.urgent_ptr  = ulist[7]
 
-        pktt.pkt.tcp = self
+        pktt.pkt.add_layer("tcp", self)
 
         # Stream identifier
         ip = pktt.pkt.ip
@@ -309,13 +309,13 @@ class TCP(BaseObj):
             # DNS on port 53
             dns = DNS(pktt, proto=6)
             if dns:
-                pkt.dns = dns
+                pkt.add_layer("dns", dns)
             return
         elif 88 in [self.src_port, self.dst_port]:
             # KRB5 on port 88
             krb = KRB5(pktt, proto=6)
             if krb:
-                pkt.krb = krb
+                pkt.add_layer("krb", krb)
             return
 
         if stream.frag_off > 0 and len(stream.buffer) == 0:
@@ -368,7 +368,7 @@ class TCP(BaseObj):
                 stream.frag_off = 0
             stream.buffer = ""
             # Save RPC layer on packet object
-            pkt.rpc = rpc
+            pkt.add_layer("rpc", rpc)
             if rpc.type:
                 # Remove packet call from the xid map since reply has
                 # already been decoded

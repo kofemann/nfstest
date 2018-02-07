@@ -107,7 +107,7 @@ class IPv4(BaseObj):
         self.src             = "%d.%d.%d.%d" % ulist[8:12]
         self.dst             = "%d.%d.%d.%d" % ulist[12:]
 
-        pktt.pkt.ip = self
+        pktt.pkt.add_layer("ip", self)
 
         if self.header_size > 20:
             # Save IP options

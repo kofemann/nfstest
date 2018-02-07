@@ -70,7 +70,7 @@ class ETHERNET(BaseObj):
         self.dst  = MacAddr(ulist[0].encode('hex'))
         self.src  = MacAddr(ulist[1].encode('hex'))
         self.type = ulist[2]
-        pktt.pkt.ethernet = self
+        pktt.pkt.add_layer("ethernet", self)
 
         if self.type == 0x0800:
             # Decode IPv4 packet

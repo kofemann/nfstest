@@ -72,7 +72,7 @@ class UDP(BaseObj):
         self.length   = ulist[2]
         self.checksum = ShortHex(ulist[3])
 
-        pktt.pkt.udp = self
+        pktt.pkt.add_layer("udp", self)
         self._decode_payload(pktt)
 
     def _decode_payload(self, pktt):
@@ -81,17 +81,17 @@ class UDP(BaseObj):
             # NTP on port 123
             ntp = NTP(pktt)
             if ntp:
-                pktt.pkt.ntp = ntp
+                pktt.pkt.add_layer("ntp", ntp)
         elif 53 in [self.src_port, self.dst_port]:
             # DNS on port 53
             dns = DNS(pktt, proto=17)
             if dns:
-                pktt.pkt.dns = dns
+                pktt.pkt.add_layer("dns", dns)
         elif 88 in [self.src_port, self.dst_port]:
             # KRB5 on port 88
             krb = KRB5(pktt, proto=17)
             if krb:
-                pktt.pkt.krb = krb
+                pktt.pkt.add_layer("krb", krb)
         elif 4791 in [self.src_port, self.dst_port]:
             # InfiniBand RoCEv2 (RDMA over Converged Ethernet)
             IB(pktt)

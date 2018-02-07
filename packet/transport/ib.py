@@ -609,7 +609,7 @@ class IB(BaseObj):
 
             # InfiniBand layer is valid
             self._ib = True
-            pkt.ib = self
+            pkt.add_layer("ib", self)
         else:
             return
 
@@ -681,7 +681,7 @@ class IB(BaseObj):
         if self.opcode in (RC + SEND_Only, RC + SEND_Only_Invalidate):
             rpcordma = RPCoRDMA(unpack)
             if rpcordma and rpcordma.vers == 1 and rdma.rdma_proc.get(rpcordma.proc):
-                pkt.rpcordma = rpcordma
+                pkt.add_layer("rpcordma", rpcordma)
                 if rpcordma.proc == rdma.RDMA_MSG:
                     # Decode RPC layer
                     RPC(pktt, proto=17)

@@ -176,7 +176,7 @@ class RPC(GSS):
 
             if self._rpc and proto == 17:
                 # Save RPC layer on packet object
-                pktt.pkt.rpc = self
+                pktt.pkt.add_layer("rpc", self)
                 if self.type:
                     # Remove packet call from the xid map since reply has
                     # already been decoded
@@ -454,8 +454,8 @@ class RPC(GSS):
 
             if ret:
                 ret._rpc = self
+                pktt.pkt.add_layer(layer, ret)
                 self.decode_gss_checksum()
-                setattr(pktt.pkt, layer, ret)
         except Exception:
             # Could not decode RPC load
             self.dprint('PKT3', traceback.format_exc())

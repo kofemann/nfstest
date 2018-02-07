@@ -91,7 +91,7 @@ class ERF(BaseObj):
                 unpack.read(8)
                 break
 
-        pktt.pkt.erf = self
+        pktt.pkt.add_layer("erf", self)
 
         if self.rtype == 21:
             # Decode InfiniBand

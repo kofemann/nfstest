@@ -97,7 +97,7 @@ class ARP(BaseObj):
             self._strfmt2 = "{4}: {7} is {8}"
 
         # Set packet layer
-        setattr(pktt.pkt, self.__class__.__name__.lower(), self)
+        pktt.pkt.add_layer(self.__class__.__name__.lower(), self)
 
     def _getha(self, unpack):
         """Get hardware address"""

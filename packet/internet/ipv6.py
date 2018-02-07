@@ -76,7 +76,7 @@ class IPv6(IPv4):
         self.src           = IPv6Addr(ulist[4].encode('hex'))
         self.dst           = IPv6Addr(ulist[5].encode('hex'))
 
-        pktt.pkt.ip = self
+        pktt.pkt.add_layer("ip", self)
 
         if self.protocol == 6:
             # Decode TCP
