@@ -506,6 +506,231 @@ ETH_map = {
     XRC+SEND_Only_Invalidate      : (XRCETH, IETH),
 }
 
+class RDMAseg(object):
+    """RDMA sub-segment object
+
+       The sub-segment is created for each RDMA_WRITE_First, RDMA_WRITE_Only
+       or RDMA_READ_Request and each sub-segment belongs to a list in the
+       RDMAsegment object so there is no segment identifier or handle.
+
+       Reassembly for each sub-segment is done using the PSN or packet
+       sequence number in each of the data fragments. Therefore, a range
+       of PSN numbers define this object which is given by the spsn and
+       epsn attributes (first and last PSN respectively).
+    """
+    def __init__(self, spsn, epsn, dmalen):
+        self.spsn     = spsn   # First PSN in sub-segment
+        self.epsn     = epsn   # Last PSN in sub-segment
+        self.dmalen   = dmalen # DMA length in sub-segment
+        self.fraglist = []     # List of data fragments
+
+    def insert_data(self, psn, data):
+        """Insert data at correct position given by the psn"""
+        # Make sure fragment belongs to this sub-segment
+        if psn >= self.spsn and psn <= self.epsn:
+            # Normalize psn with respect to first PSN
+            index = psn - self.spsn
+            fraglist = self.fraglist
+            nlen = len(fraglist)
+            if index < nlen:
+                # This is an out-of-order fragment,
+                # replace fragment data at index
+                fraglist[index] = data
+            else:
+                # Some fragments may be missing
+                for i in xrange(index - nlen):
+                    # Use an empty string for missing fragments
+                    # These may come later as out-of-order fragments
+                    fraglist.append("")
+                fraglist.append(data)
+            return True
+        return False
+
+    def get_data(self):
+        """Return sub-segment data"""
+        data = ""
+        # Get data from all fragments
+        for fragdata in self.fraglist:
+            data += fragdata
+        return data
+
+class RDMAsegment(object):
+    """RDMA segment object
+
+       Each segment is identified by its handle. The segment information
+       comes from the RPC-over-RDMA protocol layer so the length attribute
+       gives the total DMA length of the segment.
+    """
+    def __init__(self, handle, length):
+        self.handle  = handle
+        self.length  = length
+
+        # List of sub-segments (RDMAseg)
+        # When the RDMA segment's length (DMA length) is large it could be
+        # broken into multiple sub-segments. This is accomplished by sending
+        # multiple Write First (or Read Request) packets where the RETH
+        # specifies the same RKey(or handle) for all sub-segments and the
+        # DMA length for the sub-segment.
+        self.seglist = []
+
+    def valid_psn(self, psn):
+        """True if given psn is valid for this segment"""
+        # Search all sub-segments
+        for seg in self.seglist:
+            if psn >= seg.spsn and psn <= seg.epsn:
+                # Correct sub-segment found
+                return True
+        return False
+
+    def add_sub_segment(self, psn, dmalen, only=False, iosize=0):
+        """Add RDMA sub-segment PSN information"""
+        seg = None
+        # Find if sub-segment already exists
+        for item in self.seglist:
+            if psn == item.spsn:
+                seg = item
+                break
+        if seg:
+            # Sub-segment already exists, just update epsn
+            if only:
+                seg.epsn = psn
+            else:
+                dmalen = seg.dmalen
+                seg.epsn = psn + dmalen/iosize - 1 + (1 if dmalen%iosize else 0)
+        else:
+            # Sub-segment does not exist, add it to the list
+            if only:
+                # Only one fragment thus epsn == spsn
+                epsn = psn
+            else:
+                # Multiple fragments, calculate epsn if iosize is nonzero
+                if iosize == 0:
+                    # The last PSN is not known so set it to spsn so at
+                    # least this PSN is valid for the sub-segment
+                    epsn = psn
+                else:
+                    epsn = psn + dmalen/iosize - 1 + (1 if dmalen%iosize else 0)
+            seg = RDMAseg(psn, epsn, dmalen)
+            self.seglist.append(seg)
+        return seg
+
+    def add_data(self, psn, data):
+        """Add fragment data"""
+        # Search for correct sub-segment
+        for seg in self.seglist:
+            if seg.insert_data(psn, data):
+                # The insert_data method returns True on correct
+                # sub-segment for given psn
+                return
+
+    def get_data(self):
+        """Return segment data"""
+        data = ""
+        # Get data from all sub-segments
+        for seg in self.seglist:
+            data += seg.get_data()
+        return data
+
+class RDMAinfo(object):
+    """RDMA info object used for reassembly
+
+       The reassembled message consists of one or multiple chunks and
+       each chunk in turn could be composed of multiple segments. Also,
+       each segment could be composed of multiple sub-segments and each
+       sub-segment could be composed of multiple fragments.
+       The protocol only defines segments but if the segment length is
+       large, it is split into multiple sub-segments in which each
+       sub-segment is specified by RDMA_WRITE_First or RDMA_READ_Request
+       packets. The handle is the same for each of these packets but with
+       a shorter DMA length.
+
+       Thus in order to reassemble all fragments for a single message,
+       a list of segments is created where each segment is identified
+       by its handle or RKey and the message is reassembled according
+       to the chuck lists specified by the RPC-over-RDMA layer.
+    """
+
+    def __init__(self):
+        # RDMA Reads/Writes/Reply segments {key: handle, value: RDMAsegment}
+        self._rdma_segments = {}
+
+    def get_rdma_segment(self, handle):
+        """Return RDMA segment identified by the given handle"""
+        return self._rdma_segments.get(handle)
+
+    def add_rdma_segment(self, handle, length):
+        """Add RDMA segment information and if the information already
+           exists just update the length and return the segment
+        """
+        rsegment = self._rdma_segments.get(handle)
+        if rsegment:
+            # Update segment's length and return the segment
+            rsegment.length = length
+        else:
+            # Add segment information
+            self._rdma_segments[handle] = RDMAsegment(handle, length)
+        return rsegment
+
+    def add_rdma_data(self, psn, unpack, reth=None, only=False):
+        """Add RDMA fragment data"""
+        if reth:
+            # The RETH object header is given which is the case for an OpCode
+            # like *Only or *First, use the RETH RKey(or handle) to get the
+            # correct segment where this fragment should be inserted
+            rsegment = self.get_rdma_segment(reth.r_key)
+            if rsegment:
+                size = len(unpack)
+                seg = rsegment.add_sub_segment(psn, reth.dma_len, only=only, iosize=size)
+                if size > 0:
+                    seg.insert_data(psn, unpack.read(size))
+            return rsegment
+        else:
+            # The RETH object header is not given, find the correct segment
+            # where this fragment should be inserted
+            for rsegment in self._rdma_segments.itervalues():
+                if rsegment.valid_psn(psn):
+                    rsegment.add_data(psn, unpack.read(len(unpack)))
+                    return rsegment
+
+    def process_rdma_segments(self, rpcrdma):
+        """Process the RPC-over-RDMA chunks
+
+           When this method is called on an RPC call, it adds the
+           information of all the segments to the list of segments.
+           When this method is called on an RPC reply, the segments
+           should already exist so just update the segment's DMA length
+           as returned by the reply.
+
+           RPCoRDMA reply is just a single write chunk if it exists.
+           Return the reply chunk data
+        """
+        # Reassembly is done on the reply message with proc=RDMA_NOMSG.
+        # The RDMA list is processed on the call message to set up the
+        # reply chunk and its respective segments expected by the reply
+        # - The reply chunk is used for a large RPC reply which does not
+        #   fit into a single SEND operation and does not have a single
+        #   large opaque, e.g., NFS READDIR
+        # - The RPC call packet is used only to set up the RDMA reply chunk
+        # - The whole RPC reply is transferred via RDMA writes
+        # - The RPC reply packet has no data (RDMA_NOMSG) but fragments are
+        #   then reassembled and the whole RPC reply is dissected
+        #
+        # - Packet sent order, this is the whole XDR data for the RPC reply:
+        #   +--------------------------+------------------+--------------------------+
+        #   |        RDMA write        |       ...        |        RDMA write        |
+        #   +--------------------------+------------------+--------------------------+
+        #   Each RDMA write could be a single RDMA_WRITE_Only or a series of
+        #   RDMA_WRITE_First, RDMA_WRITE_Middle, ..., RDMA_WRITE_Last
+        replydata = ""
+        if rpcrdma.reply:
+            # Process all segments in the RDMA reply chunk
+            for rdma_seg in rpcrdma.reply.target:
+                rsegment = self.add_rdma_segment(rdma_seg.handle, rdma_seg.length)
+                if rsegment:
+                    # Get all bytes for the segment
+                    replydata += rsegment.get_data()
+        return replydata
+
 class IB(BaseObj):
     """InfiniBand (IB) object
 
@@ -539,6 +764,10 @@ class IB(BaseObj):
                  "icrc", "vcrc")
     _fattrs   = ("bth",)
     _strname  = "IB" # Layer name (IB, RoCE or RRoCE) to display
+
+    # The following is a class attribute which can be modified and shared
+    # by all IB packets:
+    _rdma_info = RDMAinfo()
 
     def __init__(self, pktt):
         """Constructor
@@ -654,9 +883,9 @@ class IB(BaseObj):
 
         # Decode InfiniBand payload
         offset = unpack.tell()
-        self._decode_payload(pktt)
+        out = self._decode_payload(pktt)
 
-        if unpack.tell() > offset:
+        if out and unpack.tell() > offset:
             # Payload was processed so set STRFMT1 to display either the
             # IB link or network layer
             if self.grh:
@@ -673,7 +902,9 @@ class IB(BaseObj):
         return self._ib
 
     def _decode_payload(self, pktt):
-        """Decode InifiniBand payload"""
+        """Decode InfiniBand payload
+           Return True if the next layer has been dissected
+        """
         pkt    = pktt.pkt
         unpack = pktt.unpack
         offset = unpack.tell()
@@ -682,9 +913,26 @@ class IB(BaseObj):
             rpcordma = RPCoRDMA(unpack)
             if rpcordma and rpcordma.vers == 1 and rdma.rdma_proc.get(rpcordma.proc):
                 pkt.add_layer("rpcordma", rpcordma)
+                # RPCoRDMA is valid so process the RDMA chunk lists
+                replydata = self._rdma_info.process_rdma_segments(rpcordma)
                 if rpcordma.proc == rdma.RDMA_MSG:
                     # Decode RPC layer
                     RPC(pktt, proto=17)
+                elif rpcordma.proc == rdma.RDMA_NOMSG and replydata:
+                    # This is a no-msg packet but the reply has already been
+                    # sent using RDMA writes so just add the RDMA reply chunk
+                    # data to the working buffer and decode the RPC layer
+                    unpack.insert(replydata)
+                    # Decode RPC layer
+                    RPC(pktt, proto=17)
+                return True
             else:
                 # RPCoRDMA is not valid so rewind Unpack object
                 unpack.seek(offset)
+        elif self.opcode in (RC+RDMA_WRITE_Only, RC+RDMA_WRITE_Only_Immediate):
+            self._rdma_info.add_rdma_data(self.bth.psn, unpack, self.reth, True)
+        elif self.opcode == RC+RDMA_WRITE_First:
+            self._rdma_info.add_rdma_data(self.bth.psn, unpack, self.reth, False)
+        elif self.opcode in (RC+RDMA_WRITE_Middle, RC+RDMA_WRITE_Last):
+            self._rdma_info.add_rdma_data(self.bth.psn, unpack)
+        return False
