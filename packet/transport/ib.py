@@ -554,6 +554,14 @@ class RDMAseg(object):
             data += fragdata
         return data
 
+    def get_size(self):
+        """Return sub-segment data size"""
+        size = 0
+        # Get the size from all fragments
+        for fragdata in self.fraglist:
+            size += len(fragdata)
+        return size
+
 class RDMAsegment(object):
     """RDMA segment object
 
@@ -561,9 +569,11 @@ class RDMAsegment(object):
        comes from the RPC-over-RDMA protocol layer so the length attribute
        gives the total DMA length of the segment.
     """
-    def __init__(self, handle, length):
+    def __init__(self, handle, length, xdrpos, rpcrdma):
         self.handle  = handle
         self.length  = length
+        self.xdrpos  = xdrpos  # RDMA read chunk XDR position
+        self.rpcrdma = rpcrdma # RPC-over-RDMA object used for RDMA reads
 
         # List of sub-segments (RDMAseg)
         # When the RDMA segment's length (DMA length) is large it could be
@@ -605,6 +615,10 @@ class RDMAsegment(object):
             else:
                 # Multiple fragments, calculate epsn if iosize is nonzero
                 if iosize == 0:
+                    # The iosize is not known for a Read Request which gives all
+                    # information for the segment but does not have any data,
+                    # thus the iosize is zero. The epsn will be updated in the
+                    # RDMA Read First for this case.
                     # The last PSN is not known so set it to spsn so at
                     # least this PSN is valid for the sub-segment
                     epsn = psn
@@ -631,6 +645,14 @@ class RDMAsegment(object):
             data += seg.get_data()
         return data
 
+    def get_size(self):
+        """Return segment data"""
+        size = 0
+        # Get the size from all sub-segments
+        for seg in self.seglist:
+            size += seg.get_size()
+        return size
+
 class RDMAinfo(object):
     """RDMA info object used for reassembly
 
@@ -649,7 +671,6 @@ class RDMAinfo(object):
        by its handle or RKey and the message is reassembled according
        to the chuck lists specified by the RPC-over-RDMA layer.
     """
-
     def __init__(self):
         # RDMA Reads/Writes/Reply segments {key: handle, value: RDMAsegment}
         self._rdma_segments = {}
@@ -658,7 +679,7 @@ class RDMAinfo(object):
         """Return RDMA segment identified by the given handle"""
         return self._rdma_segments.get(handle)
 
-    def add_rdma_segment(self, handle, length):
+    def add_rdma_segment(self, handle, length, xdrpos=0, rpcrdma=None):
         """Add RDMA segment information and if the information already
            exists just update the length and return the segment
         """
@@ -668,10 +689,10 @@ class RDMAinfo(object):
             rsegment.length = length
         else:
             # Add segment information
-            self._rdma_segments[handle] = RDMAsegment(handle, length)
+            self._rdma_segments[handle] = RDMAsegment(handle, length, xdrpos, rpcrdma)
         return rsegment
 
-    def add_rdma_data(self, psn, unpack, reth=None, only=False):
+    def add_rdma_data(self, psn, unpack, reth=None, only=False, read=False):
         """Add RDMA fragment data"""
         if reth:
             # The RETH object header is given which is the case for an OpCode
@@ -689,8 +710,82 @@ class RDMAinfo(object):
             # where this fragment should be inserted
             for rsegment in self._rdma_segments.itervalues():
                 if rsegment.valid_psn(psn):
-                    rsegment.add_data(psn, unpack.read(len(unpack)))
+                    size = len(unpack)
+                    if read:
+                        # Modify sub-segment for RDMA read (first or only)
+                        # The sub-segment is added in the read request where
+                        # RETH is given but the request does not have any
+                        # data to correctly calculate the epsn
+                        seg = rsegment.add_sub_segment(psn, 0, only=only, iosize=size)
+                        seg.insert_data(psn, unpack.read(size))
+                    else:
+                        rsegment.add_data(psn, unpack.read(size))
                     return rsegment
+
+    def reassemble_rdma_reads(self, psn, unpack):
+        """Reassemble RDMA read chunks
+           The RDMA read chunks are reassembled in the read last operation
+        """
+        # Payload data in the reduced message (e.g., two chunks)
+        # where each chunk data is sent separately using RDMA:
+        # +----------------+----------------+----------------+
+        # |    xdrdata1    |    xdrdata2    |    xdrdata3    |
+        # +----------------+----------------+----------------+
+        #    chunk data1 --^  chunk data2 --^
+        #
+        # Reassembled message should look like the following in which
+        # the xdrpos specifies where the chunk data must be inserted.
+        # The xdrpos is relative to the reassembled message and NOT
+        # relative to the reduced message:
+        # +----------+-------------+----------+-------------+----------+
+        # | xdrdata1 | chunk data1 | xdrdata2 | chunk data2 | xdrdata3 |
+        # +----------+-------------+----------+-------------+----------+
+        # xdrpos1 ---^              xdrpos2 --^
+
+        # Add RDMA read fragment
+        rsegment = self.add_rdma_data(psn, unpack)
+        if rsegment is None:
+            return
+
+        # Get saved RPCoRDMA object to know how to reassemble the RDMA
+        # read chunks and the data sent on the RDMA_MSG which has the
+        # reduced message data
+        rpcrdma = rsegment.rpcrdma
+        if rpcrdma:
+            # Get reduced data
+            reduced_data = rpcrdma.data
+            read_chunks = {}
+            # Check if all segments are done
+            for seg in rpcrdma.reads:
+                rsegment = self._rdma_segments.get(seg.handle)
+                if rsegment is None or rsegment.get_size() < rsegment.length:
+                    # Not all data has been accounted for this segment
+                    return
+                # The RPC-over-RDMA protocol does not have a read chunk
+                # list but instead it has a list of segments so arrange
+                # the segments into chunks by using the XDR position.
+                slist = read_chunks.setdefault(rsegment.xdrpos, [])
+                slist.append(rsegment)
+
+            data = ""
+            offset = 0  # Current offset of reduced message
+            # Reassemble the whole message
+            for xdrpos in sorted(read_chunks.keys()):
+                # Check if there is data from the reduced message which
+                # should be inserted before this chunk
+                if xdrpos > len(data):
+                    # Insert data from the reduced message
+                    size = xdrpos - len(data)
+                    data += reduced_data[offset:size]
+                    offset = size
+                # Add all data from chunk
+                for rsegment in read_chunks[xdrpos]:
+                    # Get the bytes for the segment
+                    data += rsegment.get_data()
+            if len(reduced_data) > offset:
+                # Add last fragment from the reduced message
+                data += reduced_data[offset:]
+            return data
 
     def process_rdma_segments(self, rpcrdma):
         """Process the RPC-over-RDMA chunks
@@ -701,9 +796,50 @@ class RDMAinfo(object):
            should already exist so just update the segment's DMA length
            as returned by the reply.
 
+           RPCoRDMA reads attribute is a list of read segments
+           Read segment is a plain segment plus an XDR position
+           A read chunk is the collection of all read segments
+           with the same XDR position
+
            RPCoRDMA reply is just a single write chunk if it exists.
            Return the reply chunk data
         """
+        # Reassembly is done on the last read response of the last segment.
+        # Process the rdma list to set up the expected read chunks and
+        # their respective segments.
+        # - Used for a large RPC call which has at least one
+        #   large opaque, e.g., NFS WRITE
+        # - The RPC call packet is used only to set up the RDMA read
+        #   chunk list. It also has the reduced message data which
+        #   includes the first fragment (XDR data up to and including
+        #   the opaque length), but it could also have fragments which
+        #   belong between each read chunk, and possibly a fragment after
+        #   the last read chunk data.
+        # - The opaque data is transferred via RDMA reads, once all
+        #   fragments are accounted for they are reassembled and the
+        #   whole RPC call is dissected in the last read response, so
+        #   there is no RPCoRDMA layer
+        #
+        # - Packet sent order, the reduced RPC call is sent first, then the
+        #   RDMA reads, e.g., showing only for a single chunk:
+        #   +----------------+-------------+-----------+-----------+-----+-----------+
+        #   | WRITE call XDR | opaque size |  GETATTR  | RDMA read | ... | RDMA read |
+        #   +----------------+-------------+-----------+-----------+-----+-----------+
+        #   |<-------------- First frame ------------->|<-------- chunk data ------->|
+        #   Each RDMA read could be a single RDMA_READ_Response_Only or a series of
+        #   RDMA_READ_Response_First, RDMA_READ_Response_Middle, ...,
+        #   RDMA_READ_Response_Last
+        #
+        # - NFS WRITE call, this is how it should be reassembled:
+        #   +----------------+-------------+-----------+-----+-----------+-----------+
+        #   | WRITE call XDR | opaque size | RDMA read | ... | RDMA read |  GETATTR  |
+        #   +----------------+-------------+-----------+-----+-----------+-----------+
+        #                                  |<--- opaque (chunk) data --->|
+        if rpcrdma.reads:
+            # Add all segments in the RDMA read chunk list
+            for rdma_seg in rpcrdma.reads:
+                self.add_rdma_segment(rdma_seg.handle, rdma_seg.length, rdma_seg.position, rpcrdma)
+
         # Reassembly is done on the reply message with proc=RDMA_NOMSG.
         # The RDMA list is processed on the call message to set up the
         # reply chunk and its respective segments expected by the reply
@@ -913,10 +1049,14 @@ class IB(BaseObj):
             rpcordma = RPCoRDMA(unpack)
             if rpcordma and rpcordma.vers == 1 and rdma.rdma_proc.get(rpcordma.proc):
                 pkt.add_layer("rpcordma", rpcordma)
+                if rpcordma.reads:
+                    # Save RDMA read first fragment
+                    rpcordma.data = unpack.read(len(unpack))
                 # RPCoRDMA is valid so process the RDMA chunk lists
                 replydata = self._rdma_info.process_rdma_segments(rpcordma)
-                if rpcordma.proc == rdma.RDMA_MSG:
-                    # Decode RPC layer
+                if rpcordma.proc == rdma.RDMA_MSG and not rpcordma.reads:
+                    # Decode RPC layer except for an RPC call with
+                    # RDMA read chunks in which the data has been reduced
                     RPC(pktt, proto=17)
                 elif rpcordma.proc == rdma.RDMA_NOMSG and replydata:
                     # This is a no-msg packet but the reply has already been
@@ -935,4 +1075,20 @@ class IB(BaseObj):
             self._rdma_info.add_rdma_data(self.bth.psn, unpack, self.reth, False)
         elif self.opcode in (RC+RDMA_WRITE_Middle, RC+RDMA_WRITE_Last):
             self._rdma_info.add_rdma_data(self.bth.psn, unpack)
+        elif self.opcode == RC+RDMA_READ_Request:
+            self._rdma_info.add_rdma_data(self.bth.psn, unpack, self.reth, False)
+        elif self.opcode == RC+RDMA_READ_Response_Only:
+            self._rdma_info.add_rdma_data(self.bth.psn, unpack, only=True, read=True)
+        elif self.opcode == RC+RDMA_READ_Response_First:
+            self._rdma_info.add_rdma_data(self.bth.psn, unpack, only=False, read=True)
+        elif self.opcode == RC+RDMA_READ_Response_Middle:
+            self._rdma_info.add_rdma_data(self.bth.psn, unpack)
+        elif self.opcode == RC+RDMA_READ_Response_Last:
+            # The RDMA read chunks are reassembled in the read last operation
+            data = self._rdma_info.reassemble_rdma_reads(self.bth.psn, unpack)
+            if data is not None:
+                # Decode RPC layer
+                pktt.unpack = Unpack(data)
+                RPC(pktt, proto=17)
+                return True
         return False
