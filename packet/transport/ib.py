@@ -546,12 +546,14 @@ class RDMAseg(object):
             return True
         return False
 
-    def get_data(self):
+    def get_data(self, padding=True):
         """Return sub-segment data"""
         data = ""
         # Get data from all fragments
         for fragdata in self.fraglist:
             data += fragdata
+        if not padding and len(data) > self.dmalen:
+            return data[:self.dmalen-len(data)]
         return data
 
     def get_size(self):
@@ -637,12 +639,12 @@ class RDMAsegment(object):
                 # sub-segment for given psn
                 return
 
-    def get_data(self):
+    def get_data(self, padding=True):
         """Return segment data"""
         data = ""
         # Get data from all sub-segments
         for seg in self.seglist:
-            data += seg.get_data()
+            data += seg.get_data(padding)
         return data
 
     def get_size(self):
@@ -780,8 +782,10 @@ class RDMAinfo(object):
                     offset = size
                 # Add all data from chunk
                 for rsegment in read_chunks[xdrpos]:
-                    # Get the bytes for the segment
-                    data += rsegment.get_data()
+                    # Get the bytes for the segment including the padding
+                    # bytes because this is part of the message that will
+                    # be dissected and the opaque needs a 4-byte boundary
+                    data += rsegment.get_data(padding=True)
             if len(reduced_data) > offset:
                 # Add last fragment from the reduced message
                 data += reduced_data[offset:]
@@ -863,8 +867,10 @@ class RDMAinfo(object):
             for rdma_seg in rpcrdma.reply.target:
                 rsegment = self.add_rdma_segment(rdma_seg.handle, rdma_seg.length)
                 if rsegment:
-                    # Get all bytes for the segment
-                    replydata += rsegment.get_data()
+                    # Get the bytes for the segment including the padding
+                    # bytes because this is part of the message that will
+                    # be dissected and the opaque needs a 4-byte boundary
+                    replydata += rsegment.get_data(padding=True)
         return replydata
 
 class IB(BaseObj):
