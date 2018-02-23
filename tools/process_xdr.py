@@ -24,7 +24,7 @@ from optparse import OptionParser, IndentedHelpFormatter
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.4"
+__version__   = "1.5"
 
 USAGE = """%prog [options] <xdrfile1.x> [<xdrfile2.x> ...]
 
@@ -161,6 +161,19 @@ using the following syntax:
             0: fattr4_supported_attrs,
             1: fattr4_type,
         };
+    FWRAP: attr=fname[,attr1=fname1[...]]
+        Add function wrapper to the given attribute definition
+        /* INHERIT: BaseClass */
+        /* FWRAP: info=infowrap,data=BaseClass.datawrap */
+        struct TestInfo {
+            stinfo  info[4];
+            opaque  data<>;
+        };
+        Creates the following:
+        class TestInfo(BaseClass):
+            def __init__(self, unpack):
+                self.info = infowrap(unpack.unpack_array, stinfo, 4)
+                self.data = self.datawrap(unpack.unpack_opaque)
     BITMAP: 1
         On a typedef use unpack_bitmap() to decode
         /* BITMAP: 1 */
@@ -226,6 +239,7 @@ valid_tags = {
     "FOPAQUE"   : 1,
     "STRHEX"    : 1,
     "FMAP"      : 1,
+    "FWRAP"     : 1,
     "BITMAP"    : 1,
     "BITDICT"   : 1,
     "OBJATTR"   : 1,
@@ -983,6 +997,35 @@ class XDRobject:
                     attrs.append(data[0])
         return classattr, attrs
 
+    def process_fwrap(self, deftags, vname, bclass_names, astr):
+        """Process the FWRAP tag"""
+        fwrap = deftags.get("FWRAP")
+        if fwrap is not None:
+            # Process multiple FWRAP definitions
+            itemlist = fwrap.split(",")
+            for item in itemlist:
+                # Get attribute name and function wrapper
+                fname,fvalue = item.split("=")
+                if fname == vname:
+                    # Change the first segment of wrapper to "self" when it is
+                    # specified as BaseClass.method (change to self.method)
+                    ddlist = fvalue.split(".")
+                    if ddlist and ddlist[0] in bclass_names:
+                        ddlist[0] = "self"
+                        fvalue = ".".join(ddlist)
+
+                    # Get current function definition and its arguments
+                    regex = re.search(r"(.*)\((.*)\)", astr)
+                    if regex:
+                        method,args = regex.groups()
+                        # Convert arguments string to a list of arguments
+                        ddlist = [x for x in map(str.strip, args.split(",")) if len(x)]
+                        # Original function is now the first argument to
+                        # the wrapper
+                        ddlist.insert(0, method)
+                        astr = "%s(%s)" % (fvalue, ", ".join(ddlist))
+        return astr
+
     def set_copyright(self, fd):
         """Write copyright information"""
         if self.copyright is not None:
@@ -1103,6 +1146,7 @@ class XDRobject:
         """
         prefix = "self."
         valid_default = False
+        bclass_names = []
 
         isbitdict = self.process_bitdict(defname, deftags)
 
@@ -1337,16 +1381,6 @@ class XDRobject:
 
             # Get the correct decoding statement for given var definition
             astr = self.getunpack(dname, alist, compound=isarray)
-            if tag.get("STRHEX"):
-                # This definition has a STRHEX tag -- display object in hex
-                d_name,d_opts = self.gettype(dname)
-                if d_name in int32_list + uint32_list:
-                    objtype = "IntHex"
-                elif d_name in int64_list + uint64_list:
-                    objtype = "LongHex"
-                else:
-                    objtype = "StrHex"
-                astr = "%s(%s)" % (objtype, astr)
 
             for comm in pcomms:
                 fd.write("%s%s%s# %s\n" % (indent, tindent, cindent, comm))
@@ -1360,10 +1394,10 @@ class XDRobject:
 
             if pdef == "*" and not self.linkedlist.get(dname):
                 # Conditional: has a pointer definition "*" but it is not a linked list
-                fd.write("%sunpack.unpack_conditional(%s)%s\n" % (setattr_str, dname, swstr))
+                astr = "unpack.unpack_conditional(%s)" % dname
             elif self.linkedlist.get(dname) and pdef == "*":
                 # Pointer to a linked list
-                fd.write("%sunpack.unpack_list(%s)%s\n" % (setattr_str, self.linkedlist.get(dname), swstr))
+                astr = "unpack.unpack_list(%s)" % self.linkedlist.get(dname)
             elif isarray:
                 cond = False
                 if len(adef):
@@ -1381,22 +1415,38 @@ class XDRobject:
                                 # Variable length array
                                 astr += ", maxcount=%s" % data[1]
                 if cond:
-                    fd.write("%sunpack.unpack_conditional(%s)%s\n" % (setattr_str, astr, swstr))
+                    astr = "unpack.unpack_conditional(%s)" % astr
                 else:
-                    fd.write("%sunpack.unpack_array(%s)%s\n" % (setattr_str, astr, swstr))
+                    astr = "unpack.unpack_array(%s)" % astr
             elif dname[:7] == "Unpack.":
-                fd.write("%sunpack.%s()%s\n" % (setattr_str, dname[7:], swstr))
+                astr = "unpack.%s()" % dname[7:]
             elif dname == "void":
+                astr = ""
+                swstr = ""
+                setattr_str = ""
                 if need_if:
                     self.set_vars(fd, tag, dnames, indent+tindent+cindent)
                 elif need_if_fmt:
                     pass
                 elif valid_default:
-                    fd.write("%s%s%spass;\n" % (indent, tindent, cindent))
-            else:
-                if dname == "bool":
-                    # Rename "bool" definition
-                    dname = "nfs_bool"
+                    astr = "%s%s%spass;" % (indent, tindent, cindent)
+
+            if len(astr):
+                # Process FWRAP tag
+                astr = self.process_fwrap(deftags, vname, bclass_names, astr)
+
+                if tag.get("STRHEX"):
+                    # This definition has a STRHEX tag -- display object in hex
+                    d_name,d_opts = self.gettype(dname)
+                    if d_name in int32_list + uint32_list:
+                        objtype = "IntHex"
+                    elif d_name in int64_list + uint64_list:
+                        objtype = "LongHex"
+                    else:
+                        objtype = "StrHex"
+                    astr = "%s(%s)" % (objtype, astr)
+
+                # Write the attribute definition to the file
                 fd.write("%s%s%s\n" % (setattr_str, astr, swstr))
 
             self.set_vars(fd, deftags, dnames, indent+tindent, post=True, vname=vname)
