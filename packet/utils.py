@@ -23,13 +23,14 @@ This module also includes some module variables to change how certain
 objects are displayed.
 """
 import nfstest_config as c
+from packet.unpack import Unpack
 from baseobj import BaseObj, fstrobj
 
 # Module constants
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.4"
+__version__   = "1.5"
 
 # RPC type constants
 RPC_CALL  = 0
@@ -285,3 +286,61 @@ class RPCload(BaseObj):
             return out
         else:
             return BaseObj.__str__(self)
+
+class RDMAbase(BaseObj):
+    """RDMA base object
+
+       Base class for an RDMA reduced payload object having RDMA write
+       chunks. An application having a DDP (direct data placement) item
+       must inherit this class and use the rdma_opaque method as a
+       dissecting function.
+
+       Usage:
+           from packet.utils import RDMAbase
+
+           # For an original class definition with DDP items
+           class APPobj(BaseObj):
+               def __init__(self, unpack):
+                   self.test = nfs_bool(unpack)
+                   self.data = unpack.unpack_opaque()
+
+           # Class definition to access RDMA chunk writes
+           class APPobj(RDMAbase):
+               def __init__(self, unpack):
+                   self.test = self.rdma_opaque(nfs_bool, unpack)
+                   self.data = self.rdma_opaque(unpack.unpack_opaque)
+    """
+    # Class attribute is shared by all instances
+    rdma_write_chunks = []
+
+    def rdma_opaque(self, func, *kwts, **kwds):
+        """Dissecting method for a DDP item
+           The first positional argument is the original dissecting
+           function to be called when there is no RDMA write chunks.
+           The rest of the arguments (positional or named) are passed
+           directly to the dissecting function.
+        """
+        if self.rdma_write_chunks:
+            # There are RDMA write chunks, use the next chunk data
+            # instead of calling the original decoding function
+            data = ""
+            for rsegment in self.rdma_write_chunks.pop(0):
+                # Just get the bytes for the segment, dropping the
+                # padding bytes if any
+                data += rsegment.get_data(padding=False)
+            unpack = None
+            if len(kwts) == 0:
+                # If no arguments are given check if the original function
+                # is an instance method like unpack.unpack_opaque
+                unpack = getattr(func, "__self__")
+            elif isinstance(kwts[0], Unpack):
+                # At least one positional argument is given and the first is
+                # an instance of Unpack
+                unpack = kwts[0]
+            if unpack:
+                # Throw away the opaque size
+                unpack.unpack_uint()
+            return data
+        else:
+            # Call original decoding function with all arguments given
+            return func(*kwts, **kwds)
