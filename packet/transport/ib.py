@@ -655,7 +655,7 @@ class RDMAsegment(object):
             size += seg.get_size()
         return size
 
-class RDMAinfo(object):
+class RDMAinfo(RDMAbase):
     """RDMA info object used for reassembly
 
        The reassembled message consists of one or multiple chunks and
@@ -805,6 +805,9 @@ class RDMAinfo(object):
            A read chunk is the collection of all read segments
            with the same XDR position
 
+           RPCoRDMA writes attribute is a list of write chunks
+           A write chunk is a list of plain segments
+
            RPCoRDMA reply is just a single write chunk if it exists.
            Return the reply chunk data
         """
@@ -843,6 +846,55 @@ class RDMAinfo(object):
             # Add all segments in the RDMA read chunk list
             for rdma_seg in rpcrdma.reads:
                 self.add_rdma_segment(rdma_seg.handle, rdma_seg.length, rdma_seg.position, rpcrdma)
+
+        # Reassembly is done on the reply message (RDMA_MSG)
+        # Process the rdma list on the call message to set up the write
+        # chunks and their respective segments expected by the reply
+        # - Used for a large RPC reply which has at least one
+        #   large opaque, e.g., NFS READ
+        # - The RPC call packet is used only to set up the RDMA write
+        #   chunk list
+        # - The opaque data is transferred via RDMA writes
+        # - The RPC reply packet has the reduced message data which
+        #   includes the first fragment (XDR data up to and including
+        #   the opaque length), but it could also have fragments which
+        #   belong between each write chunk, and possibly a fragment
+        #   after the last write chunk.
+        # - The message is not actually reassembled here but instead a
+        #   list of write chunks is created in the shared class attribute
+        #   rdma_write_chunks. This attribute can be accessed by the upper
+        #   layer and use the chunk data instead of getting the data from
+        #   the unpack object.
+        # - Packet sent order, the RDMA writes are sent first, then the
+        #   reduced RPC reply, e.g., showing only for a single chunk:
+        #   +------------+-----+------------+----------------+-------------+---------+
+        #   | RDMA write | ... | RDMA write | READ reply XDR | opaque size | GETATTR |
+        #   +------------+-----+------------+----------------+-------------+---------+
+        #   |<-------- write chunk -------->|<------------- Last frame ------------->|
+        #   Each RDMA write could be a single RDMA_WRITE_Only or a series of
+        #   RDMA_WRITE_First, RDMA_WRITE_Middle, ..., RDMA_WRITE_Last
+        #
+        # - NFS READ reply, this is how it should be reassembled:
+        #   +----------------+-------------+------------+-----+------------+---------+
+        #   | READ reply XDR | opaque size | RDMA write | ... | RDMA write | GETATTR |
+        #   +----------------+-------------+------------+-----+------------+---------+
+        #                                  |<---- opaque (chunk) data ---->|
+        if rpcrdma.writes:
+            # Clear the list of RDMA write chunks
+            while len(self.rdma_write_chunks):
+                self.rdma_write_chunks.pop()
+
+            # Process RDMA write chunk list
+            for chunk in rpcrdma.writes:
+                self.rdma_write_chunks.append([])
+                # Process all segments in RDMA write chunk
+                for seg in chunk.target:
+                    rsegment = self.add_rdma_segment(seg.handle, seg.length)
+                    if rsegment:
+                        # Add segment to write chunk list, this list is
+                        # available to upper layer objects which inherit
+                        # from packet.utils.RDMAbase
+                        self.rdma_write_chunks[-1].append(rsegment)
 
         # Reassembly is done on the reply message with proc=RDMA_NOMSG.
         # The RDMA list is processed on the call message to set up the
