@@ -362,6 +362,8 @@ struct READLINK3args {
         nfs_fh3  fh;
 };
 
+/* INHERIT: RDMAbase */
+/* FWRAP: link=RDMAbase.rdma_opaque */
 /* STRFMT1: {1} */
 struct READLINK3resok {
         post_op_attr  attributes;
@@ -391,6 +393,8 @@ struct READ3args {
         count3   count;
 };
 
+/* INHERIT: RDMAbase */
+/* FWRAP: data=RDMAbase.rdma_opaque */
 /* STRFMT1: eof:{2} count:{1:umax32} */
 struct READ3resok {
         post_op_attr  attributes;

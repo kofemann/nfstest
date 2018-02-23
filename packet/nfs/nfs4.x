@@ -2042,6 +2042,8 @@ struct READ4args {
     count4          count;
 };
 
+/* INHERIT: RDMAbase */
+/* FWRAP: data=RDMAbase.rdma_opaque */
 /* STRFMT1: eof:{0} count:{1:umax32} */
 struct READ4resok {
     bool            eof;
@@ -2103,6 +2105,8 @@ union READDIR4res switch (nfsstat4 status) {
  * READLINK: Read Symbolic Link
  * ======================================================================
  */
+/* INHERIT: RDMAbase */
+/* FWRAP: link=RDMAbase.rdma_opaque */
 /* STRFMT1: {0} */
 struct READLINK4resok {
     linktext4       link;
