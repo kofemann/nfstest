@@ -19,6 +19,8 @@ Decode ethernet layer (RFC 894) Ethernet II.
 import nfstest_config as c
 from baseobj import BaseObj
 from macaddr import MacAddr
+from ethernet_const import *
+from packet.link.vlan import VLAN
 from packet.internet.ipv4 import IPv4
 from packet.internet.ipv6 import IPv6
 from packet.internet.arp import ARP,RARP
@@ -27,14 +29,7 @@ from packet.internet.arp import ARP,RARP
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.2"
-
-_ETHERNET_map = {
-    0x0800: 'IPv4',
-    0x86dd: 'IPv6',
-    0x0806: 'ARP',
-    0x8035: 'RARP',
-}
+__version__   = "1.3"
 
 class ETHERNET(BaseObj):
     """Ethernet object
@@ -72,18 +67,29 @@ class ETHERNET(BaseObj):
         self.type = ulist[2]
         pktt.pkt.add_layer("ethernet", self)
 
-        if self.type == 0x0800:
+        etype = self.type
+        if etype == 0x8100:
+            # Decode VLAN 802.1Q packet
+            VLAN(pktt)
+            if pktt.pkt.vlan:
+                # VLAN has the etype for next layer
+                etype = pktt.pkt.vlan.etype
+
+        if etype == 0x0800:
             # Decode IPv4 packet
             IPv4(pktt)
-        elif self.type == 0x86dd:
+        elif etype == 0x86dd:
             # Decode IPv6 packet
             IPv6(pktt)
-        elif self.type == 0x0806:
+        elif etype == 0x0806:
             # Decode ARP packet
             ARP(pktt)
-        elif self.type == 0x8035:
+        elif etype == 0x8035:
             # Decode RARP packet
             RARP(pktt)
+        elif pktt.pkt.vlan:
+            # Add rest of the data to the VLAN layer
+            pktt.pkt.vlan.data = unpack.getbytes()
         else:
             self.data = unpack.getbytes()
 
@@ -103,13 +109,13 @@ class ETHERNET(BaseObj):
         if rdebug == 1:
             out = "%s -> %s " % (self.src, self.dst)
             if self._pkt.get_layers()[-1] == "ethernet":
-                etype = _ETHERNET_map.get(self.type, None)
+                etype = ETHERTYPES.get(self.type)
                 etype = "" if etype is None else "(%s)" % etype
                 out += " ETHERNET  type: 0x%04x%s" % (self.type, etype)
         elif rdebug == 2:
-            etype = _ETHERNET_map.get(self.type, None)
-            etype = hex(self.type) if etype is None else "%s(%s)" % (hex(self.type), etype)
-            out = "%s -> %s, type: %s" % (self.src, self.dst, etype)
+            etype = ETHERTYPES.get(self.type)
+            etype = "" if etype is None else "(%s)" % etype
+            out = "%s -> %s, type: 0x%04x%s" % (self.src, self.dst, self.type, etype)
         else:
             out = BaseObj.__str__(self)
         return out
