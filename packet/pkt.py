@@ -139,6 +139,25 @@ class Pkt(BaseObj):
             out = BaseObj.__str__(self)
         return out
 
+    def __repr__(self):
+        """Formal string representation of packet object"""
+        rdebug = self.debug_repr()
+        if rdebug > 0:
+            sindent = self.sindent()
+            out = "Pkt(\n"
+            # Display layers in the order in which they were added
+            for key in self._layers:
+                layer = getattr(self, key, None)
+                if layer is not None:
+                    # Add indentation to every line in the
+                    # layer's representation
+                    value = repr(layer).replace("\n", "\n"+sindent)
+                    out += "%s%s = %s,\n" % (sindent, key, value)
+            out += ")\n"
+        else:
+            out = object.__repr__(self)
+        return out
+
     def add_layer(self, name, layer):
         """Add layer to name and object to the packet"""
         layer._pkt = self
