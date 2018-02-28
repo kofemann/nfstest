@@ -20,9 +20,9 @@ import nfstest_config as c
 from baseobj import BaseObj
 from macaddr import MacAddr
 from ethernet_const import *
-from packet.link.vlan import VLAN
 from packet.internet.ipv4 import IPv4
 from packet.internet.ipv6 import IPv6
+from packet.link.vlan import vlan_layers
 from packet.internet.arp import ARP,RARP
 
 # Module constants
@@ -70,7 +70,7 @@ class ETHERNET(BaseObj):
         etype = self.type
         if etype == 0x8100:
             # Decode VLAN 802.1Q packet
-            VLAN(pktt)
+            vlan_layers(pktt)
             if pktt.pkt.vlan:
                 # VLAN has the etype for next layer
                 etype = pktt.pkt.vlan.etype

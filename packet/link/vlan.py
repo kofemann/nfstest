@@ -14,7 +14,7 @@
 """
 VLAN module
 
-Decode Virtual LAN IEEE 802.1Q layer
+Decode Virtual LAN IEEE 802.1Q/802.1ad layer
 """
 import nfstest_config as c
 from baseobj import BaseObj
@@ -25,6 +25,27 @@ __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2018 NetApp, Inc."
 __license__   = "GPL v2"
 __version__   = "1.0"
+
+def vlan_layers(pktt):
+    """Get all nested (stacked VLANs or QinQ) VLAN layers
+       A Packet layer attribute is created for each VLAN layer:
+       vlan1, vlan2, ..., and vlan. The last packet attribute
+       is always vlan.
+    """
+    vlan_list = []
+    while True:
+        vlan = VLAN(pktt)
+        if vlan.etype == 0x8100 or vlan.etype == 0x88A8:
+            # VLAN layer could be 802.1Q or 802.1ad
+            vlan_list.append(vlan)
+        else:
+            # Done with all VLAN layers, add them to the packet as:
+            # vlan1, vlan2, ..., vlan
+            for i in range(len(vlan_list)):
+                pktt.pkt.add_layer("vlan"+str(i+1), vlan_list.pop(0))
+            # Add last VLAN layer
+            pktt.pkt.add_layer("vlan", vlan)
+            break
 
 class VLAN(BaseObj):
     """VLAN object
@@ -45,6 +66,7 @@ class VLAN(BaseObj):
     """
     # Class attributes
     _attrlist = ("pcp", "dei", "vid", "etype")
+    _strname = "VLAN"
 
     def __init__(self, pktt):
         """Constructor
@@ -61,7 +83,6 @@ class VLAN(BaseObj):
         self.dei   = (ulist[0] >> 12) & 0x01
         self.vid   = ulist[0] & 0x0FFF
         self.etype = ulist[1]
-        pktt.pkt.add_layer("vlan", self)
 
     def __str__(self):
         """String representation of object
