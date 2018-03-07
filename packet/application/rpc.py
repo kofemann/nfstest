@@ -288,9 +288,9 @@ class RPC(GSS):
                 self.version   = rpc_header.version
                 self.procedure = rpc_header.procedure
                 if rpc_header.credential.flavor == RPCSEC_GSS:
-                    self.verifier.gss_proc    = rpc_header.credential.gss_proc
-                    self.verifier.gss_service = rpc_header.credential.gss_service
-                    self.verifier.gss_version = rpc_header.credential.gss_version
+                    self.verifier.gssproc = rpc_header.credential.gssproc
+                    self.verifier.service = rpc_header.credential.service
+                    self.verifier.version = rpc_header.credential.version
             except Exception:
                 pass
 

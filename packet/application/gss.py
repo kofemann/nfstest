@@ -17,10 +17,11 @@ GSS module
 Decode GSS layers.
 
 RFC 2203 RPCSEC_GSS Protocol Specification
+RFC 5403 RPCSEC_GSS Version 2
 RFC 1964 The Kerberos Version 5 GSS-API Mechanism
 
 NOTE:
-  Only procedures RPCSEC_GSS_INIT and RPCSEC_GSS_DATA are supported
+  Procedure RPCSEC_GSS_BIND_CHANNEL is not supported
 """
 import krb5
 import rpc_const
@@ -34,7 +35,7 @@ from packet.derunpack import DERunpack
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2013 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.5"
+__version__   = "2.0"
 
 # Token Identifier TOK_ID
 KRB_AP_REQ            = 0x0100
@@ -166,9 +167,9 @@ class GSS_API(BaseObj):
         """Truth value testing for the built-in operation bool()"""
         return self._valid
 
-class GSS_init_arg(BaseObj):
+class rgss_init_arg(BaseObj):
     """struct rpc_gss_init_arg {
-           opaque  gss_token<>;
+           opaque token<>;
        };
     """
     # Class attributes
@@ -177,18 +178,18 @@ class GSS_init_arg(BaseObj):
 
     def __init__(self, unpack):
         self.token = unpack.unpack_opaque()
-        krb5 = GSS_API(self.token)
-        if krb5:
-            self.token = krb5
+        krb = GSS_API(self.token)
+        if krb:
+            self.token = krb
             self.set_strfmt(2, "{0}")
 
-class GSS_init_res(BaseObj):
-    """struct rpc_gss_init_res {
-           opaque        handle<>;
-           unsigned int  gss_major;
-           unsigned int  gss_minor;
-           unsigned int  seq_window;
-           opaque        gss_token<>;
+class rgss_init_res(BaseObj):
+    """struct rgss_init_res {
+           opaque       context<>;
+           unsigned int major;
+           unsigned int minor;
+           unsigned int seq_window;
+           opaque       token<>;
        };
     """
     # Class attributes
@@ -197,8 +198,8 @@ class GSS_init_res(BaseObj):
 
     def __init__(self, unpack):
         self.context    = StrHex(unpack.unpack_opaque())
-        self.major      = gss_major_status(unpack.unpack_uint())
-        self.minor      = gss_minor_status(unpack.unpack_int())
+        self.major      = gss_major_status(unpack)
+        self.minor      = gss_minor_status(unpack)
         self.seq_window = unpack.unpack_uint()
         self.token      = unpack.unpack_opaque()
         if self.major not in (const.GSS_S_COMPLETE, const.GSS_S_CONTINUE_NEEDED):
@@ -206,16 +207,16 @@ class GSS_init_res(BaseObj):
             self.set_strfmt(2, "major: {1}, minor: {2}")
         else:
             # Try to decode the token
-            krb5 = GSS_API(self.token)
-            if krb5:
+            krb = GSS_API(self.token)
+            if krb:
                 # Replace token attribute with the decoded object
-                self.token = krb5
+                self.token = krb
                 self.set_strfmt(2, "context: {0}, {4}")
 
-class GSS_data(BaseObj):
-    """struct rpc_gss_data_t {
-           unsigned int    seq_num;
-           proc_req_arg_t  arg;
+class rgss_data(BaseObj):
+    """struct rgss_data {
+           unsigned int length;
+           unsigned int seq_num;
        };
     """
     # Class attributes
@@ -226,7 +227,20 @@ class GSS_data(BaseObj):
         self.length  = unpack.unpack_uint()
         self.seq_num = unpack.unpack_uint()
 
-class GSS_checksum(GSS_init_arg): pass
+class rgss_checksum(rgss_init_arg): pass
+
+class rgss_priv_data(BaseObj):
+    """struct rgss_priv_data {
+           opaque data<>;
+       };
+    """
+    # Class attributes
+    _strfmt2  = "length: {0}"
+    _attrlist = ("length", "data")
+
+    def __init__(self, unpack):
+        self.length = unpack.unpack_uint()
+        self.data   = unpack.unpack_fopaque(self.length)
 
 class GSS(BaseObj):
     """GSS Data object
@@ -239,41 +253,34 @@ class GSS(BaseObj):
            # Decode data following the RPC payload when flavor is RPCSEC_GSS
            x.decode_gss_checksum()
     """
-    def _gss_data_call(self):
-        """Internal method to decode GSS data on a CALL"""
-        if self.credential.flavor != rpc_const.RPCSEC_GSS:
-            # Not a GSS encoded packet
-            return
-        unpack = self._pktt.unpack
-        if self.credential.gss_proc == const.RPCSEC_GSS_DATA:
-            if self.credential.gss_service == const.rpc_gss_svc_integrity:
-                return GSS_data(unpack)
-        elif self.credential.gss_proc == const.RPCSEC_GSS_INIT:
-            return GSS_init_arg(unpack)
-
-    def _gss_data_reply(self):
-        """Internal method to decode GSS data on a REPLY"""
-        if self.verifier.flavor != rpc_const.RPCSEC_GSS and not hasattr(self.verifier, 'gss_proc'):
-            # Not a GSS encoded packet
-            return
-        unpack = self._pktt.unpack
-        if self.verifier.gss_proc == const.RPCSEC_GSS_DATA:
-            if self.verifier.gss_service == const.rpc_gss_svc_integrity:
-                return GSS_data(unpack)
-        elif self.verifier.gss_proc == const.RPCSEC_GSS_INIT:
-            return GSS_init_res(unpack)
-
     def decode_gss_data(self):
         """Decode GSS data"""
         try:
+            gss = None
             pktt = self._pktt
-            if pktt.unpack.size() < 4:
+            unpack = pktt.unpack
+            if unpack.size() < 4:
                 # Not a GSS encoded packet
                 return
             if self.type == rpc_const.CALL:
-                gss = self._gss_data_call()
+                cred = self.credential
             else:
-                gss = self._gss_data_reply()
+                cred = self.verifier
+            gssproc = getattr(cred, "gssproc", None)
+            if cred.flavor != rpc_const.RPCSEC_GSS or gssproc is None:
+                # Not a GSS encoded packet
+                return
+            if gssproc == const.RPCSEC_GSS_DATA:
+                if cred.service == const.rpc_gss_svc_integrity:
+                    gss = rgss_data(unpack)
+                elif cred.service == const.rpc_gss_svc_privacy:
+                    gss = rgss_priv_data(unpack)
+            elif gssproc in (const.RPCSEC_GSS_INIT, const.RPCSEC_GSS_CONTINUE_INIT):
+                if self.type == rpc_const.CALL:
+                    gss = rgss_init_arg(unpack)
+                else:
+                    gss = rgss_init_res(unpack)
+
             if gss is not None:
                 pktt.pkt.add_layer("gssd", gss)
         except:
@@ -291,8 +298,8 @@ class GSS(BaseObj):
                 cred = self.credential
             else:
                 cred = self.verifier
-            if cred.flavor == rpc_const.RPCSEC_GSS and cred.gss_proc == const.RPCSEC_GSS_DATA:
-                if cred.gss_service == const.rpc_gss_svc_integrity:
-                    pktt.pkt.add_layer("gssc", GSS_checksum(unpack))
+            if cred.flavor == rpc_const.RPCSEC_GSS and cred.gssproc == const.RPCSEC_GSS_DATA:
+                if cred.service == const.rpc_gss_svc_integrity:
+                    pktt.pkt.add_layer("gssc", rgss_checksum(unpack))
         except:
             pass

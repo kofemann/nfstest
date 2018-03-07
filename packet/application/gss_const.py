@@ -17,6 +17,7 @@ GSS constants module
 Provide constant values and mapping dictionaries for the GSS layer.
 
 RFC 2203 RPCSEC_GSS Protocol Specification
+RFC 5403 RPCSEC_GSS Version 2
 RFC 1964 The Kerberos Version 5 GSS-API Mechanism
 """
 import nfstest_config as c
@@ -25,13 +26,13 @@ import nfstest_config as c
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2013 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.2"
+__version__   = "2.0"
 
 # Enum rpc_gss_service_t
 rpc_gss_svc_none         = 1
 rpc_gss_svc_integrity    = 2
 rpc_gss_svc_privacy      = 3
-rpc_gss_svc_channel_prot = 4
+rpc_gss_svc_channel_prot = 4  # RFC 5403
 rpc_gss_service = {
     1: 'rpc_gss_svc_none',
     2: 'rpc_gss_svc_integrity',
@@ -44,7 +45,7 @@ RPCSEC_GSS_DATA          = 0
 RPCSEC_GSS_INIT          = 1
 RPCSEC_GSS_CONTINUE_INIT = 2
 RPCSEC_GSS_DESTROY       = 3
-RPCSEC_GSS_BIND_CHANNEL  = 4
+RPCSEC_GSS_BIND_CHANNEL  = 4  # RFC 5403
 rpc_gss_proc = {
     0: 'RPCSEC_GSS_DATA',
     1: 'RPCSEC_GSS_INIT',
@@ -64,7 +65,7 @@ gss_bind_chan_stat = {
 }
 
 RPCSEC_GSS_VERS_1 = 1
-RPCSEC_GSS_VERS_2 = 2
+RPCSEC_GSS_VERS_2 = 2  # RFC 5403
 
 # Integrity algorithm indicator
 DES_MAC_MD5 = 0x0000

@@ -27,7 +27,7 @@ from baseobj import BaseObj
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.2"
+__version__   = "1.3"
 
 class auth_flavor(Enum):
     """enum auth_flavor"""
@@ -74,17 +74,17 @@ class GSS_Credential(BaseObj):
     # Class attributes
     flavor = auth_flavor(rpc_const.RPCSEC_GSS)
     _strfmt2  = "{0}({3}:{5:@12})"
-    _attrlist = ("flavor", "size", "gss_version", "gss_proc", "gss_seq_num",
-                 "gss_service", "gss_context")
+    _attrlist = ("flavor", "size", "version", "gssproc", "seq_num",
+                 "service", "context")
 
     def __init__(self, unpack):
         """Constructor which takes the Unpack object as input"""
-        self.size        = unpack.unpack_uint()
-        self.gss_version = unpack.unpack_uint()
-        self.gss_proc    = rpc_gss_proc(unpack.unpack_uint())
-        self.gss_seq_num = unpack.unpack_uint()
-        self.gss_service = rpc_gss_service(unpack.unpack_uint())
-        self.gss_context = unpack.unpack_opaque()
+        self.size    = unpack.unpack_uint()
+        self.version = unpack.unpack_uint()
+        self.gssproc = rpc_gss_proc(unpack)
+        self.seq_num = unpack.unpack_uint()
+        self.service = rpc_gss_service(unpack)
+        self.context = unpack.unpack_opaque()
 
 class GSS_Verifier(BaseObj):
     """GSS_Verifier object"""
