@@ -18,6 +18,7 @@ Decode GSS layers.
 
 RFC 2203 RPCSEC_GSS Protocol Specification
 RFC 5403 RPCSEC_GSS Version 2
+RFC 7861 RPCSEC_GSS Version 3
 RFC 1964 The Kerberos Version 5 GSS-API Mechanism
 
 NOTE:
@@ -29,13 +30,14 @@ import gss_const as const
 from packet.utils import *
 import nfstest_config as c
 from baseobj import BaseObj
+from packet.unpack import Unpack
 from packet.derunpack import DERunpack
 
 # Module constants
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2013 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "2.0"
+__version__   = "3.0"
 
 # Token Identifier TOK_ID
 KRB_AP_REQ            = 0x0100
@@ -242,6 +244,169 @@ class rgss_priv_data(BaseObj):
         self.length = unpack.unpack_uint()
         self.data   = unpack.unpack_fopaque(self.length)
 
+rgss3_chan_binding = Unpack.unpack_opaque
+
+class rgss3_gss_mp_auth(BaseObj):
+    """
+       struct rgss3_gss_mp_auth {
+           opaque context<>;  /* Inner handle */
+           opaque mic<>;
+       };
+    """
+    # Class attributes
+    _attrlist = ("context", "mic")
+
+    def __init__(self, unpack):
+        self.context = StrHex(unpack.unpack_opaque())
+        self.mic     = StrHex(unpack.unpack_opaque())
+
+class rgss3_lfs(BaseObj):
+    """
+       struct rgss3_lfs {
+           unsigned int lfs_id;
+           unsigned int pi_id;
+       };
+    """
+    # Class attributes
+    _attrlist = ("lfs_id", "pi_id")
+
+    def __init__(self, unpack):
+        self.lfs_id = unpack.unpack_uint()
+        self.pi_id  = unpack.unpack_uint()
+
+class rgss3_label(BaseObj):
+    """
+       struct rgss3_label {
+           rgss3_lfs lfs;
+           opaque    label<>;
+       };
+    """
+    # Class attributes
+    _attrlist = ("lfs", "label")
+
+    def __init__(self, unpack):
+        self.lfs   = rgss3_lfs(unpack)
+        self.label = StrHex(unpack.unpack_opaque())
+
+class rgss3_privs(BaseObj):
+    """
+       struct rgss3_privs {
+           utf8str_cs name;
+           opaque     privilege<>;
+       };
+    """
+    # Class attributes
+    _attrlist = ("name", "privilege")
+
+    def __init__(self, unpack):
+        self.name      = utf8str_cs(unpack)
+        self.privilege = StrHex(unpack.unpack_opaque())
+
+class rgss3_assertion_type(Enum):
+    """enum rgss3_assertion_type"""
+    _enumdict = const.rgss3_assertion_type
+
+class rgss3_assertion_u(BaseObj):
+    """
+       union switch rgss3_assertion_u (rgss3_assertion_type atype) {
+           case const.LABEL:
+               rgss3_label label;
+           case const.PRIVS:
+               rgss3_privs privs;
+           default:
+               opaque ext<>;
+       };
+    """
+    def __init__(self, unpack):
+        self.set_attr("atype", rgss3_assertion_type(unpack))
+        if self.atype == const.LABEL:
+            self.set_attr("label", rgss3_label(unpack), switch=True)
+        elif self.atype == const.PRIVS:
+            self.set_attr("privs", rgss3_privs(unpack), switch=True)
+        else:
+            self.set_attr("ext", StrHex(unpack.unpack_opaque()), switch=True)
+
+class rgss3_create_args(BaseObj):
+    """
+       struct rgss3_create_args {
+           rgss3_gss_mp_auth  auth<1>;
+           rgss3_chan_binding mic<1>;
+           rgss3_assertion_u  assertions<>;
+       };
+    """
+    # Class attributes
+    _attrlist = ("auth", "mic", "assertions")
+
+    def __init__(self, unpack):
+        self.auth       = unpack.unpack_conditional(rgss3_gss_mp_auth)
+        self.mic        = unpack.unpack_conditional(rgss3_chan_binding)
+        self.assertions = unpack.unpack_array(rgss3_assertion_u)
+
+class rgss3_create_res(BaseObj):
+    """
+       struct rgss3_create_res {
+           opaque             context<>;
+           rgss3_gss_mp_auth  auth<1>;
+           rgss3_chan_binding mic<1>;
+           rgss3_assertion_u  assertions<>;
+       };
+    """
+    # Class attributes
+    _attrlist = ("context", "auth", "mic", "assertions")
+
+    def __init__(self, unpack):
+        self.context    = StrHex(unpack.unpack_opaque())
+        self.auth       = unpack.unpack_conditional(rgss3_gss_mp_auth)
+        self.mic        = unpack.unpack_conditional(rgss3_chan_binding)
+        self.assertions = unpack.unpack_array(rgss3_assertion_u)
+
+# Enum rgss3_list_item is the same as rgss3_assertion_type
+class rgss3_list_item(rgss3_assertion_type): pass
+
+class rgss3_list_args(BaseObj):
+    """
+       struct rgss3_list_args {
+           rgss3_list_item items<>;
+       };
+    """
+    # Class attributes
+    _attrlist = ("items",)
+
+    def __init__(self, unpack):
+        self.items = unpack.unpack_array(rgss3_list_item)
+
+class rgss3_list_item_u(BaseObj):
+    """
+       union switch rgss3_list_item_u (rgss3_list_item itype) {
+           case const.LABEL:
+               rgss3_label labels<>;
+           case const.PRIVS:
+               rgss3_privs privs<>;
+           default:
+               opaque ext<>;
+       };
+    """
+    def __init__(self, unpack):
+        self.set_attr("itype", rgss3_list_item(unpack))
+        if self.itype == const.LABEL:
+            self.set_attr("labels", unpack.unpack_array(rgss3_label), switch=True)
+        elif self.itype == const.PRIVS:
+            self.set_attr("privs", unpack.unpack_array(rgss3_privs), switch=True)
+        else:
+            self.set_attr("ext", StrHex(unpack.unpack_opaque()), switch=True)
+
+class rgss3_list_res(BaseObj):
+    """
+       struct rgss3_list_res {
+           rgss3_list_item_u items<>;
+       };
+    """
+    # Class attributes
+    _attrlist = ("items",)
+
+    def __init__(self, unpack):
+        self.items = unpack.unpack_array(rgss3_list_item_u)
+
 class GSS(BaseObj):
     """GSS Data object
 
@@ -280,6 +445,16 @@ class GSS(BaseObj):
                     gss = rgss_init_arg(unpack)
                 else:
                     gss = rgss_init_res(unpack)
+            elif gssproc == const.RPCSEC_GSS_CREATE:
+                if self.type == rpc_const.CALL:
+                    gss = rgss3_create_args(unpack)
+                else:
+                    gss = rgss3_create_res(unpack)
+            elif gssproc == const.RPCSEC_GSS_LIST:
+                if self.type == rpc_const.CALL:
+                    gss = rgss3_list_args(unpack)
+                else:
+                    gss = rgss3_list_res(unpack)
 
             if gss is not None:
                 pktt.pkt.add_layer("gssd", gss)

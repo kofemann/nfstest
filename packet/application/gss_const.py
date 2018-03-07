@@ -18,6 +18,7 @@ Provide constant values and mapping dictionaries for the GSS layer.
 
 RFC 2203 RPCSEC_GSS Protocol Specification
 RFC 5403 RPCSEC_GSS Version 2
+RFC 7861 RPCSEC_GSS Version 3
 RFC 1964 The Kerberos Version 5 GSS-API Mechanism
 """
 import nfstest_config as c
@@ -26,7 +27,7 @@ import nfstest_config as c
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2013 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "2.0"
+__version__   = "3.0"
 
 # Enum rpc_gss_service_t
 rpc_gss_svc_none         = 1
@@ -45,13 +46,17 @@ RPCSEC_GSS_DATA          = 0
 RPCSEC_GSS_INIT          = 1
 RPCSEC_GSS_CONTINUE_INIT = 2
 RPCSEC_GSS_DESTROY       = 3
-RPCSEC_GSS_BIND_CHANNEL  = 4  # RFC 5403
+RPCSEC_GSS_BIND_CHANNEL  = 4  # RFC 5403 (Not used in RFC 7861)
+RPCSEC_GSS_CREATE        = 5  # RFC 7861
+RPCSEC_GSS_LIST          = 6  # RFC 7861
 rpc_gss_proc = {
     0: 'RPCSEC_GSS_DATA',
     1: 'RPCSEC_GSS_INIT',
     2: 'RPCSEC_GSS_CONTINUE_INIT',
     3: 'RPCSEC_GSS_DESTROY',
     4: 'RPCSEC_GSS_BIND_CHANNEL',
+    5: 'RPCSEC_GSS_CREATE',
+    6: 'RPCSEC_GSS_LIST',
 }
 
 # Enum rgss2_bind_chan_status
@@ -64,8 +69,18 @@ gss_bind_chan_stat = {
     2: 'RGSS2_BIND_CHAN_HASH_NOTSUPP',
 }
 
+# Enum rgss3_assertion_type
+LABEL = 0
+PRIVS = 1
+
+rgss3_assertion_type = {
+    0 : "LABEL",
+    1 : "PRIVS",
+}
+
 RPCSEC_GSS_VERS_1 = 1
 RPCSEC_GSS_VERS_2 = 2  # RFC 5403
+RPCSEC_GSS_VERS_3 = 3  # RFC 7861
 
 # Integrity algorithm indicator
 DES_MAC_MD5 = 0x0000
