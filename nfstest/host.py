@@ -35,7 +35,7 @@ from packet.pktt import Pktt
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.3"
+__version__   = "1.4"
 
 class Host(BaseObj):
     """Host object
@@ -169,6 +169,7 @@ class Host(BaseObj):
         self.sudo         = kwargs.pop("sudo",         c.NFSTEST_SUDO)
 
         # Initialize object variables
+        self.nfs_version = float(self.nfsversion)
         self.mtdir = self.mtpoint
         self.mounted = False
         self._nfsdebug = False
@@ -227,17 +228,18 @@ class Host(BaseObj):
         minor = int(round(10*(version-major)))
         return (major, minor)
 
-    def nfsstr(self, version=None):
+    def nfsstr(self, version=None, prefix="NFSv"):
         """Return the NFS string for the given NFS version
 
            version:
                NFS version, default is the object attribute nfsversion
         """
-        nver, mver = self.nfsvers(version)
-        if mver == 0:
-            return "NFSv%d" % nver
-        else:
-            return "NFSv%d.%d" % (nver, mver)
+        if version is None:
+            version = self.nfsversion
+        nver = int(float(version))
+        if nver < 4:
+            version = nver
+        return "%s%s" % (prefix, version)
 
     def abspath(self, filename, dir=None):
         """Return the absolute path for the given file name."""
@@ -421,6 +423,49 @@ class Host(BaseObj):
             self._invalidmtpoint.append(mtpoint)
             raise Exception("Mount point %s is not a directory" % mtpoint)
 
+    def _find_nfs_version(self):
+        """Get the NFS version from mount point"""
+        opts_h = {}
+        mount_h = {}
+        try:
+            # Try the "findmnt" command to get options for mount point
+            cmd = "findmnt %s" % self.mtpoint
+            out = self.run_cmd(cmd, dlevel='DBG5', msg="Get the actual NFS version of mount point: ")
+            regex = re.search(r"\n(\/.*)\s+.*\snfs(?:\d+)?\s+(.*)", out)
+            if regex:
+                mount_h[regex.group(1)] =  regex.group(2)
+        except:
+            try:
+                # Try the "mount" command to get options for all mount points
+                out = self.run_cmd("mount", dlevel='DBG5', msg="Get the actual NFS version of mount point: ")
+                for line in re.split("\n+", out):
+                    regex = re.search(r"on\s+(.*)\s+type.*\((.*)\)", line)
+                    if regex:
+                        mount_h[regex.group(1)] =  regex.group(2)
+            except:
+                pass
+
+        # Get options for given mount point
+        mount_opts = mount_h.get(self.mtpoint)
+        if mount_opts is not None:
+            # Split all options and save them into dictionary
+            for optstr in mount_opts.split(","):
+                opts = optstr.split("=")
+                if len(opts) > 1:
+                    opts_h[opts[0]] = opts[1]
+                elif len(opts) > 0:
+                    opts_h[opts[0]] = 1
+            # Save "vers" option
+            vers = opts_h.get("vers")
+            if vers is not None:
+                minorversion = opts_h.get("minorversion")
+                if minorversion is not None:
+                    # Include "minorversion" option into the saved string
+                    vers += "." + minorversion
+            # Set the actual NFS version mounted
+            self.nfs_version = float(vers)
+            self.dprint('DBG6', "    NFS version of mount point: %s" % vers)
+
     def mount(self, **kwargs):
         """Mount the file system on the given mount point.
 
@@ -456,6 +501,9 @@ class Host(BaseObj):
         datadir      = kwargs.pop("datadir",      self.datadir)
         mtopts       = kwargs.pop("mtopts",       self.mtopts)
 
+        # Set NFS version -- the actual value will be set after the mount
+        self.nfs_version = float(nfsversion)
+
         # Remove trailing '/' on mount point
         mtpoint = mtpoint.rstrip("/")
 
@@ -473,12 +521,7 @@ class Host(BaseObj):
             export = export.rstrip("/")
 
         # Using the proper version of NFS
-        mt_list = []
-        nver, mver = self.nfsvers(nfsversion)
-        if mver > 0:
-            mt_list.append("vers=%d.%d" % (nver, mver))
-        else:
-            mt_list.append("vers=%d" % nver)
+        mt_list = [ self.nfsstr(nfsversion, prefix="vers=") ]
 
         if port != 2049:
             mt_list.append("port=%d" % port)
@@ -492,6 +535,9 @@ class Host(BaseObj):
 
         self.mounted = True
         self.mtpoint = mtpoint
+
+        # Get the NFS version from mount point
+        self._find_nfs_version()
 
         # Create data directory if it does not exist
         if self._localhost:

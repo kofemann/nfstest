@@ -1344,12 +1344,12 @@ class NFSUtil(Host):
                Destination port [default: self.port]
         """
         self.clientid = None
-        if self.nfsversion > 4:
+        if self.nfs_version > 4:
             # Find the EXCHANGE_ID packets
             self.find_nfs_op(OP_EXCHANGE_ID, **kwargs)
             if self.pktreply:
                 self.clientid = self.pktreply.NFSop.clientid
-        elif self.nfsversion == 4:
+        elif self.nfs_version == 4:
             # Find the SETCLIENTID packets
             self.find_nfs_op(OP_SETCLIENTID, **kwargs)
             if self.pktreply:
@@ -1366,7 +1366,7 @@ class NFSUtil(Host):
            port:
                Destination port [default: self.port]
         """
-        if self.nfsversion < 4.1:
+        if self.nfs_version < 4.1:
             return
         self.sessionid = None
         clientid = kwargs.pop('clientid', None)

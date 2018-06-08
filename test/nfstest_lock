@@ -794,7 +794,7 @@ class LockTest(TestUtil):
            or both. It also checks different ranges including limit conditions.
         """
         self.test_group("Basic locking tests")
-        nmax = 0x7fffffff if self.nfsversion == 2 else 0x7fffffffffffffff
+        nmax = 0x7fffffff if self.nfs_version == 2 else 0x7fffffffffffffff
         tlist = [ (0, 0), (0, 1), (1, 0), (0, self.length),
                   (self.offset, self.length), (self.offset, 0),
                   (self.offset, 1), (0, nmax), (1, nmax), (nmax, 1),

@@ -106,7 +106,7 @@ class pNFSTest(TestUtil):
 
         self.deviceids = {}
         self.stripe_size = None
-        if self.nfsversion < 4.1:
+        if self.nfs_version < 4.1:
             self.config("Cannot use %s for pNFS testing" % self.nfsstr())
 
     def verify_stateid(self, openfh, sent_stateid):

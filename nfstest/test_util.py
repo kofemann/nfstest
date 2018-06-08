@@ -336,7 +336,7 @@ class TestUtil(NFSUtil):
         hmsg = "Exported file system to mount [default: '%default']"
         self.nfs_opgroup.add_option("-e", "--export", default=self.export, help=hmsg)
         hmsg = "NFS version, e.g., 3, 4, 4.1, etc. [default: %default]"
-        self.nfs_opgroup.add_option("--nfsversion", type="float", default=self.nfsversion, help=hmsg)
+        self.nfs_opgroup.add_option("--nfsversion", default=self.nfsversion, help=hmsg)
         hmsg = "Mount point [default: '%default']"
         self.nfs_opgroup.add_option("-m", "--mtpoint", default=self.mtpoint, help=hmsg)
         hmsg = "NFS server port [default: %default]"
@@ -711,6 +711,9 @@ class TestUtil(NFSUtil):
             self.wsize        = int_units(self.wsize)
             self.offset_delta = int_units(self.offset_delta)
             self.tbsize       = int_units(self.tbsize)
+
+            # Set NFS version -- the actual value will be set after the mount
+            self.nfs_version = float(self.nfsversion)
 
             if len(self.basename) > 0:
                 self._name      = self.basename

@@ -486,7 +486,7 @@ class SSCTest(TestUtil):
         """
         index_map = {}
         self.pktt.rewind()
-        if self.nfsversion < 4:
+        if self.nfs_version < 4:
             if op == OP_READ:
                 op = NFSPROC3_READ
             elif op == OP_WRITE:
@@ -1011,7 +1011,7 @@ class SSCTest(TestUtil):
                 args["fh"] = dst_topfh
                 if src_clientid is not None and dst_clientid is not None and src_clientid != dst_clientid:
                     diff_server = True
-                if self.nfsversion < 4:
+                if self.nfs_version < 4:
                     #XXX how to check if two different servers on NFSv3?
                     diff_server = True
 

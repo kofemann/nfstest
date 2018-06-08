@@ -712,7 +712,7 @@ class PosixTest(TestUtil):
         self.test(offset == 1022, "lseek - offset: 1000, whence: SEEK_END succeeds")
         self.dprint('DBG3', "Write file [%s]" % 'DDDDDDDD')
         count = posix.write(fd, 'DDDDDDDD')
-        if self.nfsversion > 2:
+        if self.nfs_version > 2:
             N = 2*1024*1024*1024
             self.dprint('DBG3', "Set file pointer lseek(2GB, SEEK_SET)")
             offset = posix.lseek(fd, N, os.SEEK_SET)
