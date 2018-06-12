@@ -22,7 +22,7 @@ from nfstest.test_util import TestUtil
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.0"
+__version__   = "1.1"
 
 USAGE = """%prog --server <server> [options]
 
@@ -76,6 +76,24 @@ class InteropTest(TestUtil):
         hmsg = "Size of data to be written by each version of NFS [default: '%default']"
         self.test_opgroup.add_option("--datasize", type="int", default=10, help=hmsg)
         self.scan_options()
+        # NFS version mount option for NFSv4
+        self.nfsvers4 = 4.0
+
+    def setup(self, **kwargs):
+        """Setup test environment"""
+        self.umount()
+        try:
+            self.dprint('DBG4', "Try NFSv4 mount using vers=4.0")
+            self.mount(nfsversion=4.0)
+        except:
+            if self.perror.find("incorrect mount option") >= 0:
+                self.dprint('DBG4', "NFSv4 mount using vers=4.0 is not supported, using vers=4 instead")
+                self.mount(nfsversion=4)
+                self.nfsvers4 = 4
+        # Get block size for mounted volume
+        self.statvfs = os.statvfs(self.mtdir)
+        super(InteropTest, self).setup(**kwargs)
+        self.umount()
 
     def do_read(self, absfile, version):
         """Read contents of given file"""
@@ -99,7 +117,7 @@ class InteropTest(TestUtil):
         data_map = {
             "v3"   : {"args":{"nfsversion":3, "mtpoint":self.mtpoint+"_v30"},
                       "data":self.data_pattern(0, self.datasize, "A")},
-            "v4"   : {"args":{"nfsversion":4, "mtpoint":self.mtpoint+"_v40"},
+            "v4"   : {"args":{"nfsversion":self.nfsvers4, "mtpoint":self.mtpoint+"_v40"},
                       "data":self.data_pattern(0, self.datasize, "B")},
             "v4.1" : {"args":{"nfsversion":4.1, "mtpoint":self.mtpoint+"_v41"},
                       "data":self.data_pattern(0, self.datasize, "C")},
