@@ -688,13 +688,20 @@ class pNFSTest(TestUtil):
             orig_data = self.data_pattern(0, self.filesize)
             files = []
             vers = []
-            for version in (4, 3):
+            for version in (4.0, 3):
                 try:
                     self.umount()
                     self.mount(nfsversion=version)
-                except Exception as e:
-                    self.warning(str(e))
-                    continue
+                except Exception:
+                    if version == 4.0 and self.perror.find("incorrect mount option") >= 0:
+                        try:
+                            self.dprint('DBG4', "NFSv4 mount using vers=4.0 is not supported, using vers=4 instead")
+                            self.mount(nfsversion=4)
+                        except Exception:
+                            pass
+                    if self.returncode:
+                        self.warning(self.perror)
+                        continue
 
                 ver = self.nfsstr(version)
                 vers.append(ver)
