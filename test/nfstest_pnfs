@@ -803,6 +803,8 @@ class pNFSTest(TestUtil):
             self.find_getdeviceinfo()
             self.pktt.rewind()
             self.verify_file(self.filename, iomode=LAYOUTIOMODE4_RW, filesize=filesize, nocreate_list=nocreate_list, write_list=write_list)
+            layout_list = [self.layout]
+            self.verify_layoutreturn(layout_list)
         except Exception:
             self.test(False, traceback.format_exc())
 
@@ -866,10 +868,12 @@ class pNFSTest(TestUtil):
             self.pktt.rewind()
             (multipath_ds_list, openfh) = self.verify_file(filename, iomode=iomode)
             layout = self.layout
+            layout_list = [self.layout]
             session_ids = self.session_ids
 
             self.test_group("Verify traffic for second file using pNFS within the same mount - %s" % wstr)
             self.verify_file(filename2, iomode=iomode, nocreate=True, multipath_ds_list=multipath_ds_list)
+            layout_list.append(self.layout)
 
             if write:
                 if 'deleg_stateid' in openfh and openfh['deleg_stateid'] is not None:
@@ -887,6 +891,8 @@ class pNFSTest(TestUtil):
                 self.trace_open(trace2)
                 self.set_pktlist()
                 self.verify_file(filename, iomode=siomode, nocreate=True, multipath_ds_list=multipath_ds_list, openfh=openfh, delegreturn=delegreturn)
+
+            self.verify_layoutreturn(layout_list)
 
             self.session_ids = session_ids
             self.verify_destroy_session()
@@ -942,6 +948,8 @@ class pNFSTest(TestUtil):
             self.find_getdeviceinfo()
             self.pktt.rewind()
             (multipath_ds_list, openfh) = self.verify_file(filename, iomode=iomode, lock=True)
+            layout_list = [self.layout]
+            self.verify_layoutreturn(layout_list)
 
     def do_setattr(self, size=0, lock=False):
         """Verify setattr traffic for file using pNFS."""
@@ -1059,6 +1067,7 @@ class pNFSTest(TestUtil):
             self.find_getdeviceinfo()
             self.pktt.rewind()
             (multipath_ds_list, openfh) = self.verify_file(filename, iomode=LAYOUTIOMODE4_READ, noclose=True)
+            layout_list = [self.layout]
 
             # Re-position trace file after the last READ call/reply
             self.pktt.rewind()
@@ -1076,6 +1085,7 @@ class pNFSTest(TestUtil):
 
             openfh['samefile'] = True
             self.verify_file(filename, iomode=LAYOUTIOMODE4_RW, nocreate=True, multipath_ds_list=multipath_ds_list, openfh=openfh, layout_stateid=layout_stateid)
+            self.verify_layoutreturn(layout_list)
         except Exception:
             self.test(False, traceback.format_exc())
 
@@ -1110,6 +1120,7 @@ class pNFSTest(TestUtil):
             self.find_getdeviceinfo()
             self.pktt.rewind()
             (multipath_ds_list, openfh) = self.verify_file(filename, iomode=LAYOUTIOMODE4_RW, noclose=True)
+            layout_list = [self.layout]
             if openfh is None:
                 return
 
@@ -1125,6 +1136,7 @@ class pNFSTest(TestUtil):
             self.test_group("Verify traffic for file opened for read and write: reading file after write")
             openfh['samefile'] = True
             self.verify_file(filename, iomode=LAYOUTIOMODE4_READ, nocreate=True, multipath_ds_list=multipath_ds_list, openfh=openfh)
+            self.verify_layoutreturn(layout_list)
         except Exception:
             self.test(False, traceback.format_exc())
 
@@ -1257,8 +1269,11 @@ class pNFSTest(TestUtil):
             self.pktt.rewind()
             self.test_info("Verify READ traffic ========================================")
             (multipath_ds_list, openfh) = self.verify_file(filename1, iomode=LAYOUTIOMODE4_READ, max_iosize=r_max_iosize, nmax_iosize=w_max_iosize)
+            layout_list = [self.layout]
             self.test_info("Verify WRITE traffic =======================================")
             self.verify_file(filename2, iomode=LAYOUTIOMODE4_RW, nocreate=True, multipath_ds_list=multipath_ds_list, max_iosize=w_max_iosize, nmax_iosize=r_max_iosize)
+            layout_list.append(self.layout)
+            self.verify_layoutreturn(layout_list)
         except Exception:
             self.test(False, traceback.format_exc())
 

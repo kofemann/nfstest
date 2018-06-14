@@ -34,7 +34,7 @@ from nfstest.utils import split_path
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "2.7"
+__version__   = "2.8"
 
 class NFSUtil(Host):
     """NFSUtil object
@@ -502,6 +502,7 @@ class NFSUtil(Host):
                 'stripe_size':        nfl_util & NFL4_UFLG_STRIPE_UNIT_SIZE_MASK,
                 'first_stripe_index': loc_body.first_stripe_index,
                 'offset':             loc_body.pattern_offset,
+                'filehandle':         filehandle,
                 'filehandles':        loc_body.fh_list,
                 'deviceid':           loc_body.deviceid,
                 'stateid':            layoutget_res.stateid.other,
@@ -510,6 +511,7 @@ class NFSUtil(Host):
         else:
             loc_body = {
                 'type':               layoutget.type,
+                'filehandle':         filehandle,
                 'stateid':            layoutget_res.stateid.other,
                 'iomode':             layout.iomode,
             }
@@ -1291,6 +1293,84 @@ class NFSUtil(Host):
             getattr_res = pkt.nfs.array[idx+1]
             self.test(getattr_res.attributes[FATTR4_SIZE] == filesize, "GETATTR should return correct file size within LAYOUTCOMMIT compound")
         return
+
+    def verify_layoutreturn(self, layout_list):
+        """Verify layoutreturn is properly sent to the server specified by
+           the ipaddr for self.server and port given by self.port.
+
+           layout_list:
+               List of layouts
+        """
+        save_index = self.pktt.get_index()
+        dst = self.pktt.ip_tcp_dst_expr(self.server_ipaddr, self.port)
+        layout_list = [ lo for lo in layout_list if lo is not None ]
+        layout_count = len(layout_list)
+
+        # Find LAYOUTRETURN requests sent to the MDS and include their replies
+        while self.pktt.match(dst + " and NFS.argop == %d" % OP_LAYOUTRETURN, reply=True):
+            if self.pktt.pkt.rpc.type == 0:
+                # LAYOUTRETURN request
+                lrcall = self.pktt.pkt.NFSop
+                for layout in layout_list:
+                    fh = lrcall.fh
+                    stid = lrcall.layoutreturn.stateid.other
+                    # Match the LAYOUTRETURN to a layout by the file handle
+                    if fh == layout.get('filehandle'):
+                        # Save LAYOUTRETURN call info in the layout
+                        layout['lrcount'] = layout.setdefault('lrcount', 0) + 1
+                        layout['lrstid']  = stid
+                        layout['lrxid']   = self.pktt.pkt.rpc.xid
+                        if stid == layout.get('stateid'):
+                            # This LAYOUTRETURN also matches the layout state id
+                            layout['lrstcount'] = 1
+                        break
+            else:
+                # LAYOUTRETURN reply
+                xid = self.pktt.pkt.rpc.xid
+                status = self.pktt.pkt.nfs.status
+                for layout in layout_list:
+                    if xid == layout.get('lrxid'):
+                        # Save LAYOUTRETURN reply status in the layout
+                        layout['lrstatus'] = status
+                        break
+
+        lcount = 0     # Number of layouts having a LAYOUTRETURN call
+        lrmiss = 0     # Number of LAYOUTRETURN replies missing
+        lstcount = 0   # Number of layouts matching LAYOUTRETURN state id
+        lg_count = 0   # Number of total LAYOUTRETURN calls send by the client
+        lr_stat = True # True if all LAYOUTRETURN status codes are NFS4_OK
+        for layout in layout_list:
+            if layout.get('lrcount') > 0:
+                # There is at least one LAYOUTRETURN request for this layout
+                lcount += 1
+                lg_count += layout['lrcount']
+                status = layout.get('lrstatus')
+                if status is None:
+                    # LAYOUTRETURN reply is missing for this layout
+                    lrmiss += 1
+                elif status != NFS4_OK:
+                    # At least one failure
+                    lr_stat = False
+                if layout.get('lrstcount') > 0:
+                    lstcount += 1
+        # Number of layouts NOT having a corresponding LAYOUTRETURN
+        count = layout_count - lcount
+        rstr = "calls" if count > 1 else "call"
+        fmsg = ", %d %s missing" % (count, rstr)
+        self.test(count == 0, "LAYOUTRETURN should be sent to MDS", failmsg=fmsg)
+        if lcount > 0:
+            # At least one LAYOUTRETURN call was found
+            self.test(lstcount == lcount, "LAYOUTRETURN should use the layout stateid")
+            self.test(lcount == lg_count, "LAYOUTRETURN should be sent just once per layout")
+            if lcount > lrmiss:
+                # At least one LAYOUTRETURN reply was found
+                self.test(lr_stat, "LAYOUTRETURN should succeed")
+            if lrmiss > 0:
+                # At least one LAYOUTRETURN reply is missing
+                rstr = "replies" if lrmiss > 1 else "reply"
+                fmsg = ", %d %s missing" % (lrmiss, rstr)
+                self.test(False, "LAYOUTRETURN reply was not found", failmsg=fmsg)
+        self.pktt.rewind(save_index)
 
     def get_stateid(self, filename, **kwargs):
         """Search the packet trace for the file name given to get the OPEN
