@@ -711,8 +711,7 @@ class DioTest(TestUtil):
             if deleg_stateid != None:
                 self.dprint('DBG3', "Delegation is granted")
             stateid = deleg_stateid if deleg_stateid else open_stateid
-            (layoutget, layoutget_res, loc_body) = self.find_layoutget(filehandle)
-            self.layout = loc_body
+            self.find_layoutget(filehandle)
             self.find_getdeviceinfo()
             self.pktt.rewind(save_index)
 
@@ -791,8 +790,7 @@ class DioTest(TestUtil):
                 self.pktt.rewind()
                 (filehandle, open_stateid, deleg_stateid) = self.find_open(filename=bfile)
                 stateid = deleg_stateid if deleg_stateid else open_stateid
-                (layoutget, layoutget_res, loc_body) = self.find_layoutget(filehandle)
-                self.layout = loc_body
+                self.find_layoutget(filehandle)
                 total_size = 0
                 rmatch = True
                 xids = {}
@@ -1036,8 +1034,7 @@ class DioTest(TestUtil):
                 self.file_handles[write] = filehandle
                 save_index = self.pktt.get_index()
                 self.stateid = deleg_stateid if deleg_stateid else open_stateid
-                (layoutget, layoutget_res, loc_body) = self.find_layoutget(filehandle)
-                self.layout = loc_body
+                self.find_layoutget(filehandle)
                 self.find_getdeviceinfo()
                 self.pktt.rewind(save_index)
             elif not check and self.file_handles[write] is None:
@@ -1540,12 +1537,12 @@ try:
     x.trace_open()
     x.set_pktlist()
     (filehandle, open_stateid, deleg_stateid) = x.find_open(filename=x.files[0])
-    (layoutget, layoutget_res, loc_body) = x.find_layoutget(filehandle)
+    (layoutget, layoutget_res) = x.find_layoutget(filehandle)
     x.find_getdeviceinfo()
     x.ispnfs = False if layoutget is None or len(x.dslist) == 0 else True
 
     if x.ispnfs:
-        x.stripe_size = loc_body['stripe_size']
+        x.stripe_size = x.layout['stripe_size']
 
     if len(x.basename) == 0 and x.f_bsize < 3*x.rsize:
         raise Exception("CONFIG error: mount options rsize and wsize must be greater than or equal to 3 times the value of option rsize")

@@ -495,7 +495,7 @@ class pNFSTest(TestUtil):
         openfh['lock_stateid'] = lock_stateid
 
         # Find LAYOUTGET request
-        (layoutget, layoutget_res, loc_body) = self.verify_layoutget(filehandle, iomode)
+        (layoutget, layoutget_res) = self.verify_layoutget(filehandle, iomode)
         if nolayoutget:
             self.test(not self.layout, "LAYOUTGET should not be sent")
         elif 'layout' in openfh:
@@ -1179,7 +1179,7 @@ class pNFSTest(TestUtil):
             self.test(data == '\000' * self.rsize, "Client should read a hole at the beginning of the file after writing")
 
             (filehandle, open_stateid, deleg_stateid) = self.find_open(filename=filename)
-            (layoutget, layoutget_res, loc_body) = self.verify_layoutget(filehandle, LAYOUTIOMODE4_RW)
+            self.verify_layoutget(filehandle, LAYOUTIOMODE4_RW)
             (pktcall, pktreply, dslist) = self.find_getdeviceinfo()
             nds = len(dslist)
             if self.layout is None:
@@ -1306,7 +1306,8 @@ try:
             x.dprint('INFO', "Client implementation: %s" % x.nii_name)
             x.dprint('INFO', "Server implementation: %s" % x.nii_server)
             (filehandle, open_stateid, deleg_stateid) = x.find_open(filename=x.files[i])
-            x.stripe_size = x.find_layoutget(filehandle)[2]['stripe_size']
+            x.find_layoutget(filehandle)
+            x.stripe_size = x.layout['stripe_size']
             x.find_getdeviceinfo()
             break
         except Exception as e:

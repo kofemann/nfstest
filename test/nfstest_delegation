@@ -388,11 +388,11 @@ class DelegTest(TestUtil):
                 return
 
             filehandles = [fh]
-            (layoutget, layoutget_res, loc_body) = self.find_layoutget(fh)
+            self.find_layoutget(fh)
             (devcall, devreply, dslist) = self.find_getdeviceinfo()
             self.pktt.rewind(save_index)
-            if loc_body:
-                filehandles = loc_body['filehandles']
+            if self.layout:
+                filehandles = self.layout['filehandles']
 
             # Find any other OPEN's for the same file
             olist = self.find_open(filename=self.filename)
@@ -519,11 +519,11 @@ class DelegTest(TestUtil):
                 return
 
             filehandles = [fh]
-            (layoutget, layoutget_res, loc_body) = self.find_layoutget(fh)
+            self.find_layoutget(fh)
             (devcall, devreply, dslist) = self.find_getdeviceinfo()
             self.pktt.rewind(save_index)
-            if loc_body:
-                filehandles = loc_body['filehandles']
+            if self.layout:
+                filehandles = self.layout['filehandles']
 
             if deleg_type == OPEN_DELEGATE_READ:
                 # Find OPEN (READ) call from the second client

@@ -97,7 +97,7 @@ class NFSUtil(Host):
 
            Initialize object's private data.
         """
-        # Arguments
+        # Current matched packets
         self.pktcall   = None
         self.pktreply  = None
         self.opencall  = None
@@ -117,6 +117,7 @@ class NFSUtil(Host):
         self.sessionid_map = {} # Session id map {key:exchangeid, value:sessionid}
         self.sessionid = None # Session ID returned from CREATE_SESSION
         self.clientid = None # Client ID returned from EXCHANGE_ID
+        self.layout = None # Current layout information
 
         # State id to string mapping
         self.stid_map = {}
@@ -468,55 +469,55 @@ class NFSUtil(Host):
            of the given file handle going to the server specified by the
            ipaddr for self.server and port given by self.port.
 
-           Return a tuple: (layoutget, layoutget_res, loc_body).
+           Return a tuple: (layoutget, layoutget_res).
+           Layout information is stored in object attribute "layout".
         """
+        self.layout = None
+
         dst = self.pktt.ip_tcp_dst_expr(self.server_ipaddr, self.port)
 
         # Find LAYOUTGET request
         pkt = self.pktt.match(dst + " and NFS.fh == '%s' and NFS.argop == %d" % (self.pktt.escape(filehandle), OP_LAYOUTGET))
         if not pkt:
-            return (None, None, None)
+            return (None, None)
         xid = pkt.rpc.xid
         layoutget = pkt.NFSop
 
         # Find LAYOUTGET reply
         pkt = self.pktt.match("RPC.xid == %d and NFS.resop == %d" % (xid, OP_LAYOUTGET))
         if pkt is None:
-            return (layoutget, None, None)
+            return (layoutget, None)
         layoutget_res = pkt.NFSop
         if layoutget_res.status:
-            return (layoutget, layoutget_res, None)
+            return (layoutget, layoutget_res)
         # XXX Using first layout segment only
         layout = layoutget_res.layout[0]
 
+        self.layout = {
+            'type':            layoutget.type,
+            'iomode':          layout.iomode,
+            'filehandle':      filehandle,
+            'stateid':         layoutget_res.stateid.other,
+            'return_on_close': layoutget_res.return_on_close
+        }
+
         # Get layout content
         loc_body = layout.content.body
-        if layoutget.type == LAYOUT4_NFSV4_1_FILES:
+        if layout.content.type == LAYOUT4_NFSV4_1_FILES:
             nfl_util = loc_body.nfl_util
 
             # Decode loc_body
-            loc_body = {
-                'type':               layoutget.type,
+            self.layout.update({
                 'dense':              (nfl_util & NFL4_UFLG_DENSE > 0),
                 'commit_mds':         (nfl_util & NFL4_UFLG_COMMIT_THRU_MDS > 0),
                 'stripe_size':        nfl_util & NFL4_UFLG_STRIPE_UNIT_SIZE_MASK,
                 'first_stripe_index': loc_body.first_stripe_index,
                 'offset':             loc_body.pattern_offset,
-                'filehandle':         filehandle,
                 'filehandles':        loc_body.fh_list,
                 'deviceid':           loc_body.deviceid,
-                'stateid':            layoutget_res.stateid.other,
-                'iomode':             layout.iomode,
-            }
-        else:
-            loc_body = {
-                'type':               layoutget.type,
-                'filehandle':         filehandle,
-                'stateid':            layoutget_res.stateid.other,
-                'iomode':             layout.iomode,
-            }
+            })
 
-        return (layoutget, layoutget_res, loc_body)
+        return (layoutget, layoutget_res)
 
     def get_addr_port(self, addr):
         """Get address and port number from universal address string"""
@@ -925,15 +926,13 @@ class NFSUtil(Host):
            provided the following defaults are used: offset = 0,
            length = NFS4_UINT64_MAX.
 
-           Layout information is stored in the object attribute layout.
-
-           Return a tuple: (layoutget, layoutget_res, loc_body).
+           Return a tuple: (layoutget, layoutget_res).
         """
         # Find LAYOUTGET for given filehandle
-        layoutget, layoutget_res, loc_body = self.find_layoutget(filehandle)
+        layoutget, layoutget_res = self.find_layoutget(filehandle)
         if layoutget is None:
             self.layout = None
-            return (None, None, None)
+            return (None, None)
 
         # Test layout type
         self.test(layoutget.type == LAYOUT4_NFSV4_1_FILES, "LAYOUTGET layout type should be LAYOUT4_NFSV4_1_FILES")
@@ -946,14 +945,14 @@ class NFSUtil(Host):
 
         if layoutget_res is None:
             self.test(False, "LAYOUTGET reply should be returned")
-            return (layoutget, None, None)
+            return (layoutget, None)
 
         if status:
             self.test(layoutget_res.status == status, "LAYOUTGET reply should return error %s(%d)" % (nfsstat4[status], status))
-            return (layoutget, layoutget_res, None)
+            return (layoutget, layoutget_res)
         elif layoutget_res.status:
             self.test(False, "LAYOUTGET reply returned %s(%d)" % (nfsstat4[layoutget_res.status], layoutget_res.status))
-            return (layoutget, layoutget_res, None)
+            return (layoutget, layoutget_res)
 
         # Get layout from reply
         layout = layoutget_res.layout[0]
@@ -981,9 +980,7 @@ class NFSUtil(Host):
             self.test(layout.offset == offset and layout.length == length, "LAYOUTGET reply should be: (offset=%d, length=%d)" % (offset, length))
 
         # Return layout
-        self.layout = loc_body
-        self.layout['return_on_close'] = layoutget_res.return_on_close
-        return (layoutget, layoutget_res, loc_body)
+        return (layoutget, layoutget_res)
 
     def verify_io(self, iomode, stateid, ipaddr=None, port=None, src_ipaddr=None, filehandle=None, ds_index=None, init=False, maxindex=None, pattern=None):
         """Verify I/O is sent to the server specified by the ipaddr and port.
