@@ -23,11 +23,14 @@ Furthermore, methods for finding specific NFSv4 operations within the packet
 trace are also included.
 """
 import os
+import struct
 from host import Host
 from formatstr import *
 import nfstest_config as c
+from packet.unpack import Unpack
 from packet.nfs.nfs3_const import *
 from packet.nfs.nfs4_const import *
+from packet.nfs.nfs4 import stateid4
 from nfstest.utils import split_path
 
 # Module constants
@@ -142,6 +145,12 @@ class NFSUtil(Host):
         self.test_no_commit   = False
         self.test_commit_verf = True
 
+        # Special Stateids
+        self.stateid_anonymous = self._stateid(0, 0) # Special anonymous stateid
+        self.stateid_bypass    = self._stateid(1, 1) # Special READ bypass stateid
+        self.stateid_current   = self._stateid(1, 0) # Current stateid within compound
+        self.stateid_invalid   = self._stateid(NFS4_UINT32_MAX, 0)
+
     def __del__(self):
         """Destructor
 
@@ -153,6 +162,15 @@ class NFSUtil(Host):
             self.clients.pop()
         # Call base class destructor
         super(NFSUtil, self).__del__()
+
+    def _stateid(self, seqid, other):
+        """Return the special stateid given by seqid and other"""
+        data = struct.pack("!I", seqid)
+        if other == 0:
+            data += "\x00" * NFS4_OTHER_SIZE
+        elif other == 1:
+            data += "\xFF" * NFS4_OTHER_SIZE
+        return stateid4(Unpack(data))
 
     def create_host(self, host, **kwargs):
         """Create client host object and set defaults."""
