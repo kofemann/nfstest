@@ -903,7 +903,7 @@ class NFSUtil(Host):
             self.pktt.rewind(save_index)
         return self.sessionid
 
-    def verify_layoutget(self, filehandle, iomode, riomode=None, status=0, offset=None, length=None):
+    def verify_layoutget(self, filehandle, iomode, riomode=None, status=0, offset=None, length=None, openfh={}):
         """Verify the client sends a LAYOUTGET for the given file handle.
 
            filehandle:
@@ -920,19 +920,50 @@ class NFSUtil(Host):
                Expected layout range for LAYOUTGET reply [default: None]
            length:
                Expected layout range for LAYOUTGET reply [default: None]
+           openfh:
+               Open information for file (filehandle, open/delegation/lock stateids,
+               and delegation type) if file has been previously opened [default: {}]
 
            If both offset and length are not given, verify LAYOUTGET reply
            should be a full layout [0, NFS4_UINT64_MAX]. If only one is
            provided the following defaults are used: offset = 0,
            length = NFS4_UINT64_MAX.
 
-           Return a tuple: (layoutget, layoutget_res).
+           Return True if a layout is found and it is supported.
         """
         # Find LAYOUTGET for given filehandle
         layoutget, layoutget_res = self.find_layoutget(filehandle)
-        if layoutget is None:
-            self.layout = None
-            return (None, None)
+
+        check_layoutget = False
+        if openfh.get('nolayoutget'):
+            self.test(not self.layout, "LAYOUTGET should not be sent")
+        elif 'layout' in openfh:
+            if 'samefile' in openfh and not self.layout:
+                self.test(True, "LAYOUTGET should not be sent for the same file if data has been cached")
+                openfh['nolayoutget'] = True
+                self.layout = openfh['layout']
+            elif openfh['layout']['return_on_close']:
+                self.test(self.layout, "LAYOUTGET should be sent for the same file when return_on_close is set")
+                check_layoutget = True
+            else:
+                self.test(not self.layout, "LAYOUTGET should not be sent for the same file")
+                self.layout = openfh['layout']
+        else:
+            self.test(layoutget, "LAYOUTGET should be sent")
+            check_layoutget = True
+
+        if layoutget and check_layoutget:
+            openfh['layout'] = self.layout
+            # Test layoutget stateid
+            if openfh.get('layout_stateid') is not None:
+                expr = layoutget.stateid == openfh.get('layout_stateid')
+                self.test(expr, "LAYOUTGET stateid should be the previous LAYOUTGET stateid")
+            elif layoutget.stateid == openfh.get('deleg_stateid'):
+                self.test(True, "LAYOUTGET stateid should be the DELEG stateid")
+            else:
+                self.test(layoutget.stateid == openfh.get('open_stateid'), "LAYOUTGET stateid should be the OPEN stateid")
+        else:
+            return bool(self.layout)
 
         # Test layout type
         self.test(layoutget.type == LAYOUT4_NFSV4_1_FILES, "LAYOUTGET layout type should be LAYOUT4_NFSV4_1_FILES")
@@ -945,14 +976,14 @@ class NFSUtil(Host):
 
         if layoutget_res is None:
             self.test(False, "LAYOUTGET reply should be returned")
-            return (layoutget, None)
+            return bool(self.layout)
 
         if status:
             self.test(layoutget_res.status == status, "LAYOUTGET reply should return error %s(%d)" % (nfsstat4[status], status))
-            return (layoutget, layoutget_res)
+            return bool(self.layout)
         elif layoutget_res.status:
             self.test(False, "LAYOUTGET reply returned %s(%d)" % (nfsstat4[layoutget_res.status], layoutget_res.status))
-            return (layoutget, layoutget_res)
+            return bool(self.layout)
 
         # Get layout from reply
         layout = layoutget_res.layout[0]
@@ -979,8 +1010,7 @@ class NFSUtil(Host):
                 length = NFS4_UINT64_MAX
             self.test(layout.offset == offset and layout.length == length, "LAYOUTGET reply should be: (offset=%d, length=%d)" % (offset, length))
 
-        # Return layout
-        return (layoutget, layoutget_res)
+        return bool(self.layout)
 
     def verify_io(self, iomode, stateid, ipaddr=None, port=None, src_ipaddr=None, filehandle=None, ds_index=None, init=False, maxindex=None, pattern=None):
         """Verify I/O is sent to the server specified by the ipaddr and port.

@@ -495,31 +495,11 @@ class pNFSTest(TestUtil):
         openfh['lock_stateid'] = lock_stateid
 
         # Find LAYOUTGET request
-        (layoutget, layoutget_res) = self.verify_layoutget(filehandle, iomode)
-        if nolayoutget:
-            self.test(not self.layout, "LAYOUTGET should not be sent")
-        elif 'layout' in openfh:
-            if 'samefile' in openfh and not self.layout:
-                self.test(True, "LAYOUTGET should not be sent for the same file if data has been cached")
-                nolayoutget = True
-                self.layout = openfh['layout']
-            elif openfh['layout']['return_on_close']:
-                self.test(self.layout, "LAYOUTGET should be sent for the same file")
-            else:
-                self.test(not self.layout, "LAYOUTGET should not be sent for the same file")
-                self.layout = openfh['layout']
-        elif self.layout:
-            openfh['layout'] = self.layout
-            # Test layoutget stateid
-            if layout_stateid is not None:
-                self.test(layoutget.stateid == layout_stateid, "LAYOUTGET stateid should be the previous LAYOUTGET stateid")
-            elif deleg_stateid is not None and layoutget.stateid == deleg_stateid:
-                self.test(True, "LAYOUTGET stateid should be the DELEG stateid")
-            else:
-                self.test(layoutget.stateid == open_stateid, "LAYOUTGET stateid should be the OPEN stateid")
-        else:
-            self.test(False, "LAYOUTGET should be sent", terminate=False)
+        openfh['nolayoutget'] = nolayoutget
+        openfh['layout_stateid'] = layout_stateid
+        if not self.verify_layoutget(filehandle, iomode, openfh=openfh):
             return (multipath_ds_list, openfh)
+        nolayoutget = openfh['nolayoutget']
 
         need_getdev = False
         if not nolayoutget and not (self.layout['deviceid'] in self.deviceids):
@@ -1179,7 +1159,8 @@ class pNFSTest(TestUtil):
             self.test(data == '\000' * self.rsize, "Client should read a hole at the beginning of the file after writing")
 
             (filehandle, open_stateid, deleg_stateid) = self.find_open(filename=filename)
-            self.verify_layoutget(filehandle, LAYOUTIOMODE4_RW)
+            openfh = {"open_stateid": open_stateid, "deleg_stateid": deleg_stateid}
+            self.verify_layoutget(filehandle, LAYOUTIOMODE4_RW, openfh=openfh)
             (pktcall, pktreply, dslist) = self.find_getdeviceinfo()
             nds = len(dslist)
             if self.layout is None:
