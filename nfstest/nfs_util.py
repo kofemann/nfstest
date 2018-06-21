@@ -966,7 +966,12 @@ class NFSUtil(Host):
             return bool(self.layout)
 
         # Test layout type
-        self.test(layoutget.type == LAYOUT4_NFSV4_1_FILES, "LAYOUTGET layout type should be LAYOUT4_NFSV4_1_FILES")
+        expr = layoutget.type == LAYOUT4_NFSV4_1_FILES
+        fmsg = ", got layout type %s(%d)" % (layouttype4.get(layoutget.type, "UNKNOWN"), layoutget.type)
+        self.test(expr, "LAYOUTGET layout type should be LAYOUT4_NFSV4_1_FILES", failmsg=fmsg)
+        if not expr:
+            # Only LAYOUT4_NFSV4_1_FILES is supported
+            return False
 
         # Test iomode
         self.test(layoutget.iomode == iomode, "LAYOUTGET iomode should be %s" % self.iomode_str(iomode))
@@ -989,7 +994,12 @@ class NFSUtil(Host):
         layout = layoutget_res.layout[0]
 
         # Test LAYOUTGET reply for correct layout type
-        self.test(layout.content.type == LAYOUT4_NFSV4_1_FILES, "LAYOUTGET reply layout type should be LAYOUT4_NFSV4_1_FILES")
+        expr = layout.content.type == LAYOUT4_NFSV4_1_FILES
+        fmsg = ", got layout type %s(%d)" % (layouttype4.get(layout.content.type, "UNKNOWN"), layout.content.type)
+        self.test(expr, "LAYOUTGET reply layout type should be LAYOUT4_NFSV4_1_FILES", failmsg=fmsg)
+        if not expr:
+            # Only LAYOUT4_NFSV4_1_FILES is supported
+            return False
 
         # Test LAYOUTGET reply for correct iomode
         if riomode is not None:

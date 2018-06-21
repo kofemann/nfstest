@@ -197,6 +197,10 @@ class pNFSTest(TestUtil):
         test_pattern          = True
         io_str = 'READ' if iomode == LAYOUTIOMODE4_READ else 'WRITE'
         io_op = OP_READ if iomode == LAYOUTIOMODE4_READ else OP_WRITE
+
+        if self.layout is None or self.layout.get('dense') is None:
+            return
+
         layout_dense = 'dense' if self.layout['dense'] else 'sparse'
         filehandle = openfh['filehandle']
 
