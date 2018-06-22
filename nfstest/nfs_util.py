@@ -105,6 +105,7 @@ class NFSUtil(Host):
         self.pktreply  = None
         self.opencall  = None
         self.openreply = None
+        self.layoutget_on_open = False
 
         # Initialize object variables
         self.clients = []
@@ -492,22 +493,33 @@ class NFSUtil(Host):
         """
         self.layout = None
 
-        dst = self.pktt.ip_tcp_dst_expr(self.server_ipaddr, self.port)
+        # Look for LAYOUTGET in the same compound as the OPEN
+        layoutget = None
+        layoutget_res = None
+        self.layoutget_on_open = False
+        if self.opencall:
+            layoutget = self.getop(self.opencall, OP_LAYOUTGET)
+            if layoutget:
+                self.layoutget_on_open = True
+                if self.openreply:
+                    layoutget_res = self.getop(self.openreply, OP_LAYOUTGET)
 
-        # Find LAYOUTGET request
-        pkt = self.pktt.match(dst + " and NFS.fh == '%s' and NFS.argop == %d" % (self.pktt.escape(filehandle), OP_LAYOUTGET))
-        if not pkt:
-            return (None, None)
-        xid = pkt.rpc.xid
-        layoutget = pkt.NFSop
+        if layoutget is None:
+            # Find LAYOUTGET request
+            dst = self.pktt.ip_tcp_dst_expr(self.server_ipaddr, self.port)
+            pkt = self.pktt.match(dst + " and NFS.fh == '%s' and NFS.argop == %d" % (self.pktt.escape(filehandle), OP_LAYOUTGET))
+            if pkt is not None:
+                xid = pkt.rpc.xid
+                layoutget = pkt.NFSop
 
-        # Find LAYOUTGET reply
-        pkt = self.pktt.match("RPC.xid == %d and NFS.resop == %d" % (xid, OP_LAYOUTGET))
-        if pkt is None:
-            return (layoutget, None)
-        layoutget_res = pkt.NFSop
-        if layoutget_res.status:
+                # Find LAYOUTGET reply
+                pkt = self.pktt.match("RPC.xid == %d and NFS.resop == %d" % (xid, OP_LAYOUTGET))
+                if pkt is not None:
+                    layoutget_res = pkt.NFSop
+
+        if layoutget is None or layoutget_res is None or layoutget_res.status:
             return (layoutget, layoutget_res)
+
         # XXX Using first layout segment only
         layout = layoutget_res.layout[0]
 
@@ -951,9 +963,11 @@ class NFSUtil(Host):
         """
         # Find LAYOUTGET for given filehandle
         layoutget, layoutget_res = self.find_layoutget(filehandle)
+        if self.layoutget_on_open:
+            self.dprint('DBG2', "LAYOUTGET is in the same compound as the OPEN")
 
         check_layoutget = False
-        if openfh.get('nolayoutget'):
+        if openfh.get('nolayoutget') and not self.layoutget_on_open:
             self.test(not self.layout, "LAYOUTGET should not be sent")
         elif 'layout' in openfh:
             if 'samefile' in openfh and not self.layout:
@@ -976,6 +990,10 @@ class NFSUtil(Host):
             if openfh.get('layout_stateid') is not None:
                 expr = layoutget.stateid == openfh.get('layout_stateid')
                 self.test(expr, "LAYOUTGET stateid should be the previous LAYOUTGET stateid")
+            elif self.layoutget_on_open:
+                expr = layoutget.stateid.seqid == self.stateid_current.seqid \
+                   and layoutget.stateid.other == self.stateid_current.other
+                self.test(expr, "LAYOUTGET stateid should be the special stateid (1, 0)")
             elif layoutget.stateid == openfh.get('deleg_stateid'):
                 self.test(True, "LAYOUTGET stateid should be the DELEG stateid")
             else:
@@ -992,7 +1010,11 @@ class NFSUtil(Host):
             return False
 
         # Test iomode
-        self.test(layoutget.iomode == iomode, "LAYOUTGET iomode should be %s" % self.iomode_str(iomode))
+        io_mode = iomode
+        if iomode == LAYOUTIOMODE4_READ and self.layoutget_on_open and \
+           self.opencall and self.opencall.NFSop.access != OPEN4_SHARE_ACCESS_READ:
+            io_mode = LAYOUTIOMODE4_RW
+        self.test(layoutget.iomode == io_mode, "LAYOUTGET iomode should be %s" % self.iomode_str(io_mode))
 
         # Test for full file layout
         self.test(layoutget.offset == 0 and layoutget.length == NFS4_UINT64_MAX, "LAYOUTGET should ask for full file layout")
@@ -1020,12 +1042,13 @@ class NFSUtil(Host):
             return False
 
         # Test LAYOUTGET reply for correct iomode
+        lg_iomode = layoutget.iomode
         if riomode is not None:
-            self.test(layout.iomode == riomode, "LAYOUTGET reply iomode is %s when asking for a %s layout" % (self.iomode_str(riomode), self.iomode_str(iomode)))
-        elif iomode == LAYOUTIOMODE4_READ and layoutget.iomode in [LAYOUTIOMODE4_READ, LAYOUTIOMODE4_RW]:
-            self.test(True, "LAYOUTGET reply iomode is %s when asking for a LAYOUTIOMODE4_READ layout" % self.iomode_str(layoutget.iomode))
+            self.test(layout.iomode == riomode, "LAYOUTGET reply iomode is %s when asking for a %s layout" % (self.iomode_str(riomode), self.iomode_str(lg_iomode)))
+        elif lg_iomode == LAYOUTIOMODE4_READ and layout.iomode in [LAYOUTIOMODE4_READ, LAYOUTIOMODE4_RW]:
+            self.test(True, "LAYOUTGET reply iomode is %s when asking for a LAYOUTIOMODE4_READ layout" % self.iomode_str(layout.iomode))
         else:
-            self.test(layout.iomode == iomode, "LAYOUTGET reply iomode should be %s" % self.iomode_str(iomode))
+            self.test(layout.iomode == lg_iomode, "LAYOUTGET reply iomode should be %s" % self.iomode_str(lg_iomode))
 
         if offset is None and length is None:
             # Test LAYOUTGET reply for full file layout
