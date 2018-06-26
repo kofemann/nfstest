@@ -256,7 +256,8 @@ class NFSUtil(Host):
                         # in case a READ or WRITE packet is selected by any
                         # of the other operations in the array
                         if op == OP_READ and rpc.type == 1:
-                            item.opread.resok.data = ""
+                            if item.status == NFS4_OK:
+                                item.opread.resok.data = ""
                         elif op == OP_WRITE and rpc.type == 0:
                             item.opwrite.data = ""
                         if not defexpr:
@@ -281,7 +282,8 @@ class NFSUtil(Host):
                     # Discard data from read and write packets
                     # so memory is not an issue
                     if procedure == NFSPROC3_READ and rpc.type == 1:
-                        pkt.nfs.opread.resok.data = ""
+                        if pkt.nfs.status == NFS3_OK:
+                            pkt.nfs.opread.resok.data = ""
                     elif procedure == NFSPROC3_WRITE and rpc.type == 0:
                         pkt.nfs.opwrite.data = ""
                 pktlist.append(pkt)
