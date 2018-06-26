@@ -179,27 +179,30 @@ class DelegTest(TestUtil):
             if len(self.testlist) == 0:
                 self.opts.error("no test to run, specify option --client for --runtest='%s'" % self.runtest)
 
-    def lock_file(self, fd, lock_type):
+    def lock_file(self, fd, lock_type, absfile):
         """Lock file given by the file descriptor.
 
            fd:
                Opened file descriptor of file
            lock_type:
                Lock type
+           absfile:
+               File path to display as debug info
         """
         lock_type = fcntl.F_RDLCK if lock_type == OPEN_DELEGATE_READ else fcntl.F_WRLCK
+        lock_str = "F_RDLCK" if lock_type == OPEN_DELEGATE_READ else "F_WRLCK"
         try:
-            self.dprint('DBG3', "Lock file (F_SETLKW) start=%d len=%d" % (self.lock_offset, self.lock_len))
+            self.dprint('DBG3', "Lock %s (F_SETLKW, %s) start=%d len=%d" % (absfile, lock_str, self.lock_offset, self.lock_len))
             lockdata = struct.pack('hhllhh', lock_type, 0, self.lock_offset, self.lock_len, 0, 0)
             rv = fcntl.fcntl(fd, fcntl.F_SETLKW, lockdata)
         except Exception as e:
             self.warning("Unable to get a lock on file: %r" % e)
 
-    def open_file(self, file, deleg_type, lock=False, pid=None, msg=''):
+    def open_file(self, absfile, deleg_type, lock=False, pid=None, msg=''):
         """Open file, lock it and do some I/O on the file.
            Return the file descriptor of the opened file.
 
-           file:
+           absfile:
                File name to open
            deleg_type:
                Delegation type to get
@@ -212,16 +215,18 @@ class DelegTest(TestUtil):
         """
         pidstr = " from a different process [pid: %d]" % pid if pid else ""
         msg = msg if len(msg) == 0 else " %s" % msg
-        self.dprint('DBG3', "Open file for %s [%s]%s%s" % (open_mode_str(deleg_type), file, pidstr, msg))
-        fd = os.open(file, open_mode(deleg_type))
+        self.dprint('DBG2', "Open %s for %s%s%s" % (absfile, open_mode_str(deleg_type), pidstr, msg))
+        fd = os.open(absfile, open_mode(deleg_type))
 
         if lock:
-            self.lock_file(fd, deleg_type)
+            self.lock_file(fd, deleg_type, absfile)
 
         # Read/Write file
         if deleg_type == OPEN_DELEGATE_READ:
+            self.dprint("DBG3", "Read %s%s%s" % (absfile, pidstr, msg))
             os.read(fd, self.rsize)
         else:
+            self.dprint("DBG3", "Write %s%s%s" % (absfile, pidstr, msg))
             os.write(fd, self.data_pattern(0, self.wsize, PATTERN))
         self.delay_io()
         return fd
@@ -231,7 +236,9 @@ class DelegTest(TestUtil):
         fdko = self.rexecobj.run(os.open, self.abspath(self.files[0]), os.O_RDONLY)
         self.dprint("DBG2", "Get a read delegation on the remote client [%s]" % self.absfile)
         fdrd = self.rexecobj.run(os.open, self.absfile, os.O_RDONLY)
+        self.dprint("DBG3", "Read %s on the remote client" % self.absfile)
         data = self.rexecobj.run(os.read, fdrd, 1024)
+        self.dprint("DBG4", "Close %s on the remote client" % self.absfile)
         self.rexecobj.run(os.close, fdrd)
         self.rexecobj.run(os.close, fdko)
 
@@ -266,7 +273,7 @@ class DelegTest(TestUtil):
 
         # Hold a file open so that the open owner sticks around
         # (bug on the client where OO's are reaped at close)
-        self.dprint('DBG3', "Open file %s so open owner sticks around" % self.abspath(self.files[0]))
+        self.dprint('DBG4', "Open %s so open owner sticks around" % self.abspath(self.files[0]))
         self.fdko = open(self.abspath(self.files[0]), 'r')
 
     def verify_io_requests(self, iomode, deleg_stid, filehandles, src_ipaddr=None, maxindex=None):
@@ -453,11 +460,11 @@ class DelegTest(TestUtil):
             self.setup_test(deleg_type, mount=True)
 
             # Open file, should get a DELEGATION
-            self.dprint('DBG3', "Open file for %s [%s]" % (open_mode_str(deleg_type), self.absfile))
+            self.dprint('DBG2', "Open %s for %s" % (self.absfile, open_mode_str(deleg_type)))
             fd = os.open(self.absfile, open_mode(deleg_type))
 
             if lock:
-                self.lock_file(fd, deleg_type)
+                self.lock_file(fd, deleg_type, self.absfile)
 
             iosize = int(self.filesize/2)
 
@@ -466,8 +473,10 @@ class DelegTest(TestUtil):
 
             # Read/Write file
             if deleg_type == OPEN_DELEGATE_READ:
+                self.dprint("DBG3", "Read %s on client holding delegation" % self.absfile)
                 os.read(fd, iosize)
             else:
+                self.dprint("DBG3", "Write %s on client holding delegation" % self.absfile)
                 os.write(fd, self.data_pattern(0, iosize, PATTERN))
             self.delay_io()
 
@@ -498,8 +507,10 @@ class DelegTest(TestUtil):
 
             # Read/Write file
             if deleg_type == OPEN_DELEGATE_READ:
+                self.dprint("DBG3", "Read %s on client holding delegation" % self.absfile)
                 os.read(fd, iosize)
             else:
+                self.dprint("DBG3", "Write %s on client holding delegation" % self.absfile)
                 os.write(fd, self.data_pattern(iosize, iosize, PATTERN))
             self.delay_io()
         except BaseName:
@@ -509,6 +520,7 @@ class DelegTest(TestUtil):
         finally:
             if fd:
                 # Close file
+                self.dprint('DBG4', "Close %s" % self.absfile)
                 os.close(fd)
             if self.fdko:
                 # Close open owner file
