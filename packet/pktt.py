@@ -946,7 +946,6 @@ class Pktt(BaseObj, Unpack):
         st = parser.expr(expr)
         smap = parser.st2list(st)
         pdata = self._convert_match(smap)
-        self.dprint('PKT1', ">>> %d: match(%s)" % (self.index, expr))
         self.reply_matched = False
         if self.pktlist is None:
             pkt_list   = self
@@ -954,10 +953,11 @@ class Pktt(BaseObj, Unpack):
         else:
             pkt_list   = self.pktlist
             save_index = self.pindex
+        self.dprint('PKT1', ">>> %d: match(%s)" % (save_index, expr))
 
         # Search one packet at a time
         for pkt in pkt_list:
-            if maxindex and self.index > maxindex:
+            if maxindex and pkt.record.index >= maxindex:
                 # Hit maxindex limit
                 break
             if self.pktlist is not None:
