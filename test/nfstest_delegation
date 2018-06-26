@@ -586,9 +586,10 @@ class DelegTest(TestUtil):
             # Find OPEN sent from the client right before returning the delegation
             (fh, op_stid2, deleg_stid2) = self.find_open(filename=self.filename, deleg_stateid=deleg_stid, src_ipaddr=self.client_ipaddr, fh=fh)
             open_index = self.pktt.get_index()
-            self.test(op_stid2 != None, "OPEN with CLAIM_DELEGATE_CUR is sent from client right before returning the %s delegation after CB_RECALL" % mode_str)
-            self.test(op_stid2 == op_stid, "OPEN stateid should be the same as the original OPEN stateid")
-            self.test(deleg_stid2 is None, "Delegation should not be granted when re-opening the file right before returning the %s delegation after CB_RECALL" % mode_str)
+            if fh is not None:
+                self.test(op_stid2 != None, "OPEN with CLAIM_DELEGATE_CUR is sent from client right before returning the %s delegation after CB_RECALL" % mode_str)
+                self.test(op_stid2 == op_stid, "OPEN stateid should be the same as the original OPEN stateid")
+                self.test(deleg_stid2 is None, "Delegation should not be granted when re-opening the file right before returning the %s delegation after CB_RECALL" % mode_str)
 
             if deleg_type == OPEN_DELEGATE_WRITE:
                 # Find out how much data has already been flushed right
