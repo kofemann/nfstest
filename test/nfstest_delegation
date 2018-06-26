@@ -295,7 +295,7 @@ class DelegTest(TestUtil):
                 extra_str = " with file stat"
             else:
                 extra_str = ""
-            self.test_group("Basic %s delegation tests%s" % (mode_str, extra_str))
+            self.test_group("Basic %s delegation test%s" % (mode_str, extra_str))
             self.setup_test(deleg_type, existing=existing)
 
             if stat:
@@ -356,6 +356,7 @@ class DelegTest(TestUtil):
 
         try:
             self.trace_open()
+            self.set_pktlist()
 
             filehandle = None
             if stat:
@@ -443,7 +444,7 @@ class DelegTest(TestUtil):
                 conflict_str = "OPEN (%s)" % open_mode_str(conflict_type)
                 conflict_op = OP_OPEN
             lock_str = " with file lock" if lock else ""
-            self.test_group("%s delegation recall tests%s -- recall with %s" % (mode_str, lock_str, conflict_str))
+            self.test_group("%s delegation recall test%s -- recall with %s" % (mode_str, lock_str, conflict_str))
 
             self.setup_test(deleg_type, mount=True)
 
@@ -510,6 +511,8 @@ class DelegTest(TestUtil):
 
         try:
             self.trace_open()
+            self.set_pktlist()
+
             (fh, op_stid, deleg_stid) = self.find_open(filename=self.filename, deleg_type=deleg_type, src_ipaddr=self.client_ipaddr)
             self.test(deleg_stid != None, "%s delegation should be granted" % mode_str)
             save_index = self.pktt.get_index()
