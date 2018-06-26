@@ -121,6 +121,10 @@ def open_mode_str(deleg_type):
     else:
         return 'WRITE'
 
+class BaseName(Exception):
+    """Exception used to stop recall tests when --basename option is set"""
+    pass
+
 class DelegTest(TestUtil):
     """DelegTest object
 
@@ -457,6 +461,9 @@ class DelegTest(TestUtil):
 
             iosize = int(self.filesize/2)
 
+            if len(self.basename) > 0:
+                raise BaseName
+
             # Read/Write file
             if deleg_type == OPEN_DELEGATE_READ:
                 os.read(fd, iosize)
@@ -495,7 +502,9 @@ class DelegTest(TestUtil):
             else:
                 os.write(fd, self.data_pattern(iosize, iosize, PATTERN))
             self.delay_io()
-        except Exception:
+        except BaseName:
+            pass
+        except:
             self.test(False, traceback.format_exc())
         finally:
             if fd:
