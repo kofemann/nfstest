@@ -1194,6 +1194,8 @@ class NFSUtil(Host):
             if xid in xids:
                 xids.remove(xid)
                 nfsop = pkt.NFSop
+                if nfsop.status != NFS4_OK:
+                    continue
 
                 self.test_counts.append(nfsop.count)
                 xid_counts.pop(xid, None)
