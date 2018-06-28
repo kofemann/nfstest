@@ -455,20 +455,16 @@ class NFSUtil(Host):
                 continue
 
             if claimfh is None:
-                # GETFH should be the operation following the OPEN,
-                # but look for it just in case it is not
-                idx = pktreply.NFSidx + 1
-                resarray = pktreply.nfs.array
-                while (idx < len(resarray) and resarray[idx].resop != OP_GETFH):
-                    idx += 1
-                if idx >= len(resarray):
-                    # Could not find GETFH
-                    if fh is None:
-                        return (None, None, None)
-                    else:
-                        filehandle = fh
+                # GETFH should be the operation following the OPEN
+                getfh_obj = self.getop(pktreply, OP_GETFH)
+                if getfh_obj:
+                    # Get the file handle for the file under test
+                    filehandle = getfh_obj.fh
+                elif fh is not None:
+                    # Could not find GETFH, set filehandle as the one given
+                    filehandle = fh
                 else:
-                    filehandle = pktreply.nfs.array[idx].fh
+                    return (None, None, None)
             else:
                 # No need to find GETFH, the filehandle is already known
                 filehandle = claimfh
