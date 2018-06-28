@@ -380,17 +380,14 @@ class DelegTest(TestUtil):
                         break
                 self.test(lookupcall, "LOOKUP operation should be sent")
                 if lookupreply:
-                    # GETFH should be the operation following the LOOKUP,
-                    # but look for it just in case it is not
-                    idx = lookupreply.NFSidx + 1
-                    resarray = lookupreply.nfs.array
-                    while (idx < len(resarray) and resarray[idx].resop != OP_GETFH):
-                        idx += 1
-                    if idx >= len(resarray):
+                    # GETFH should be the operation following the LOOKUP
+                    getfh_obj = self.getop(lookupreply, OP_GETFH)
+                    if getfh_obj:
+                        # Get the file handle for the file under test
+                        filehandle = getfh_obj.fh
+                    else:
                         # Could not find GETFH
                         self.test(False, "Could not find GETFH operation in the LOOKUP compound")
-                    # Get the file handle for the file under test
-                    filehandle = lookupreply.nfs.array[idx].fh
 
             (fh, op_stid, deleg_stid) = self.find_open(filename=self.filename, claimfh=filehandle, deleg_type=deleg_type, anyclaim=True)
             self.test(deleg_stid != None, "%s delegation should be granted" % mode_str)
