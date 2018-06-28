@@ -172,7 +172,6 @@ class DioTest(TestUtil):
             self.opts.error("invalid type given in --withdeleg [%s]" % self.withdeleg)
 
         self.fbuffers = []
-        self.PAGESIZE = os.sysconf(os.sysconf_names['SC_PAGESIZE'])
 
         # Prototypes for libc functions
         self.libc.malloc.argtypes = [ctypes.c_long]

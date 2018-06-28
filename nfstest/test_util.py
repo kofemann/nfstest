@@ -226,6 +226,9 @@ class TestUtil(NFSUtil):
         NFSUtil.__init__(self)
         self._init_options()
 
+        # Get page size
+        self.PAGESIZE = os.sysconf(os.sysconf_names['SC_PAGESIZE'])
+
         # Prototypes for libc functions
         self.libc.fallocate.argtypes = ctypes.c_int, ctypes.c_int, ctypes.c_ulong, ctypes.c_ulong
         self.libc.fallocate.restype  = ctypes.c_int

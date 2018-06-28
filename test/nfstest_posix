@@ -262,9 +262,6 @@ class PosixTest(TestUtil):
         if 'actimeo' not in self.mtopts:
             self.mtopts += ",actimeo=0"
 
-        # Get page size
-        self.PAGESIZE = os.sysconf(os.sysconf_names['SC_PAGESIZE'])
-
         # Clear umask
         os.umask(0)
 
