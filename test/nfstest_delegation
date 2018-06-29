@@ -555,8 +555,8 @@ class DelegTest(TestUtil):
             self.trace_open()
             self.set_pktlist()
 
-            (fh, op_stid, deleg_stid) = self.find_open(filename=self.filename, deleg_type=deleg_type, src_ipaddr=self.client_ipaddr)
-            self.verify_open(fh)
+            (open_fh, open_stid, deleg_stid) = self.find_open(filename=self.filename, deleg_type=deleg_type, src_ipaddr=self.client_ipaddr)
+            self.verify_open(open_fh)
             self.test(deleg_stid != None, "%s delegation should be granted" % mode_str)
             save_index = self.pktt.get_index()
             open1_index = save_index
@@ -564,8 +564,8 @@ class DelegTest(TestUtil):
                 # Delegation was not granted
                 return
 
-            filehandles = [fh]
-            self.find_layoutget(fh)
+            filehandles = [open_fh]
+            self.find_layoutget(open_fh)
             (devcall, devreply, dslist) = self.find_getdeviceinfo()
             self.pktt.rewind(save_index)
             if self.layout:
@@ -576,17 +576,37 @@ class DelegTest(TestUtil):
                 (fh1, op_stid1, deleg_stid1) = self.find_open(filename=self.filename, src_ipaddr=self.clientobj.ipaddr)
                 save_index = self.pktt.get_index()
 
+            # Find DELEGRETURN request and reply
+            (delegreturncall, delegreturnreply) = self.find_nfs_op(OP_DELEGRETURN, src_ipaddr=self.client_ipaddr)
+            if delegreturncall:
+                delegreturn_index = delegreturncall.record.index
+            self.pktt.rewind(save_index)
+
             # Find OPEN call from the second client
             src_other_client_str = self.pktt.ip_tcp_dst_expr(self.server_ipaddr, self.port) + " and IP.src == '%s' and " % self.clientobj.ipaddr
             conflict_match_str = src_other_client_str + "NFS.argop == %d" % conflict_op
             if conflict_op == OP_OPEN:
                 conflict_match_str += " and (NFS.claim.name == '%s' or" % self.filename
-                conflict_match_str += " (NFS.fh == '%s' and NFS.claim.claim == %d))" % (self.pktt.escape(fh), CLAIM_FH)
-            opencall = self.pktt.match(conflict_match_str)
+                conflict_match_str += " (NFS.fh == '%s' and NFS.claim.claim == %d))" % (self.pktt.escape(open_fh), CLAIM_FH)
+
+            openreply = None
+            while True:
+                opencall = self.pktt.match(conflict_match_str)
+                if opencall is None:
+                    break
+
+                # Make sure conflicting operation reply status from the
+                # second client is not NFS4ERR_DELAY
+                xid = opencall.rpc.xid
+                matchstr = "RPC.xid == %d and NFS.status in (%d, %d)" % (xid, NFS4_OK, NFS4ERR_DELAY)
+                openreply = self.pktt.match(matchstr, maxindex=delegreturn_index)
+                if openreply is None or openreply.nfs.status == NFS4_OK:
+                    break
+
             if opencall is None:
                 self.test(False, "%s should be sent from second client" % conflict_str)
                 return
-            conflict_index = self.pktt.get_index()
+            conflict_index = opencall.record.index + 1
 
             if deleg_type == OPEN_DELEGATE_READ:
                 self.pktt.rewind(save_index)
@@ -618,11 +638,11 @@ class DelegTest(TestUtil):
             self.test(cbcall.NFSop.stateid.other == deleg_stid, "CB_RECALL should recall %s delegation granted to client" % mode_str)
 
             # Find OPEN sent from the client right before returning the delegation
-            (fh, op_stid2, deleg_stid2) = self.find_open(filename=self.filename, deleg_stateid=deleg_stid, src_ipaddr=self.client_ipaddr, fh=fh)
+            (fh, op_stid2, deleg_stid2) = self.find_open(filename=self.filename, deleg_stateid=deleg_stid, src_ipaddr=self.client_ipaddr, fh=open_fh)
             open_index = self.pktt.get_index()
             if fh is not None:
                 self.test(op_stid2 != None, "OPEN with CLAIM_DELEGATE_CUR is sent from client right before returning the %s delegation after CB_RECALL" % mode_str)
-                self.test(op_stid2 == op_stid, "OPEN stateid should be the same as the original OPEN stateid")
+                self.test(op_stid2 == open_stid, "OPEN stateid should be the same as the original OPEN stateid")
                 self.test(deleg_stid2 is None, "Delegation should not be granted when re-opening the file right before returning the %s delegation after CB_RECALL" % mode_str)
 
             if deleg_type == OPEN_DELEGATE_WRITE:
@@ -640,11 +660,6 @@ class DelegTest(TestUtil):
                     self.test(True, "Client has already flushed all written data before CB_RECALL")
                 self.pktt.rewind(open_index)
 
-            # Find DELEGRETURN request and reply
-            (delegreturncall, delegreturnreply) = self.find_nfs_op(OP_DELEGRETURN, src_ipaddr=self.client_ipaddr)
-            if delegreturncall:
-                delegreturn_index = delegreturncall.record.index
-
             if lock and delegreturncall:
                 self.pktt.rewind(open_index)
                 # Find the LOCK before DELEGRETURN
@@ -656,18 +671,7 @@ class DelegTest(TestUtil):
                 return
             self.test(delegreturncall.NFSop.stateid.other == deleg_stid, "DELEGRETURN should return the %s delegation being recalled" % mode_str)
 
-            # Make sure OPEN reply from the second client has not been sent with NFS4ERR_DELAY
-            xid = opencall.rpc.xid
-            self.pktt.rewind(conflict_index)
-            reply = self.pktt.match("RPC.xid == %d and NFS.status == %d" % (xid, NFS4ERR_DELAY), maxindex=delegreturn_index)
             self.pktt.rewind(delegreturn_index)
-
-            if reply != None:
-                # Find OPEN call from the second client after NFS4ERR_DELAY
-                opencall = self.pktt.match(conflict_match_str)
-                if opencall is None:
-                    self.test(False, "%s call from the second client was not found" % conflict_str)
-                    return
 
             # Find OPEN reply from the second client
             xid = opencall.rpc.xid
