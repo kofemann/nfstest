@@ -463,7 +463,7 @@ class DelegTest(TestUtil):
             if lock:
                 self.lock_file(fd, deleg_type, self.absfile)
 
-            iosize = int(self.filesize/2)
+            iosize = int(self.PAGESIZE/2)
 
             if len(self.basename) > 0:
                 raise BaseName
@@ -505,10 +505,10 @@ class DelegTest(TestUtil):
             # Read/Write file
             if deleg_type == OPEN_DELEGATE_READ:
                 self.dprint("DBG3", "Read %s on client holding delegation" % self.absfile)
-                os.read(fd, iosize)
+                os.read(fd, self.filesize - iosize)
             else:
                 self.dprint("DBG3", "Write %s on client holding delegation" % self.absfile)
-                os.write(fd, self.data_pattern(iosize, iosize, PATTERN))
+                os.write(fd, self.data_pattern(iosize, self.filesize - iosize, PATTERN))
             self.delay_io()
         except BaseName:
             pass
