@@ -77,6 +77,12 @@ TESTNAMES_LOCAL = [
     "basic05",
     "basic06",
 ]
+TESTNAMES_SETATTR = [
+    "recall07",
+    "recall08",
+    "recall09",
+    "recall10",
+]
 TESTNAMES_REMOTE = [
     "recall01",
     "recall02",
@@ -84,15 +90,12 @@ TESTNAMES_REMOTE = [
     "recall04",
     "recall05",
     "recall06",
-    "recall07",
-    "recall08",
-    "recall09",
-    "recall10",
-]
+] + TESTNAMES_SETATTR
 
 # Include the test groups in the list of test names
 # so they are displayed in the help
-TESTNAMES = ["basic"] + TESTNAMES_LOCAL + ["recall"] + TESTNAMES_REMOTE
+TESTNAMES = ["basic"] + TESTNAMES_LOCAL + ["recall", "setattr"] \
+          + TESTNAMES_REMOTE
 
 TESTGROUPS = {
     "basic": {
@@ -102,6 +105,10 @@ TESTGROUPS = {
     "recall": {
          "tests": TESTNAMES_REMOTE,
          "desc": "Run all recall delegation tests: ",
+    },
+    "setattr": {
+         "tests": TESTNAMES_SETATTR,
+         "desc": "Run all tests using SETATTR to recall the delegation: ",
     },
 }
 
