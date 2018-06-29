@@ -242,12 +242,19 @@ class DelegTest(TestUtil):
         self.rexecobj.run(os.close, fdrd)
         self.rexecobj.run(os.close, fdko)
 
-    def setup_test(self, deleg_type, mount=False, existing=False):
+    def setup_test(self, deleg_type, mount=False, nfiles=0):
         """Setup test by mounting server and hold open a file so that the open
            owner sticks around so a delegation is granted on next open using
            the same open owner -- this is done to avoid a bug on the client
            where open owner is reaped at close
         """
+        if nfiles > 0:
+            self.umount()
+            self.mount()
+            # Create new files before starting the test
+            for i in range(nfiles):
+                self.create_file()
+
         self.umount()
         if mount and self.clientobj is not None:
             # Unmount server on remote client
@@ -259,17 +266,14 @@ class DelegTest(TestUtil):
             # Mount server on remote client
             self.clientobj.mount()
 
-        if deleg_type == OPEN_DELEGATE_READ:
-            # Use existing file
-            self.filename = self.files[1]
-            self.absfile = self.abspath(self.filename)
-        elif existing:
-            # Use existing file for writing
-            self.filename = self.files[2]
-            self.absfile = self.abspath(self.filename)
-        else:
-            # Create new file
-            self.get_filename()
+        if nfiles == 0:
+            if deleg_type == OPEN_DELEGATE_READ:
+                # Use existing file
+                self.filename = self.files[1]
+                self.absfile = self.abspath(self.filename)
+            else:
+                # Create new file
+                self.get_filename()
 
         # Hold a file open so that the open owner sticks around
         # (bug on the client where OO's are reaped at close)
@@ -294,7 +298,7 @@ class DelegTest(TestUtil):
             dsindex += 1
         return nio
 
-    def basic_deleg_test(self, deleg_type, lock=False, stat=False, existing=False):
+    def basic_deleg_test(self, deleg_type, lock=False, stat=False, nfiles=0):
         """Basic delegation tests"""
         try:
             fds = []
@@ -307,7 +311,7 @@ class DelegTest(TestUtil):
             else:
                 extra_str = ""
             self.test_group("Basic %s delegation test%s" % (mode_str, extra_str))
-            self.setup_test(deleg_type, existing=existing)
+            self.setup_test(deleg_type, nfiles=nfiles)
 
             if stat:
                 self.dprint('DBG3', "Stat file %s to cache file metadata" % self.absfile)
@@ -669,7 +673,7 @@ class DelegTest(TestUtil):
 
     def basic04_test(self):
         """Basic write delegation test with file stat"""
-        self.basic_deleg_test(OPEN_DELEGATE_WRITE, stat=True, existing=True)
+        self.basic_deleg_test(OPEN_DELEGATE_WRITE, stat=True, nfiles=1)
 
     def basic05_test(self):
         """Basic read delegation test with file lock"""
@@ -724,7 +728,7 @@ class DelegTest(TestUtil):
 x = DelegTest(usage=USAGE, testnames=TESTNAMES, testgroups=TESTGROUPS, sid=SCRIPT_ID)
 
 try:
-    x.setup(nfiles=3)
+    x.setup(nfiles=2)
 
     # Run all the tests
     x.run_tests()
