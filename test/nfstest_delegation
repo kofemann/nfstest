@@ -627,7 +627,11 @@ class DelegTest(TestUtil):
                 self.test(lockcall is None, "LOCK should not be sent to the server when holding a %s delegation on the file" % mode_str)
                 self.pktt.rewind(conflict_index)
 
-            self.test(opencall != None, "%s should be sent from second client" % conflict_str)
+            self.test(opencall, "%s should be sent from second client" % conflict_str)
+            if conflict_op == OP_SETATTR:
+                expr = opencall.NFSop.stateid.seqid == self.stateid_anonymous.seqid \
+                   and opencall.NFSop.stateid.other == self.stateid_anonymous.other
+                self.test(expr, "%s should be sent with the special anonymous stateid (0, 0)" % conflict_str)
 
             # Find CB_RECALL sent to client under test
             (cbcall, cbreply) = self.find_nfs_op(OP_CB_RECALL, ipaddr=self.client_ipaddr, port=None, src_ipaddr=self.server_ipaddr)
