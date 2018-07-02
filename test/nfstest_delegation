@@ -95,6 +95,10 @@ TESTNAMES_RENAME = [
     "recall16",
     "recall17",
     "recall18",
+    "recall19",
+    "recall20",
+    "recall21",
+    "recall22",
 ]
 TESTNAMES_REMOTE = [
     "recall01",
@@ -484,7 +488,7 @@ class DelegTest(TestUtil):
         except Exception:
             self.test(False, traceback.format_exc())
 
-    def recall_deleg_test(self, deleg_type, conflict_type=None, lock=False, nfiles=0):
+    def recall_deleg_test(self, deleg_type, conflict_type=None, lock=False, nfiles=0, target=False):
         """Delegation recall tests"""
         if self.clientobj is None:
             return
@@ -493,6 +497,7 @@ class DelegTest(TestUtil):
         try:
             fd = None
             self.fdko = None
+            target_str = ""
             mode_str = open_mode_str(deleg_type)
             if conflict_type is None:
                 # Conflict OPEN type for both READ and WRITE
@@ -506,11 +511,12 @@ class DelegTest(TestUtil):
             elif conflict_type == OP_RENAME:
                 conflict_str = "RENAME"
                 conflict_op = OP_RENAME
+                target_str = " (DST)" if target else " (SRC)"
             else:
                 conflict_str = "OPEN (%s)" % open_mode_str(conflict_type)
                 conflict_op = OP_OPEN
             lock_str = " with file lock" if lock else ""
-            self.test_group("%s delegation recall test%s -- recall with %s" % (mode_str, lock_str, conflict_str))
+            self.test_group("%s delegation recall test%s -- recall with %s%s" % (mode_str, lock_str, conflict_str, target_str))
 
             self.setup_test(deleg_type, mount=True, nfiles=nfiles)
 
@@ -548,14 +554,20 @@ class DelegTest(TestUtil):
                 self.dprint("DBG2", "Remove the file from another client to recall delegation [%s]" % self.absfile)
                 self.rexecobj.run(os.unlink, self.absfile)
             elif conflict_type == OP_RENAME:
-                aname = self.absfile
-                fname = self.filename
-                self.get_filename()
-                newname = self.absfile
-                self.absfile  = aname
-                self.filename = fname
-                self.dprint("DBG2", "Rename the file from another client to recall delegation [%s]" % self.absfile)
-                self.rexecobj.run(os.rename, self.absfile, newname)
+                if target:
+                    fname = self.files[-2]
+                    srcname = self.abspath(fname)
+                    self.dprint("DBG2", "Rename into the file (DST) from another client to recall delegation [%s]" % self.absfile)
+                    self.rexecobj.run(os.rename, srcname, self.absfile)
+                else:
+                    aname = self.absfile
+                    fname = self.filename
+                    self.get_filename()
+                    newname = self.absfile
+                    self.absfile  = aname
+                    self.filename = fname
+                    self.dprint("DBG2", "Rename the file (SRC) from another client to recall delegation [%s]" % self.absfile)
+                    self.rexecobj.run(os.rename, self.absfile, newname)
             elif conflict_type == OPEN_DELEGATE_READ:
                 self.dprint("DBG2", "Read same file from another client to recall delegation [%s]" % self.absfile)
                 fdrd = self.rexecobj.run(os.open, self.absfile, os.O_RDONLY)
@@ -586,7 +598,7 @@ class DelegTest(TestUtil):
                     dmsg = "Writing file after conflicting operation"
                     # Check for errors on the write since the server may return
                     # an error when the file has been removed by another client
-                    expfail = conflict_type == OP_REMOVE
+                    expfail = conflict_type == OP_REMOVE or (conflict_type == OP_RENAME and target)
                     os.write(fd, self.data_pattern(iosize, self.filesize - iosize, PATTERN))
                     # Flush data so if there is an error on a write it will
                     # happened here instead on the close
@@ -657,6 +669,8 @@ class DelegTest(TestUtil):
             if conflict_op == OP_OPEN:
                 conflict_match_str += " and (NFS.claim.name == '%s' or" % self.filename
                 conflict_match_str += " (NFS.fh == '%s' and NFS.claim.claim == %d))" % (self.pktt.escape(open_fh), CLAIM_FH)
+            elif target and conflict_op == OP_RENAME:
+                conflict_match_str += " and NFS.newname == '%s'" % self.filename
             elif conflict_op in [OP_REMOVE, OP_RENAME]:
                 conflict_match_str += " and NFS.name == '%s'" % self.filename
 
@@ -707,8 +721,12 @@ class DelegTest(TestUtil):
                 expr = opencall.NFSop.name == self.filename
                 self.test(expr, "%s should be sent with file holding the delegation as the name" % conflict_str)
             elif conflict_op == OP_RENAME:
-                expr = opencall.NFSop.name == self.filename
-                self.test(expr, "%s should be sent with file holding the delegation as the source" % conflict_str)
+                if target:
+                    expr = opencall.NFSop.newname == self.filename
+                    self.test(expr, "%s should be sent with file holding the delegation as the target" % conflict_str)
+                else:
+                    expr = opencall.NFSop.name == self.filename
+                    self.test(expr, "%s should be sent with file holding the delegation as the source" % conflict_str)
 
             # Find CB_RECALL sent to client under test
             (cbcall, cbreply) = self.find_nfs_op(OP_CB_RECALL, ipaddr=self.client_ipaddr, port=None, src_ipaddr=self.server_ipaddr)
@@ -860,6 +878,22 @@ class DelegTest(TestUtil):
     def recall18_test(self):
         """Recall write delegation by renaming the file with file lock"""
         self.recall_deleg_test(OPEN_DELEGATE_WRITE, conflict_type=OP_RENAME, nfiles=1, lock=True)
+
+    def recall19_test(self):
+        """Recall read delegation by renaming into the file"""
+        self.recall_deleg_test(OPEN_DELEGATE_READ, conflict_type=OP_RENAME, nfiles=2, target=True)
+
+    def recall20_test(self):
+        """Recall write delegation by renaming into the file"""
+        self.recall_deleg_test(OPEN_DELEGATE_WRITE, conflict_type=OP_RENAME, nfiles=2, target=True)
+
+    def recall21_test(self):
+        """Recall read delegation by renaming into the file with file lock"""
+        self.recall_deleg_test(OPEN_DELEGATE_READ, conflict_type=OP_RENAME, nfiles=2, target=True, lock=True)
+
+    def recall22_test(self):
+        """Recall write delegation by renaming into the file with file lock"""
+        self.recall_deleg_test(OPEN_DELEGATE_WRITE, conflict_type=OP_RENAME, nfiles=2, target=True, lock=True)
 
 ################################################################################
 # Entry point
