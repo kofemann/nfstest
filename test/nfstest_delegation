@@ -13,6 +13,7 @@
 # FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 #===============================================================================
 import os
+import errno
 import fcntl
 import struct
 import traceback
@@ -24,7 +25,7 @@ from nfstest.test_util import TestUtil
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.4"
+__version__   = "1.5"
 
 USAGE = """%prog --server <server> [--client <client>] [options]
 
@@ -83,6 +84,12 @@ TESTNAMES_SETATTR = [
     "recall09",
     "recall10",
 ]
+TESTNAMES_REMOVE = [
+    "recall11",
+    "recall12",
+    "recall13",
+    "recall14",
+]
 TESTNAMES_REMOTE = [
     "recall01",
     "recall02",
@@ -90,11 +97,11 @@ TESTNAMES_REMOTE = [
     "recall04",
     "recall05",
     "recall06",
-] + TESTNAMES_SETATTR
+] + TESTNAMES_SETATTR + TESTNAMES_REMOVE
 
 # Include the test groups in the list of test names
 # so they are displayed in the help
-TESTNAMES = ["basic"] + TESTNAMES_LOCAL + ["recall", "setattr"] \
+TESTNAMES = ["basic"] + TESTNAMES_LOCAL + ["recall", "setattr", "remove"] \
           + TESTNAMES_REMOTE
 
 TESTGROUPS = {
@@ -109,6 +116,10 @@ TESTGROUPS = {
     "setattr": {
          "tests": TESTNAMES_SETATTR,
          "desc": "Run all tests using SETATTR to recall the delegation: ",
+    },
+    "remove": {
+         "tests": TESTNAMES_REMOVE,
+         "desc": "Run all tests recalling the delegation by removing the delegated file: ",
     },
 }
 
@@ -463,7 +474,7 @@ class DelegTest(TestUtil):
         except Exception:
             self.test(False, traceback.format_exc())
 
-    def recall_deleg_test(self, deleg_type, conflict_type=None, lock=False):
+    def recall_deleg_test(self, deleg_type, conflict_type=None, lock=False, nfiles=0):
         """Delegation recall tests"""
         if self.clientobj is None:
             return
@@ -479,13 +490,16 @@ class DelegTest(TestUtil):
             if conflict_type == OP_SETATTR:
                 conflict_str = "SETATTR (chmod)"
                 conflict_op = OP_SETATTR
+            elif conflict_type == OP_REMOVE:
+                conflict_str = "REMOVE"
+                conflict_op = OP_REMOVE
             else:
                 conflict_str = "OPEN (%s)" % open_mode_str(conflict_type)
                 conflict_op = OP_OPEN
             lock_str = " with file lock" if lock else ""
             self.test_group("%s delegation recall test%s -- recall with %s" % (mode_str, lock_str, conflict_str))
 
-            self.setup_test(deleg_type, mount=True)
+            self.setup_test(deleg_type, mount=True, nfiles=nfiles)
 
             # Open file, should get a DELEGATION
             self.dprint('DBG2', "Open %s for %s" % (self.absfile, open_mode_str(deleg_type)))
@@ -517,6 +531,9 @@ class DelegTest(TestUtil):
             if conflict_type == OP_SETATTR:
                 self.dprint("DBG2", "Change the permissions on file from another client to recall delegation [%s]" % self.absfile)
                 self.rexecobj.run(os.chmod, self.absfile, 0777)
+            elif conflict_type == OP_REMOVE:
+                self.dprint("DBG2", "Remove the file from another client to recall delegation [%s]" % self.absfile)
+                self.rexecobj.run(os.unlink, self.absfile)
             elif conflict_type == OPEN_DELEGATE_READ:
                 self.dprint("DBG2", "Read same file from another client to recall delegation [%s]" % self.absfile)
                 fdrd = self.rexecobj.run(os.open, self.absfile, os.O_RDONLY)
@@ -533,13 +550,36 @@ class DelegTest(TestUtil):
                 count = self.rexecobj.run(os.write, fdwr, self.data_pattern(0, 1024, "X"))
                 self.rexecobj.run(os.close, fdwr)
 
-            # Read/Write file
-            if deleg_type == OPEN_DELEGATE_READ:
-                self.dprint("DBG3", "Read %s on client holding delegation" % self.absfile)
-                os.read(fd, self.filesize - iosize)
-            else:
-                self.dprint("DBG3", "Write %s on client holding delegation" % self.absfile)
-                os.write(fd, self.data_pattern(iosize, self.filesize - iosize, PATTERN))
+            try:
+                fmsg = ""
+                # Read/Write file
+                if deleg_type == OPEN_DELEGATE_READ:
+                    self.dprint("DBG3", "Read %s on client holding delegation" % self.absfile)
+                    dmsg = "Reading file after conflicting operation"
+                    # Read should not fail
+                    expfail = False
+                    os.read(fd, self.filesize - iosize)
+                else:
+                    self.dprint("DBG3", "Write %s on client holding delegation" % self.absfile)
+                    dmsg = "Writing file after conflicting operation"
+                    # Check for errors on the write since the server may return
+                    # an error when the file has been removed by another client
+                    expfail = conflict_type == OP_REMOVE
+                    os.write(fd, self.data_pattern(iosize, self.filesize - iosize, PATTERN))
+                    # Flush data so if there is an error on a write it will
+                    # happened here instead on the close
+                    os.fdatasync(fd)
+            except OSError as exerr:
+                if expfail:
+                    expected = errno.errorcode[errno.ESTALE]
+                    error = errno.errorcode[exerr.errno]
+                    fmsg =  ": expecting %s, got %s" % (expected, error)
+                    self.dprint("DBG4", "%s returns: %s" % (dmsg, str(exerr)))
+                    self.test(exerr.errno == errno.ESTALE, "%s may return an error" % dmsg, failmsg=fmsg)
+                else:
+                    fmsg = ", failed with %s" % exerr
+            if not expfail:
+                self.test(len(fmsg) == 0, "%s should succeed" % dmsg, failmsg=fmsg)
             self.delay_io()
         except BaseName:
             pass
@@ -595,6 +635,8 @@ class DelegTest(TestUtil):
             if conflict_op == OP_OPEN:
                 conflict_match_str += " and (NFS.claim.name == '%s' or" % self.filename
                 conflict_match_str += " (NFS.fh == '%s' and NFS.claim.claim == %d))" % (self.pktt.escape(open_fh), CLAIM_FH)
+            elif conflict_op == OP_REMOVE:
+                conflict_match_str += " and NFS.name == '%s'" % self.filename
 
             openreply = None
             while True:
@@ -639,6 +681,9 @@ class DelegTest(TestUtil):
                 expr = opencall.NFSop.stateid.seqid == self.stateid_anonymous.seqid \
                    and opencall.NFSop.stateid.other == self.stateid_anonymous.other
                 self.test(expr, "%s should be sent with the special anonymous stateid (0, 0)" % conflict_str)
+            elif conflict_op == OP_REMOVE:
+                expr = opencall.NFSop.name == self.filename
+                self.test(expr, "%s should be sent with file holding the delegation as the name" % conflict_str)
 
             # Find CB_RECALL sent to client under test
             (cbcall, cbreply) = self.find_nfs_op(OP_CB_RECALL, ipaddr=self.client_ipaddr, port=None, src_ipaddr=self.server_ipaddr)
@@ -758,6 +803,22 @@ class DelegTest(TestUtil):
     def recall10_test(self):
         """Recall write delegation by changing the permissions to the file with file lock"""
         self.recall_deleg_test(OPEN_DELEGATE_WRITE, conflict_type=OP_SETATTR, lock=True)
+
+    def recall11_test(self):
+        """Recall read delegation by removing the file"""
+        self.recall_deleg_test(OPEN_DELEGATE_READ, conflict_type=OP_REMOVE, nfiles=1)
+
+    def recall12_test(self):
+        """Recall write delegation by removing the file"""
+        self.recall_deleg_test(OPEN_DELEGATE_WRITE, conflict_type=OP_REMOVE, nfiles=1)
+
+    def recall13_test(self):
+        """Recall read delegation by removing the file with file lock"""
+        self.recall_deleg_test(OPEN_DELEGATE_READ, conflict_type=OP_REMOVE, nfiles=1, lock=True)
+
+    def recall14_test(self):
+        """Recall write delegation by removing the file with file lock"""
+        self.recall_deleg_test(OPEN_DELEGATE_WRITE, conflict_type=OP_REMOVE, nfiles=1, lock=True)
 
 ################################################################################
 # Entry point
