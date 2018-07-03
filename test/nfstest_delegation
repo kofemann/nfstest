@@ -598,6 +598,20 @@ class DelegTest(TestUtil):
                     unique_io_list = sorted(set(self.test_offsets))
                     expr = len(self.test_offsets) == len(unique_io_list)
                     self.test(expr, "%s should not be sent when reading delegated file from a different process" % mode_str)
+
+            # Find CLOSE request and reply
+            self.pktt.rewind(save_index)
+            match_str = "NFS.fh == '%s'" % self.pktt.escape(fh)
+            (closecall, closereply) = self.find_nfs_op(OP_CLOSE, src_ipaddr=self.client_ipaddr, match=match_str)
+
+            if closecall:
+                # Find DELEGRETURN request and reply
+                self.pktt.rewind(closecall.record.index)
+                (delegreturncall, delegreturnreply) = self.find_nfs_op(OP_DELEGRETURN, src_ipaddr=self.client_ipaddr, match=match_str)
+                self.test(delegreturncall, "DELEGRETURN should be sent after the close")
+                if delegreturncall:
+                    expr = delegreturncall.NFSop.stateid.other == deleg_stid
+                    self.test(expr, "DELEGRETURN should be sent with the delegation stateid")
         except Exception:
             self.test(False, traceback.format_exc())
 
