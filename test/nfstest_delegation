@@ -139,6 +139,15 @@ TESTGROUPS = {
 
 PATTERN = 'FF00'
 
+OPEN_STID  = 0
+LOCK_STID  = 1
+DELEG_STID = 2
+stid_map = {
+    OPEN_STID  : "OPEN",
+    LOCK_STID  : "LOCK",
+    DELEG_STID : "DELEG",
+}
+
 def open_mode(deleg_type):
     """Open mode according to delegation type."""
     if deleg_type == OPEN_DELEGATE_READ:
@@ -349,6 +358,115 @@ class DelegTest(TestUtil):
             expr = self.opencall.NFSop.fh != fh
             self.test(expr, "OPEN should be sent with the filehandle of the directory")
 
+    def find_ios(self, op_type, filehandle, ipaddr, port):
+        """Return a list of all I/O packets"""
+        ret = {}
+        # Matched all packets sent to the server given by ipaddr and port
+        src = "IP.src == '%s' and " % self.client_ipaddr
+        dst = self.pktt.ip_tcp_dst_expr(ipaddr, port)
+        fh  = " and NFS.fh == '%s' and " % self.pktt.escape(filehandle)
+        matchstr = src + dst + fh + "NFS.argop == %d" % op_type
+
+        save_index = self.pktt.get_index()
+        self.pktt.clear_xid_list()
+        try:
+            # Matched all I/O packets and their replies
+            while self.pktt.match(matchstr, reply=True):
+                pkt = self.pktt.pkt
+                xid = pkt.rpc.xid
+                if pkt.rpc.type == 0:
+                    # Save I/O call info
+                    nfsop = pkt.NFSop
+                    info = {
+                        "stateid": nfsop.stateid,
+                        "count":   nfsop.count,
+                        "nfsidx":  pkt.NFSidx,
+                        "callidx": pkt.record.index,
+                    }
+                    if ret.get(xid) is None:
+                        ret[xid] = info
+                    else:
+                        ret[xid].update(info)
+                else:
+                    # Save I/O reply status
+                    idx = ret[xid].get("nfsidx")
+                    if idx is not None and len(pkt.nfs.array) > idx:
+                        nfsop = pkt.nfs.array[idx]
+                        ret[xid]["status"] = nfsop.status
+        except:
+            self.test(False, traceback.format_exc())
+        finally:
+            self.pktt.rewind(save_index)
+        # Return the list of I/O packets having status values
+        return [item for item in ret.values() if item.get("status") is not None]
+
+    def find_io_counts(self, io_list, stateid, status):
+        """Return the number of matched stateid and matched status packets"""
+        stid = 0  # Number of I/O packets matching the stateid
+        stat = 0  # Number of I/O packets matching the status
+        okct = 0  # Number of I/O packets with status = NFS4_OK
+        for item in io_list:
+            istatus = item.get('status')
+            if istatus is None:
+                continue
+            if item.get('stateid') == stateid:
+                stid += 1
+            if istatus == status:
+                stat += 1
+            if istatus == NFS4_OK:
+                okct += 1
+        return (stid, stat, okct)
+
+    def verify_io_per_server(self, io_list, op_type, stid_type, stateid, status, ds=False, delegret=False):
+        """Verify I/O packets for a given server"""
+        dr_str = " after returning the delegation" if delegret else ""
+        io_str = "READ" if op_type == OP_READ else "WRITE"
+        st_str = stid_map.get(stid_type)
+        sv_str = "server"
+        if self.layout and self.dslist:
+            sv_str = "DS" if ds else "MDS"
+
+        if io_list:
+            nlen = len(io_list)
+            (stid, stat, okct) = self.find_io_counts(io_list, stateid, status[0])
+            self.test(stid == nlen, "%ss should be sent to the %s with the %s stateid%s" % (io_str, sv_str, st_str, dr_str))
+            if delegret and okct == nlen and stat == 0:
+                # The RFC allows servers to process I/O operations successfully
+                # when the file has been removed. In this case all I/O operations
+                # have succeeded but an error was expected for those servers
+                # failing I/O operations when the file is removed.
+                self.test(True, "%ss may return NFS4_OK from the %s%s" % (io_str, sv_str, dr_str))
+            else:
+                # Check if all I/O operations returned one of the expected
+                # status codes
+                idx = 0
+                if stat != nlen:
+                    for i in range(1, len(status)):
+                        (stid, stat, okct) = self.find_io_counts(io_list, stateid, status[i])
+                        if stat == nlen:
+                            idx = i
+                            break
+                self.test(stat == nlen, "%ss should return %s from the %s%s" % (io_str, nfsstat4.get(status[idx], status[idx]), sv_str, dr_str))
+
+    def verify_io_packets(self, deleg_type, open_fh, stid_type, stateid, status=[NFS4_OK], ds_status=[NFS4_OK], delegret=False):
+        """Verify I/O packets"""
+        io_list = []
+        op_type =  OP_READ if deleg_type == OPEN_DELEGATE_READ else OP_WRITE
+        if self.layout and self.dslist:
+            # Get I/O packets sent to the DS
+            dsindex = 0
+            for fh in self.layout['filehandles']:
+                for item in self.dslist[dsindex]:
+                    if item is not None:
+                        io_list += self.find_ios(op_type, fh, item['ipaddr'], item['port'])
+                dsindex += 1
+        # Verify I/O packets sent to the DS
+        self.verify_io_per_server(io_list, op_type, stid_type, stateid, ds_status, ds=True, delegret=delegret)
+
+        # Verify I/O packets sent to the server (or MDS if pNFS is available)
+        io_list = self.find_ios(op_type, open_fh, self.server_ipaddr, self.port)
+        self.verify_io_per_server(io_list, op_type, stid_type, stateid, status, delegret=delegret)
+
     def basic_deleg_test(self, deleg_type, lock=False, stat=False, nfiles=0):
         """Basic delegation tests"""
         try:
@@ -459,32 +577,27 @@ class DelegTest(TestUtil):
             if self.layout:
                 filehandles = self.layout['filehandles']
 
-            # Find any other OPEN's for the same file
+            # Find any other OPENs for the same file
             olist = self.find_open(filename=self.filename)
-            self.test(olist[0] is None, "OPEN's should not be sent for the same file")
-
-            # Rewind trace file to saved packet index
-            self.pktt.rewind(save_index)
-            nio = self.verify_io_requests(deleg_type, deleg_stid, filehandles, src_ipaddr=self.client_ipaddr)
-            if nio > 0:
-                self.test(self.test_stateid, "%s stateid should be the DELEG stateid" % mode_str)
-                if deleg_type == OPEN_DELEGATE_READ:
-                    unique_io_list = sorted(set(self.test_offsets))
-                    self.test(len(self.test_offsets) == len(unique_io_list), "%s's should not be sent when reading delegated file from a different process" % mode_str)
-            else:
-                self.test(False, "%s's should be sent to server" % mode_str)
-
-            # Rewind trace file to saved packet index
-            self.pktt.rewind(save_index)
-            if deleg_type == OPEN_DELEGATE_WRITE:
-                nio = self.verify_io_requests(OPEN_DELEGATE_READ, deleg_stid, filehandles, src_ipaddr=self.client_ipaddr)
-                #self.test(nio == 0, "READ's should not be sent to the server")
+            self.test(olist[0] is None, "OPEN should not be sent for the same file")
 
             if lock:
                 # Rewind trace file
                 self.pktt.rewind()
                 (lockcall, lockreply) = self.find_nfs_op(OP_LOCK, src_ipaddr=self.client_ipaddr)
                 self.test(lockcall is None, "LOCK should not be sent to the server")
+
+            # Verify I/O packets
+            self.verify_io_packets(deleg_type, fh, DELEG_STID, deleg_stid)
+
+            # Rewind trace file to saved packet index
+            if deleg_type == OPEN_DELEGATE_READ:
+                self.pktt.rewind(save_index)
+                nio = self.verify_io_requests(deleg_type, deleg_stid, filehandles, src_ipaddr=self.client_ipaddr)
+                if nio > 0:
+                    unique_io_list = sorted(set(self.test_offsets))
+                    expr = len(self.test_offsets) == len(unique_io_list)
+                    self.test(expr, "%s should not be sent when reading delegated file from a different process" % mode_str)
         except Exception:
             self.test(False, traceback.format_exc())
 
@@ -751,7 +864,7 @@ class DelegTest(TestUtil):
                 nio = self.verify_io_requests(deleg_type, deleg_stid, filehandles, src_ipaddr=self.client_ipaddr, maxindex=cbrecall_index)
                 if iosize > sum(self.test_counts):
                     # Not all data has been flushed,
-                    # so find the WRITE's before DELEGRETURN
+                    # so find the WRITEs before DELEGRETURN
                     self.pktt.rewind(cbrecall_index)
                     nio = self.verify_io_requests(deleg_type, deleg_stid, filehandles, src_ipaddr=self.client_ipaddr, maxindex=open_index)
                     self.test(nio > 0, "Client flushes written data before returning the WRITE delegation")
@@ -759,11 +872,14 @@ class DelegTest(TestUtil):
                     self.test(True, "Client has already flushed all written data before CB_RECALL")
                 self.pktt.rewind(open_index)
 
+            lock_stid = None
             if lock and delegreturncall:
                 self.pktt.rewind(open_index)
                 # Find the LOCK before DELEGRETURN
                 (lockcall, lockreply) = self.find_nfs_op(OP_LOCK, src_ipaddr=self.client_ipaddr, maxindex=delegreturn_index)
                 self.test(lockcall != None, "LOCK is sent to the server right before returning the %s delegation" % mode_str)
+                if lockreply and lockreply.nfs.status == NFS4_OK:
+                    lock_stid = lockreply.NFSop.stateid.other
 
             self.test(delegreturncall != None, "DELEGRETURN should be sent from client right after re-opening the file")
             if delegreturncall is None:
@@ -778,8 +894,20 @@ class DelegTest(TestUtil):
             self.test(openreply != None, "%s reply should be sent to the second client after the %s delegation has been returned" % (conflict_str, mode_str))
             if openreply is None:
                 return
+            mds_stat = [NFS4_OK]
+            ds_stat  = [NFS4_OK]
+            stateid = lock_stid if lock else open_stid
             if conflict_op == OP_OPEN:
                 self.test(openreply.NFSop.delegation.deleg_type == OPEN_DELEGATE_NONE, "Delegation should not be granted for the second client")
+            elif conflict_op == OP_REMOVE or (conflict_op == OP_RENAME and target):
+                if deleg_type == OPEN_DELEGATE_WRITE:
+                    ds_stat = [NFS4ERR_STALE, NFS4ERR_BAD_STATEID]
+                else:
+                    ds_stat = [NFS4ERR_BAD_STATEID]
+                mds_stat = [NFS4ERR_STALE]
+
+            # Verify I/O packets
+            self.verify_io_packets(deleg_type, open_fh, lock, stateid, status=mds_stat, ds_status=ds_stat, delegret=True)
         except Exception:
             self.test(False, traceback.format_exc())
 
