@@ -674,42 +674,54 @@ class DelegTest(TestUtil):
                 # Other READ opens will not recall the delegation
                 self.get_deleg_remote()
 
-            if conflict_type == OP_SETATTR:
-                self.dprint("DBG2", "Change the permissions on file from another client to recall delegation [%s]" % self.absfile)
-                self.rexecobj.run(os.chmod, self.absfile, 0777)
-            elif conflict_type == OP_REMOVE:
-                self.dprint("DBG2", "Remove the file from another client to recall delegation [%s]" % self.absfile)
-                self.rexecobj.run(os.unlink, self.absfile)
-            elif conflict_type == OP_RENAME:
-                if target:
-                    fname = self.files[-2]
-                    srcname = self.abspath(fname)
-                    self.dprint("DBG2", "Rename into the file (DST) from another client to recall delegation [%s]" % self.absfile)
-                    self.rexecobj.run(os.rename, srcname, self.absfile)
+            try:
+                fmsg = ""
+                if conflict_type == OP_SETATTR:
+                    dmsg = "Change permissions on the file from another client"
+                    self.dprint("DBG2", "%s to recall delegation [%s]" % (dmsg, self.absfile))
+                    self.rexecobj.run(os.chmod, self.absfile, 0777)
+                elif conflict_type == OP_REMOVE:
+                    dmsg = "Remove the file from another client"
+                    self.dprint("DBG2", "%s to recall delegation [%s]" % (dmsg, self.absfile))
+                    self.rexecobj.run(os.unlink, self.absfile)
+                elif conflict_type == OP_RENAME:
+                    if target:
+                        fname = self.files[-2]
+                        srcname = self.abspath(fname)
+                        dmsg = "Rename into the file (DST) from another client"
+                        self.dprint("DBG2", "%s to recall delegation [%s]" % (dmsg, self.absfile))
+                        self.rexecobj.run(os.rename, srcname, self.absfile)
+                    else:
+                        aname = self.absfile
+                        fname = self.filename
+                        self.get_filename()
+                        newname = self.absfile
+                        self.absfile  = aname
+                        self.filename = fname
+                        dmsg = "Rename the file (SRC) from another client"
+                        self.dprint("DBG2", "%s to recall delegation [%s]" % (dmsg, self.absfile))
+                        self.rexecobj.run(os.rename, self.absfile, newname)
+                elif conflict_type == OPEN_DELEGATE_READ:
+                    dmsg = "Read same file from another client"
+                    self.dprint("DBG2", "%s to recall delegation [%s]" % (dmsg, self.absfile))
+                    fdrd = self.rexecobj.run(os.open, self.absfile, os.O_RDONLY)
+                    data = self.rexecobj.run(os.read, fdrd, 1024)
+                    self.rexecobj.run(os.close, fdrd)
+                elif self.truncate:
+                    dmsg = "Write same file (truncate before writing) from another client"
+                    self.dprint("DBG2", "%s to recall delegation [%s]" % (dmsg, self.absfile))
+                    fdwr  = self.rexecobj.run(os.open, self.absfile, os.O_WRONLY|os.O_TRUNC)
+                    count = self.rexecobj.run(os.write, fdwr, self.data_pattern(0, 1024, "x"))
+                    self.rexecobj.run(os.close, fdwr)
                 else:
-                    aname = self.absfile
-                    fname = self.filename
-                    self.get_filename()
-                    newname = self.absfile
-                    self.absfile  = aname
-                    self.filename = fname
-                    self.dprint("DBG2", "Rename the file (SRC) from another client to recall delegation [%s]" % self.absfile)
-                    self.rexecobj.run(os.rename, self.absfile, newname)
-            elif conflict_type == OPEN_DELEGATE_READ:
-                self.dprint("DBG2", "Read same file from another client to recall delegation [%s]" % self.absfile)
-                fdrd = self.rexecobj.run(os.open, self.absfile, os.O_RDONLY)
-                data = self.rexecobj.run(os.read, fdrd, 1024)
-                self.rexecobj.run(os.close, fdrd)
-            elif self.truncate:
-                self.dprint("DBG2", "Write same file from another client to recall delegation, truncate before writing [%s]" % self.absfile)
-                fdwr  = self.rexecobj.run(os.open, self.absfile, os.O_WRONLY|os.O_TRUNC)
-                count = self.rexecobj.run(os.write, fdwr, self.data_pattern(0, 1024, "x"))
-                self.rexecobj.run(os.close, fdwr)
-            else:
-                self.dprint("DBG2", "Write same file from another client to recall delegation [%s]" % self.absfile)
-                fdwr  = self.rexecobj.run(os.open, self.absfile, os.O_WRONLY|os.O_APPEND)
-                count = self.rexecobj.run(os.write, fdwr, self.data_pattern(0, 1024, "X"))
-                self.rexecobj.run(os.close, fdwr)
+                    dmsg = "Write same file from another client"
+                    self.dprint("DBG2", "%s to recall delegation [%s]" % (dmsg, self.absfile))
+                    fdwr  = self.rexecobj.run(os.open, self.absfile, os.O_WRONLY|os.O_APPEND)
+                    count = self.rexecobj.run(os.write, fdwr, self.data_pattern(0, 1024, "X"))
+                    self.rexecobj.run(os.close, fdwr)
+            except OSError as exerr:
+                fmsg = ", failed with %s" % exerr
+            self.test(len(fmsg) == 0, "%s should succeed" % dmsg, failmsg=fmsg)
 
             try:
                 fmsg = ""
