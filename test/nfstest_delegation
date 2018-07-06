@@ -205,6 +205,9 @@ class DelegTest(TestUtil):
                 isremote = True
                 break
 
+        # Local rexec object
+        self.lexecobj = None
+
         if self.client is not None and isremote:
             self.create_host(self.client)
             self.create_rexec(self.client)
@@ -239,7 +242,7 @@ class DelegTest(TestUtil):
         except Exception as e:
             self.warning("Unable to get a lock on file: %r" % e)
 
-    def open_file(self, absfile, deleg_type, lock=False, pid=None, msg=''):
+    def open_file(self, absfile, deleg_type, lock=False, lexec=False, msg=''):
         """Open file, lock it and do some I/O on the file.
            Return the file descriptor of the opened file.
 
@@ -249,26 +252,50 @@ class DelegTest(TestUtil):
                Delegation type to get
            lock:
                Get a lock on the file if true [default: False]
-           pid:
-               Process ID to differentiate between different processes [default: None]
+           lexec:
+               Use different process to open file [default: False]
            msg:
                Message to append on debug message [default: '']
         """
-        pidstr = " from a different process [pid: %d]" % pid if pid else ""
+        pidstr = " from a different process" if lexec else ""
         msg = msg if len(msg) == 0 else " %s" % msg
-        self.dprint('DBG2', "Open %s for %s%s%s" % (absfile, open_mode_str(deleg_type), pidstr, msg))
-        fd = os.open(absfile, open_mode(deleg_type))
+        mode_str = open_mode_str(deleg_type)
+
+        try:
+            fmsg = ""
+            dmsg = "Open file for %s%s%s" % (mode_str, pidstr, msg)
+            self.dprint('DBG2', "%s [%s]" % (dmsg, absfile))
+            if lexec:
+                fd = self.lexecobj.run(os.open, absfile, open_mode(deleg_type))
+            else:
+                fd = os.open(absfile, open_mode(deleg_type))
+        except OSError as exerr:
+            fmsg = ", failed with %s" % exerr
+        self.test(len(fmsg) == 0, "%s should succeed" % dmsg, failmsg=fmsg)
 
         if lock:
             self.lock_file(fd, deleg_type, absfile)
 
-        # Read/Write file
-        if deleg_type == OPEN_DELEGATE_READ:
-            self.dprint("DBG3", "Read %s%s%s" % (absfile, pidstr, msg))
-            os.read(fd, self.rsize)
-        else:
-            self.dprint("DBG3", "Write %s%s%s" % (absfile, pidstr, msg))
-            os.write(fd, self.data_pattern(0, self.wsize, PATTERN))
+        try:
+            fmsg = ""
+            dmsg = "%s file%s%s" % (mode_str.capitalize(), pidstr, msg)
+            self.dprint("DBG3", "%s [%s]" % (dmsg, absfile))
+            # Read/Write file
+            if deleg_type == OPEN_DELEGATE_READ:
+                if lexec:
+                    self.lexecobj.run(os.read, fd, self.rsize)
+                else:
+                    os.read(fd, self.rsize)
+            else:
+                data = self.data_pattern(0, self.wsize, PATTERN)
+                if lexec:
+                    self.lexecobj.run(os.write, fd, data)
+                else:
+                    os.write(fd, data)
+        except OSError as exerr:
+            fmsg = ", failed with %s" % exerr
+        self.test(len(fmsg) == 0, "%s should succeed" % dmsg, failmsg=fmsg)
+
         self.delay_io()
         return fd
 
@@ -283,7 +310,7 @@ class DelegTest(TestUtil):
         self.rexecobj.run(os.close, fdrd)
         self.rexecobj.run(os.close, fdko)
 
-    def setup_test(self, deleg_type, mount=False, nfiles=0):
+    def setup_test(self, deleg_type, mount=False, nfiles=0, lexec=False):
         """Setup test by mounting server and hold open a file so that the open
            owner sticks around so a delegation is granted on next open using
            the same open owner -- this is done to avoid a bug on the client
@@ -300,6 +327,12 @@ class DelegTest(TestUtil):
         if mount and self.clientobj is not None:
             # Unmount server on remote client
             self.clientobj.umount()
+
+        if lexec and self.lexecobj is None:
+            # Start local rexec connection just once
+            rexecobj_save = self.rexecobj
+            self.lexecobj = self.create_rexec()
+            self.rexecobj = rexecobj_save
 
         self.trace_start()
         self.mount()
@@ -480,7 +513,7 @@ class DelegTest(TestUtil):
             else:
                 extra_str = ""
             self.test_group("Basic %s delegation test%s" % (mode_str, extra_str))
-            self.setup_test(deleg_type, nfiles=nfiles)
+            self.setup_test(deleg_type, nfiles=nfiles, lexec=True)
 
             if stat:
                 self.dprint('DBG3', "Stat file %s to cache file metadata" % self.absfile)
@@ -497,34 +530,13 @@ class DelegTest(TestUtil):
                 fds.append(self.open_file(self.absfile, deleg_type, msg="on same process"))
 
             # Access file from a different process
-            pid = os.fork()
-            if pid == 0:
-                try:
-                    ret = 1
-                    # Open same file on different process for reading
-                    fd = self.open_file(self.absfile, OPEN_DELEGATE_READ, pid=os.getpid())
-                    os.close(fd)
-                    ret = 0
-                finally:
-                    os._exit(ret)
-            (pid, out) = os.waitpid(pid, 0)
-            if out:
-               raise Exception("Unable to read file from a different process [pid: %d]" % pid)
+            fd = self.open_file(self.absfile, OPEN_DELEGATE_READ, lexec=True)
+            self.lexecobj.run(os.close, fd)
 
             if deleg_type == OPEN_DELEGATE_WRITE:
-                pid = os.fork()
-                if pid == 0:
-                    try:
-                        ret = 1
-                        # Open same file on different process for writing
-                        fd = self.open_file(self.absfile, deleg_type, pid=os.getpid())
-                        os.close(fd)
-                        ret = 0
-                    finally:
-                        os._exit(ret)
-                (pid, out) = os.waitpid(pid, 0)
-                if out:
-                   raise Exception("Unable to write file from a different process [pid: %d]" % pid)
+                # Open same file on different process for writing
+                fd = self.open_file(self.absfile, deleg_type, lexec=True)
+                self.lexecobj.run(os.close, fd)
         except Exception:
             self.test(False, traceback.format_exc())
             return
