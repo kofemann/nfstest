@@ -236,11 +236,14 @@ class DelegTest(TestUtil):
         lock_type = fcntl.F_RDLCK if lock_type == OPEN_DELEGATE_READ else fcntl.F_WRLCK
         lock_str = "F_RDLCK" if lock_type == OPEN_DELEGATE_READ else "F_WRLCK"
         try:
+            fmsg = ""
             self.dprint('DBG3', "Lock %s (F_SETLKW, %s) start=%d len=%d" % (absfile, lock_str, self.lock_offset, self.lock_len))
             lockdata = struct.pack('hhllhh', lock_type, 0, self.lock_offset, self.lock_len, 0, 0)
             rv = fcntl.fcntl(fd, fcntl.F_SETLKW, lockdata)
-        except Exception as e:
-            self.warning("Unable to get a lock on file: %r" % e)
+        except OSError as exerr:
+            fmsg = ", failed with %s" % exerr
+        dmsg = "Lock file with %s" % lock_str
+        self.test(len(fmsg) == 0, "%s should succeed" % dmsg, failmsg=fmsg)
 
     def open_file(self, absfile, deleg_type, lock=False, lexec=False, msg=''):
         """Open file, lock it and do some I/O on the file.
@@ -516,8 +519,14 @@ class DelegTest(TestUtil):
             self.setup_test(deleg_type, nfiles=nfiles, lexec=True)
 
             if stat:
-                self.dprint('DBG3', "Stat file %s to cache file metadata" % self.absfile)
-                fstat = os.stat(self.absfile)
+                try:
+                    fmsg = ""
+                    dmsg = "Stat file to cache file metadata"
+                    self.dprint('DBG3', "%s [%s]" % (dmsg, self.absfile))
+                    fstat = os.stat(self.absfile)
+                except OSError as exerr:
+                    fmsg = ", failed with %s" % exerr
+                self.test(len(fmsg) == 0, "%s should succeed" % dmsg, failmsg=fmsg)
 
             # Open file, should get a DELEGATION
             fds.append(self.open_file(self.absfile, deleg_type, lock=lock))
@@ -660,8 +669,14 @@ class DelegTest(TestUtil):
             self.setup_test(deleg_type, mount=True, nfiles=nfiles)
 
             # Open file, should get a DELEGATION
-            self.dprint('DBG2', "Open %s for %s" % (self.absfile, open_mode_str(deleg_type)))
-            fd = os.open(self.absfile, open_mode(deleg_type))
+            try:
+                fmsg = ""
+                dmsg = "Open file for %s" % mode_str
+                self.dprint('DBG2', "%s [%s]" % (dmsg, self.absfile))
+                fd = os.open(self.absfile, open_mode(deleg_type))
+            except OSError as exerr:
+                fmsg = ", failed with %s" % exerr
+            self.test(len(fmsg) == 0, "%s should succeed" % dmsg, failmsg=fmsg)
 
             if lock:
                 self.lock_file(fd, deleg_type, self.absfile)
@@ -671,13 +686,18 @@ class DelegTest(TestUtil):
             if len(self.basename) > 0:
                 raise BaseName
 
-            # Read/Write file
-            if deleg_type == OPEN_DELEGATE_READ:
-                self.dprint("DBG3", "Read %s on client holding delegation" % self.absfile)
-                os.read(fd, iosize)
-            else:
-                self.dprint("DBG3", "Write %s on client holding delegation" % self.absfile)
-                os.write(fd, self.data_pattern(0, iosize, PATTERN))
+            try:
+                # Read/Write file
+                fmsg = ""
+                dmsg = "%s file on client holding delegation" % mode_str.capitalize()
+                self.dprint("DBG3", "%s [%s]" % (dmsg, self.absfile))
+                if deleg_type == OPEN_DELEGATE_READ:
+                    os.read(fd, iosize)
+                else:
+                    os.write(fd, self.data_pattern(0, iosize, PATTERN))
+            except OSError as exerr:
+                fmsg = ", failed with %s" % exerr
+            self.test(len(fmsg) == 0, "%s should succeed" % dmsg, failmsg=fmsg)
             self.delay_io()
 
             # Read same file from another client -- delegation should not be
@@ -737,16 +757,14 @@ class DelegTest(TestUtil):
 
             try:
                 fmsg = ""
+                dmsg = "%s file after conflicting operation" % mode_str.capitalize()
+                self.dprint("DBG3", "%s [%s]" % (dmsg, self.absfile))
                 # Read/Write file
                 if deleg_type == OPEN_DELEGATE_READ:
-                    self.dprint("DBG3", "Read %s on client holding delegation" % self.absfile)
-                    dmsg = "Reading file after conflicting operation"
                     # Read should not fail
                     expfail = False
                     os.read(fd, self.filesize - iosize)
                 else:
-                    self.dprint("DBG3", "Write %s on client holding delegation" % self.absfile)
-                    dmsg = "Writing file after conflicting operation"
                     # Check for errors on the write since the server may return
                     # an error when the file has been removed by another client
                     expfail = conflict_type == OP_REMOVE or (conflict_type == OP_RENAME and target)
