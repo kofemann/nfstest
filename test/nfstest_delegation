@@ -684,6 +684,12 @@ class DelegTest(TestUtil):
             iosize = int(self.PAGESIZE/2)
 
             if len(self.basename) > 0:
+                if conflict_type == OP_RENAME and not target:
+                    aname = self.absfile
+                    fname = self.filename
+                    self.get_filename()
+                    self.absfile  = aname
+                    self.filename = fname
                 raise BaseName
 
             try:
@@ -721,17 +727,17 @@ class DelegTest(TestUtil):
                         fname = self.files[-2]
                         srcname = self.abspath(fname)
                         dmsg = "Rename into the file (DST) from another client"
-                        self.dprint("DBG2", "%s to recall delegation [%s]" % (dmsg, self.absfile))
+                        self.dprint("DBG2", "%s to recall delegation [%s -> %s]" % (dmsg, fname, self.filename))
                         self.rexecobj.run(os.rename, srcname, self.absfile)
                     else:
                         aname = self.absfile
                         fname = self.filename
                         self.get_filename()
+                        dmsg = "Rename the file (SRC) from another client"
+                        self.dprint("DBG2", "%s to recall delegation [%s -> %s]" % (dmsg, fname, self.filename))
                         newname = self.absfile
                         self.absfile  = aname
                         self.filename = fname
-                        dmsg = "Rename the file (SRC) from another client"
-                        self.dprint("DBG2", "%s to recall delegation [%s]" % (dmsg, self.absfile))
                         self.rexecobj.run(os.rename, self.absfile, newname)
                 elif conflict_type == OPEN_DELEGATE_READ:
                     dmsg = "Read same file from another client"
