@@ -120,7 +120,8 @@ class Pkt(BaseObj):
             for key in layer_list:
                 value = getattr(self, key, None)
                 if value is not None:
-                    if rdebug == 1 and (index == lastkey or key in _PKT_rlayers or (not self.ip and key == "ethernet")):
+                    if rdebug == 1 and (index == lastkey or key in _PKT_rlayers or \
+                      (not self.ip and not self.ib and key == "ethernet")):
                         out += str(value)
                     elif rdebug == 2:
                         if getattr(value, "_strname", None) is not None:

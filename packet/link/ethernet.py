@@ -20,6 +20,7 @@ import nfstest_config as c
 from baseobj import BaseObj
 from macaddr import MacAddr
 from ethernet_const import *
+from packet.transport.ib import IB
 from packet.internet.ipv4 import IPv4
 from packet.internet.ipv6 import IPv6
 from packet.link.vlan import vlan_layers
@@ -81,6 +82,9 @@ class ETHERNET(BaseObj):
         elif etype == 0x86dd:
             # Decode IPv6 packet
             IPv6(pktt)
+        elif etype == 0x8915:
+            # Decode InfiniBand packet
+            IB(pktt)
         elif etype == 0x0806:
             # Decode ARP packet
             ARP(pktt)

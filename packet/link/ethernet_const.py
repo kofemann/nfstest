@@ -28,4 +28,5 @@ ETHERTYPES = {
     0x0806: "ARP",
     0x8035: "RARP",
     0x8100: "802.1Q VLAN",
+    0x8915: "IB",
 }
