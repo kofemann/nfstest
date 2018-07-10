@@ -21,6 +21,7 @@ mechanism including methods to change the debug verbosity level and methods
 to add debug levels.
 """
 import re
+import sys
 import time
 import nfstest_config as c
 from pprint import pformat
@@ -31,6 +32,9 @@ __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
 __version__   = "1.2"
+
+if sys.version_info[0] != 2:
+    raise Exception("Script requires Python 2")
 
 # Module variables
 _dindent = ""
