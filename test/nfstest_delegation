@@ -100,6 +100,12 @@ TESTNAMES_RENAME = [
     "recall21",
     "recall22",
 ]
+TESTNAMES_PENDING = [
+    "recall23",
+    "recall24",
+    "recall25",
+    "recall26",
+]
 TESTNAMES_REMOTE = [
     "recall01",
     "recall02",
@@ -107,11 +113,11 @@ TESTNAMES_REMOTE = [
     "recall04",
     "recall05",
     "recall06",
-] + TESTNAMES_SETATTR + TESTNAMES_REMOVE + TESTNAMES_RENAME
+] + TESTNAMES_SETATTR + TESTNAMES_REMOVE + TESTNAMES_RENAME + TESTNAMES_PENDING
 
 # Include the test groups in the list of test names
 # so they are displayed in the help
-GTESTS = ["recall", "setattr", "remove", "rename"]
+GTESTS = ["recall", "setattr", "remove", "rename", "pending"]
 TESTNAMES = ["basic"] + TESTNAMES_LOCAL + GTESTS + TESTNAMES_REMOTE
 
 TESTGROUPS = {
@@ -134,6 +140,10 @@ TESTGROUPS = {
     "rename": {
          "tests": TESTNAMES_RENAME,
          "desc": "Run all tests recalling the delegation by renaming the delegated file: ",
+    },
+    "pending": {
+         "tests": TESTNAMES_PENDING,
+         "desc": "Run all recall delegation tests having a pending open: ",
     },
 }
 
@@ -636,7 +646,7 @@ class DelegTest(TestUtil):
         except Exception:
             self.test(False, traceback.format_exc())
 
-    def recall_deleg_test(self, deleg_type, conflict_type=None, lock=False, nfiles=0, target=False):
+    def recall_deleg_test(self, deleg_type, conflict_type=None, lock=False, nfiles=0, target=False, claim_cur=None):
         """Delegation recall tests"""
         if self.clientobj is None:
             return
@@ -644,6 +654,7 @@ class DelegTest(TestUtil):
             return
         try:
             fd = None
+            fdsec = None
             self.fdko = None
             target_str = ""
             mode_str = open_mode_str(deleg_type)
@@ -663,10 +674,22 @@ class DelegTest(TestUtil):
             else:
                 conflict_str = "OPEN (%s)" % open_mode_str(conflict_type)
                 conflict_op = OP_OPEN
-            lock_str = " with file lock" if lock else ""
-            self.test_group("%s delegation recall test%s -- recall with %s%s" % (mode_str, lock_str, conflict_str, target_str))
+            lock_str = " and file lock" if lock else ""
 
-            self.setup_test(deleg_type, mount=True, nfiles=nfiles)
+            claim_str = ""
+            if claim_cur == os.O_RDONLY:
+                claim_io = "READ"
+                claim_str = ", having a pending READ open"
+            elif claim_cur == os.O_WRONLY:
+                claim_io = "WRITE"
+                claim_str = ", having a pending WRITE open"
+
+            # Flag to read same file from another client to test the
+            # delegation should not be recalled
+            other_read_deleg = deleg_type == OPEN_DELEGATE_READ and claim_cur is None
+
+            self.test_group("Recall %s delegation with %s%s%s%s" % (mode_str, conflict_str, target_str, lock_str, claim_str))
+            self.setup_test(deleg_type, mount=True, nfiles=nfiles, lexec=(claim_cur is not None))
 
             # Open file, should get a DELEGATION
             try:
@@ -682,6 +705,16 @@ class DelegTest(TestUtil):
                 self.lock_file(fd, deleg_type, self.absfile)
 
             iosize = int(self.PAGESIZE/2)
+
+            if claim_cur is not None:
+                try:
+                    fmsg = ""
+                    dmsg = "Open file for %s in a different process" % claim_io
+                    self.dprint('DBG2', "%s [%s]" % (dmsg, self.absfile))
+                    fdsec = self.lexecobj.run(os.open, self.absfile, claim_cur)
+                except OSError as exerr:
+                    fmsg = ", failed with %s" % exerr
+                self.test(len(fmsg) == 0, "%s should succeed" % dmsg, failmsg=fmsg)
 
             if len(self.basename) > 0:
                 if conflict_type == OP_RENAME and not target:
@@ -708,7 +741,7 @@ class DelegTest(TestUtil):
 
             # Read same file from another client -- delegation should not be
             # recalled and delegation should be granted
-            if deleg_type == OPEN_DELEGATE_READ:
+            if other_read_deleg:
                 # Other READ opens will not recall the delegation
                 self.get_deleg_remote()
 
@@ -802,6 +835,9 @@ class DelegTest(TestUtil):
             if self.fdko:
                 # Close open owner file
                 self.fdko.close()
+            if fdsec:
+                self.dprint('DBG4', "Close %s on second process" % self.absfile)
+                self.lexecobj.run(os.close, fdsec)
             self.umount()
             if self.clientobj:
                 self.clientobj.umount()
@@ -820,6 +856,10 @@ class DelegTest(TestUtil):
                 # Delegation was not granted
                 return
 
+            open_stateid = None
+            if open_stid is not None:
+                open_stateid = self.openreply.NFSop.stateid
+
             filehandles = [open_fh]
             self.find_layoutget(open_fh)
             (devcall, devreply, dslist) = self.find_getdeviceinfo()
@@ -827,7 +867,7 @@ class DelegTest(TestUtil):
             if self.layout:
                 filehandles = self.layout['filehandles']
 
-            if deleg_type == OPEN_DELEGATE_READ:
+            if other_read_deleg:
                 # Find OPEN (READ) call from the second client
                 (fh1, op_stid1, deleg_stid1) = self.find_open(filename=self.filename, src_ipaddr=self.clientobj.ipaddr)
                 save_index = self.pktt.get_index()
@@ -868,7 +908,10 @@ class DelegTest(TestUtil):
                 return
             conflict_index = opencall.record.index + 1
 
-            if deleg_type == OPEN_DELEGATE_READ:
+            # Boolean for pending test which should not recall the delegation
+            read_write = deleg_type == OPEN_DELEGATE_READ and claim_cur == os.O_WRONLY
+
+            if other_read_deleg:
                 self.pktt.rewind(save_index)
                 # Verify no CB_RECALL is sent to client under test
                 (cbcall, cbreply) = self.find_nfs_op(OP_CB_RECALL, ipaddr=self.client_ipaddr, port=None, src_ipaddr=self.server_ipaddr, maxindex=conflict_index)
@@ -877,6 +920,7 @@ class DelegTest(TestUtil):
                     self.test(cbcall is None, "CB_RECALL should not be sent to the client after a second client is granted a READ delegation")
                 self.pktt.rewind(conflict_index)
 
+            lock_stid = None
             if lock:
                 self.pktt.rewind(save_index)
                 # Verify no CB_RECALL is sent to client under test
@@ -884,8 +928,20 @@ class DelegTest(TestUtil):
                 self.test(cbcall is None, "%s delegation should not be recalled after locking the file" % mode_str)
 
                 (lockcall, lockreply) = self.find_nfs_op(OP_LOCK, src_ipaddr=self.client_ipaddr, maxindex=conflict_index)
-                self.test(lockcall is None, "LOCK should not be sent to the server when holding a %s delegation on the file" % mode_str)
+                if read_write:
+                    self.test(lockcall, "LOCK should be sent when holding a %s delegation and the file is opened on the same client for writing" % mode_str)
+                    if lockreply:
+                        lock_stid = lockreply.NFSop.stateid.other
+                else:
+                    self.test(lockcall is None, "LOCK should not be sent when holding a %s delegation on the file" % mode_str)
                 self.pktt.rewind(conflict_index)
+
+            if read_write:
+                # The client returns the delegation
+                self.test(delegreturncall, "DELEGRETURN should be sent when the file is opened on the same client for writing")
+                if delegreturncall:
+                    expr = delegreturncall.NFSop.stateid.other == deleg_stid
+                    self.test(expr, "DELEGRETURN should be sent with the %s delegation stateid" % mode_str)
 
             self.test(opencall, "%s should be sent from second client" % conflict_str)
             if conflict_op == OP_SETATTR:
@@ -905,7 +961,18 @@ class DelegTest(TestUtil):
 
             # Find CB_RECALL sent to client under test
             (cbcall, cbreply) = self.find_nfs_op(OP_CB_RECALL, ipaddr=self.client_ipaddr, port=None, src_ipaddr=self.server_ipaddr)
-            self.test(cbcall != None, "CB_RECALL should be sent to the client after a conflicting %s is received from a second client" % conflict_str)
+            if read_write:
+                # The client has returned the delegation so no CB_RECALL
+                self.test(cbcall is None, "CB_RECALL should not be sent to the client after a conflicting %s is received from a second client" % conflict_str)
+                xid = opencall.rpc.xid
+                openreply = self.pktt.match("RPC.xid == %d and NFS.resop == %d" % (xid, conflict_op))
+                self.test(openreply, "%s reply should be sent to the second client" % conflict_str)
+                # Verify I/O packets
+                stid_type = LOCK_STID if lock and lock_stid else OPEN_STID
+                stateid = lock_stid if stid_type == LOCK_STID else open_stid
+                self.verify_io_packets(deleg_type, open_fh, stid_type, stateid, delegret=True)
+            else:
+                self.test(cbcall, "CB_RECALL should be sent to the client after a conflicting %s is received from a second client" % conflict_str)
             if cbcall is None:
                 return
             cbrecall_index = self.pktt.get_index()
@@ -914,10 +981,18 @@ class DelegTest(TestUtil):
             # Find OPEN sent from the client right before returning the delegation
             (fh, op_stid2, deleg_stid2) = self.find_open(filename=self.filename, deleg_stateid=deleg_stid, src_ipaddr=self.client_ipaddr, fh=open_fh)
             open_index = self.pktt.get_index()
+            if fh is not None or claim_cur in [os.O_RDONLY, os.O_WRONLY]:
+                expr1 = deleg_type == OPEN_DELEGATE_READ and claim_cur == os.O_RDONLY
+                expr2 = deleg_type == OPEN_DELEGATE_WRITE and claim_cur == os.O_WRONLY
+                # OPEN is only sent if main open and pending open are different
+                if not (op_stid2 is None and (expr1 or expr2)):
+                    self.test(op_stid2, "OPEN with CLAIM_DELEGATE_CUR is sent before returning the %s delegation after CB_RECALL" % mode_str)
             if fh is not None:
-                self.test(op_stid2 != None, "OPEN with CLAIM_DELEGATE_CUR is sent from client right before returning the %s delegation after CB_RECALL" % mode_str)
                 self.test(op_stid2 == open_stid, "OPEN stateid should be the same as the original OPEN stateid")
-                self.test(deleg_stid2 is None, "Delegation should not be granted when re-opening the file right before returning the %s delegation after CB_RECALL" % mode_str)
+                op_stateid = self.openreply.NFSop.stateid
+                expr = op_stateid.seqid == open_stateid.seqid + 1
+                self.test(expr, "OPEN stateid seqid should be increased by one from the original OPEN stateid")
+                self.test(deleg_stid2 is None, "Delegation should not be granted when re-opening the file before returning the %s delegation after CB_RECALL" % mode_str)
 
             if deleg_type == OPEN_DELEGATE_WRITE:
                 # Find out how much data has already been flushed right
@@ -929,7 +1004,10 @@ class DelegTest(TestUtil):
                     # so find the WRITEs before DELEGRETURN
                     self.pktt.rewind(cbrecall_index)
                     nio = self.verify_io_requests(deleg_type, deleg_stid, filehandles, src_ipaddr=self.client_ipaddr, maxindex=open_index)
-                    self.test(nio > 0, "Client flushes written data before returning the WRITE delegation")
+                    if nio > 0:
+                        # Make this test optional since latest kernels do not
+                        # flush the data before returning the delegation
+                        self.test(True, "Client flushes written data before returning the WRITE delegation")
                 else:
                     self.test(True, "Client has already flushed all written data before CB_RECALL")
                 self.pktt.rewind(open_index)
@@ -939,14 +1017,15 @@ class DelegTest(TestUtil):
                 self.pktt.rewind(open_index)
                 # Find the LOCK before DELEGRETURN
                 (lockcall, lockreply) = self.find_nfs_op(OP_LOCK, src_ipaddr=self.client_ipaddr, maxindex=delegreturn_index)
-                self.test(lockcall != None, "LOCK is sent to the server right before returning the %s delegation" % mode_str)
+                self.test(lockcall, "LOCK should be sent before returning the %s delegation" % mode_str)
                 if lockreply and lockreply.nfs.status == NFS4_OK:
                     lock_stid = lockreply.NFSop.stateid.other
 
-            self.test(delegreturncall != None, "DELEGRETURN should be sent from client right after re-opening the file")
+            self.test(delegreturncall, "DELEGRETURN should be sent")
             if delegreturncall is None:
                 return
-            self.test(delegreturncall.NFSop.stateid.other == deleg_stid, "DELEGRETURN should return the %s delegation being recalled" % mode_str)
+            expr = delegreturncall.NFSop.stateid.other == deleg_stid
+            self.test(expr, "DELEGRETURN should be sent with the stateid of %s delegation being recalled" % mode_str)
 
             self.pktt.rewind(delegreturn_index)
 
@@ -958,7 +1037,8 @@ class DelegTest(TestUtil):
                 return
             mds_stat = [NFS4_OK]
             ds_stat  = [NFS4_OK]
-            stateid = lock_stid if lock else open_stid
+            stid_type = LOCK_STID if lock and lock_stid else OPEN_STID
+            stateid = lock_stid if stid_type == LOCK_STID else open_stid
             if conflict_op == OP_OPEN:
                 self.test(openreply.NFSop.delegation.deleg_type == OPEN_DELEGATE_NONE, "Delegation should not be granted for the second client")
             elif conflict_op == OP_REMOVE or (conflict_op == OP_RENAME and target):
@@ -969,7 +1049,7 @@ class DelegTest(TestUtil):
                 mds_stat = [NFS4ERR_STALE]
 
             # Verify I/O packets
-            self.verify_io_packets(deleg_type, open_fh, lock, stateid, status=mds_stat, ds_status=ds_stat, delegret=True)
+            self.verify_io_packets(deleg_type, open_fh, stid_type, stateid, status=mds_stat, ds_status=ds_stat, delegret=True)
         except Exception:
             self.test(False, traceback.format_exc())
 
@@ -1084,6 +1164,28 @@ class DelegTest(TestUtil):
     def recall22_test(self):
         """Recall write delegation by renaming into the file with file lock"""
         self.recall_deleg_test(OPEN_DELEGATE_WRITE, conflict_type=OP_RENAME, nfiles=2, target=True, lock=True)
+
+    def recall23_test(self):
+        """Recall read delegation by writing from a second client with file lock,
+           having a pending read open"""
+        self.recall_deleg_test(OPEN_DELEGATE_READ, claim_cur=os.O_RDONLY, lock=True)
+
+    def recall24_test(self):
+        """Recall read delegation by writing from a second client with file lock,
+           having a pending write open.
+           Delegation is returned by the client when the second open is done so
+           there is no delegation recall"""
+        self.recall_deleg_test(OPEN_DELEGATE_READ, claim_cur=os.O_WRONLY, lock=True)
+
+    def recall25_test(self):
+        """Recall write delegation by writing from a second client with file lock,
+           having a pending read open"""
+        self.recall_deleg_test(OPEN_DELEGATE_WRITE, claim_cur=os.O_RDONLY, lock=True)
+
+    def recall26_test(self):
+        """Recall write delegation by writing from a second client with file lock,
+           having a pending write open"""
+        self.recall_deleg_test(OPEN_DELEGATE_WRITE, claim_cur=os.O_WRONLY, lock=True)
 
 ################################################################################
 # Entry point
