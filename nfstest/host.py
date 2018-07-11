@@ -183,6 +183,7 @@ class Host(BaseObj):
         self.process_smap = {}
         self.process_dmap = {}
         self._checkmtpoint = []
+        self._checkdatadir = []
         self._invalidmtpoint = []
         self._mtpoint_created = []
         self.need_network_reset = False
@@ -423,6 +424,25 @@ class Host(BaseObj):
             self._invalidmtpoint.append(mtpoint)
             raise Exception("Mount point %s is not a directory" % mtpoint)
 
+    def _check_datadir(self):
+        """Check if data directory exists."""
+        if self.mtdir == self.mtpoint or self.mtdir in self._checkdatadir:
+            # Same as mount point or it has been checked before
+            return
+        if self._localhost:
+            if not os.path.exists(self.mtdir):
+                os.mkdir(self.mtdir, 0777)
+        else:
+            try:
+                cmd = "test -e '%s'" % self.mtdir
+                self.run_cmd(cmd, dlevel='DBG4', msg="Check if data directory exists: ")
+            except:
+                pass
+            if self.returncode:
+                cmd = "mkdir -m 0777 -p %s" % self.mtdir
+                self.run_cmd(cmd, dlevel='DBG3', msg="Creating data directory: ")
+        self._checkdatadir.append(self.mtdir)
+
     def _find_nfs_version(self):
         """Get the NFS version from mount point"""
         opts_h = {}
@@ -540,18 +560,7 @@ class Host(BaseObj):
         self._find_nfs_version()
 
         # Create data directory if it does not exist
-        if self._localhost:
-            if not os.path.exists(self.mtdir):
-                os.mkdir(self.mtdir, 0777)
-        else:
-            try:
-                cmd = "test -e '%s'" % self.mtdir
-                self.run_cmd(cmd, dlevel='DBG4', msg="Check if data directory exists: ")
-            except:
-                pass
-            if self.returncode:
-                cmd = "mkdir -m 0777 -p %s" % self.mtdir
-                self.run_cmd(cmd, dlevel='DBG3', msg="Creating data directory: ")
+        self._check_datadir()
 
         # Return the mount point
         return mtpoint
