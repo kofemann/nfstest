@@ -42,17 +42,27 @@ is holding a delegation.
 
 Recall delegation tests verify the delegation is recalled when a conflicting
 operation is sent to the server from a different client. Conflicting operations
-are reading, writing and changing the permissions on the same file. Note, that
-reading a file from a different client can only recall a read delegation.
-Also, verify that a delegation is not recalled when a different client is
-granted a read delegation. After a delegation is recalled, the client should
-send an OPEN with CLAIM_DELEGATE_CUR before returning the delegation and the
-stateid should be the same as the original OPEN stateid. Also, a delegation
-should not be granted when re-opening the file right before returning
-the delegation. Verify client flushes all written data before returning
-the WRITE delegation. The LOCK should be sent as well right before returning
-a delegation which has been recalled. A delegation should not be granted
-on the second client who cause the delegation recall on the first client.
+are reading, writing, removing, renaming and changing the permissions on the
+same file. Note that reading a file from a different client can only recall
+a write delegation. Removing the delegated file from a different client
+recalls the delegation and the server may or may not allow any more writes
+from the client after the delegation has been returned. Renaming either the
+delegated file (as source) or into the delegated file (as target) recalls
+the delegation. In the case where the delegated file is the target of rename,
+the existing target is removed before the rename occurs, therefore the server
+may or may not allow nay more writes from the client after the delegation has
+been removed just like in the case when removing the delegated file.
+
+Also, verify that a read delegation is not recalled when a different client is
+granted a read delegation. After a delegation is recalled, the client may send
+an OPEN with CLAIM_DELEGATE_CUR before returning the delegation specially when
+there is a open pending on the client. In addition, the stateid returned by the
+new open should be the same as the original OPEN stateid. Also, a delegation
+should not be granted when re-opening the file before returning the delegation.
+The client may flush all written data before returning the WRITE delegation.
+The LOCK should be sent as well before returning a delegation which has been
+recalled. Finally, a delegation should not be granted on the second client who
+cause the delegation recall on the first client.
 
 Examples:
     The only required option is --server but only the basic delegation tests
