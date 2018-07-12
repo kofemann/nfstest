@@ -669,7 +669,7 @@ class DioTest(TestUtil):
                 else:
                     aligned = True
                 for j in xrange(nio):
-                    test_hash.append({'offset':b_off, 'size':b_size, 'aligned':aligned})
+                    test_hash.append({'offset':b_off, 'size':b_size, 'aligned':aligned, 'grpidx':i})
                     b_off += b_size
                 if write:
                     count = self.do_write(fd, off, bsize, aligned=aligned)
@@ -758,7 +758,24 @@ class DioTest(TestUtil):
                     toffset  = test_hash[idx].get('offset')
                     tsize    = test_hash[idx].get('size')
                     taligned = test_hash[idx].get('aligned')
-                    self.test(toffset == roffset and tsize == rsize, "%s (%d@%d) should be sent with correct offset and count" % (io_str, tsize, toffset), failmsg=", got packet (%d@%d)" %(rsize, roffset))
+                    tgrpidx  = test_hash[idx].get('grpidx')
+                    expr = (toffset == roffset and tsize == rsize)
+                    if not expr and mtbsize and bsize > mtbsize:
+                        # The I/O size is greater than the mount block size
+                        # check if this write belongs to the same I/O group
+                        for item in test_hash:
+                            if item.get('grpidx') == tgrpidx:
+                                expr = (item.get('offset') == roffset and item.get('size') == rsize)
+                                if expr:
+                                    # I/O belongs to the expected I/O group
+                                    toffset  = item.get('offset')
+                                    tsize    = item.get('size')
+                                    taligned = item.get('aligned')
+                                    self.dprint('DBG5', "%s (%d@%d) is sent out of order but within the same I/O call" % (io_str, tsize, toffset))
+                                    break
+                    msg  = "%s (%d@%d) should be sent with correct offset and count" % (io_str, tsize, toffset)
+                    fmsg = ", got packet (%d@%d)" %(rsize, roffset)
+                    self.test(expr, msg, failmsg=fmsg)
                     if len(align_hash):
                         if (self.newstyle or taligned) and self.ispnfs:
                             dsidx = 0
