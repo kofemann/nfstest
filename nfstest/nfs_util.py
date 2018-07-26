@@ -37,7 +37,7 @@ from nfstest.utils import split_path
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "2.8"
+__version__   = "2.9"
 
 class NFSUtil(Host):
     """NFSUtil object
@@ -362,6 +362,8 @@ class NFSUtil(Host):
            The following object attributes are defined: opencall and pktcall
            both referencing the packet call while openreply and pktreply both
            referencing the packet reply.
+           In the case for NFSv3, search for LOOKUP or CREATE to get the file
+           handle.
 
            filename:
                Find open call and reply for this file [default: None]
@@ -404,6 +406,24 @@ class NFSUtil(Host):
         self.pktreply = None
         self.opencall  = None
         self.openreply = None
+
+        if self.nfs_version < 4:
+            # Search for LOOKUP or CREATE if NFSv3
+            if claimfh is None:
+                margs = {
+                    "ipaddr"     : ipaddr,
+                    "port"       : port,
+                    "src_ipaddr" : src_ipaddr,
+                    "maxindex"   : maxindex,
+                    "match"      : "NFS.name == '%s'" % filename,
+                }
+                self.find_nfs_op(NFSPROC3_LOOKUP, **margs)
+                if self.pktreply is None:
+                    # No LOOKUP, search for CREATE now
+                    self.find_nfs_op(NFSPROC3_CREATE, **margs)
+                if self.pktreply:
+                    claimfh = self.pktreply.nfs.fh
+            return (claimfh, None, None)
 
         src = "IP.src == '%s' and " % src_ipaddr if src_ipaddr is not None else ''
         dst = self.pktt.ip_tcp_dst_expr(ipaddr, port)
@@ -491,6 +511,9 @@ class NFSUtil(Host):
         """
         self.layout = None
 
+        if self.nfs_version < 4:
+            return (None, None)
+
         # Look for LAYOUTGET in the same compound as the OPEN
         layoutget = None
         layoutget_res = None
@@ -570,6 +593,10 @@ class NFSUtil(Host):
            Return a tuple: (pktcall, pktreply, dslist).
         """
         dslist = []
+
+        if self.nfs_version < 4:
+            return (None, None, dslist)
+
         # Find GETDEVICEINFO request and reply
         match = "NFS.deviceid == '%s'" % self.pktt.escape(deviceid) if deviceid is not None else ''
         (pktcall, pktreply) = self.find_nfs_op(OP_GETDEVICEINFO, match=match, status=None)
@@ -608,6 +635,9 @@ class NFSUtil(Host):
 
            Return a tuple: (pktcall, pktreply).
         """
+        if self.nfs_version < 4:
+            return (None, None)
+
         # Find EXCHANGE_ID request and reply
         (pktcall, pktreply) = self.find_nfs_op(OP_EXCHANGE_ID, **kwargs)
         self.src_ipaddr = pktcall.ip.src
@@ -625,6 +655,9 @@ class NFSUtil(Host):
         """Find NFSv4 CB_LAYOUTRECALL call and return its reply.
            The reply must also match the given status.
         """
+        if self.nfs_version < 4:
+            return None
+
         # Find CB_LAYOUTRECALL request
         pktcall = self.pktt.match(self.cb_dst + " and NFS.argop == %d" % OP_CB_LAYOUTRECALL)
         if pktcall:
@@ -1126,7 +1159,10 @@ class NFSUtil(Host):
             self.error_hash   = {}
 
         # Get I/O type: iomode == 1 (READ), else (WRITE)
-        io_op = OP_READ if iomode == LAYOUTIOMODE4_READ else OP_WRITE
+        if self.nfs_version < 4:
+            io_op = NFSPROC3_READ if iomode == LAYOUTIOMODE4_READ else NFSPROC3_WRITE
+        else:
+            io_op = OP_READ if iomode == LAYOUTIOMODE4_READ else OP_WRITE
 
         # Find all I/O requests for MDS or current DS
         while True:
@@ -1269,7 +1305,7 @@ class NFSUtil(Host):
            Return the number of commits sent to the server.
         """
         dst = self.pktt.ip_tcp_dst_expr(ipaddr, port)
-        fh = "NFS.fh == '%s'" % self.pktt.escape(filehandle)
+        fh = " and NFS.fh == '%s'" % self.pktt.escape(filehandle)
         save_index = self.pktt.get_index()
         xids = []
         if init:
@@ -1277,9 +1313,12 @@ class NFSUtil(Host):
             self.test_no_commit   = False
             self.test_commit_verf = True
 
+        commit_op = NFSPROC3_COMMIT if self.nfs_version < 4 else OP_COMMIT
+        match_str = dst + fh + " and NFS.argop == %d" % commit_op
+
         while True:
             # Find COMMIT request for current DS
-            pkt = self.pktt.match(dst + " and " + fh + " and NFS.argop == %d" % OP_COMMIT)
+            pkt = self.pktt.match(match_str)
             if not pkt:
                 break
             xids.append(pkt.rpc.xid)
@@ -1297,7 +1336,7 @@ class NFSUtil(Host):
         self.pktt.rewind(save_index)
         while True:
             # Find COMMIT reply for current DS
-            pkt = self.pktt.match("NFS.resop == %d" % OP_COMMIT)
+            pkt = self.pktt.match("NFS.resop == %d" % commit_op)
             if not pkt:
                 break
             if pkt.rpc.xid in xids:
@@ -1319,6 +1358,9 @@ class NFSUtil(Host):
            filesize:
                Expected size of file
         """
+        if self.nfs_version < 4:
+            return
+
         dst = self.pktt.ip_tcp_dst_expr(self.server_ipaddr, self.port)
         fh = "NFS.fh == '%s'" % self.pktt.escape(filehandle)
 
@@ -1379,6 +1421,9 @@ class NFSUtil(Host):
            layout_list:
                List of layouts
         """
+        if self.nfs_version < 4:
+            return
+
         save_index = self.pktt.get_index()
         dst = self.pktt.ip_tcp_dst_expr(self.server_ipaddr, self.port)
         layout_list = [ lo for lo in layout_list if lo is not None ]
@@ -1465,6 +1510,9 @@ class NFSUtil(Host):
            noreset:
                Do not reset the state id map [default: False]
         """
+        if self.nfs_version < 4:
+            return None
+
         noreset = kwargs.pop("noreset", False)
         if not noreset:
             self.stid_map = {}
@@ -1601,7 +1649,10 @@ class NFSUtil(Host):
                 else:
                     # Save packet reply
                     self.pktreply = pkt
-                    if hasattr(pkt.nfs, "status") and pkt.nfs.status == 0:
+                    if getattr(pkt.nfs, "status", None) == 0:
+                        if self.nfs_version < 4:
+                            dirfh = pkt.nfs.fh
+                            break
                         # Get GETFH from the packet reply where name was matched
                         getfh = self.getop(pkt, OP_GETFH)
                         if getfh:
