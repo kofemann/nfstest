@@ -153,6 +153,13 @@ class DioTest(TestUtil):
         # DS instead of the MDS
         self.newstyle = False
 
+        # Flag is True when pNFS is available
+        self.ispnfs = False
+
+        # Flags are True if delegations are available
+        self.read_deleg  = False
+        self.write_deleg = False
+
         if self.nfs_version < 4:
             self.config("Option nfsversion must be 4 or above")
 
@@ -192,6 +199,93 @@ class DioTest(TestUtil):
         self.libc.writev.restype = ctypes.c_ulong
 
         self.bsize = self.rsize if self.rsize > self.wsize else self.wsize
+
+    def _check_delegations(self):
+        """Check if delegations are granted"""
+        self.umount()
+        self.trace_start()
+        self.mount()
+        try:
+            fd = None
+            ofd = None
+            oofile = self.abspath(self.files[0])
+            self.dprint('DBG3', "Open file %s so open owner sticks around" % oofile)
+            ofd = open(oofile, 'r')
+            self.create_file()
+            rfile = self.abspath(self.files[1])
+            self.dprint('DBG3', "Open file %s for reading" % rfile)
+            fd = open(rfile, 'r')
+            fd.read(self.rsize)
+        finally:
+            if ofd:
+                ofd.close()
+            if fd:
+                fd.close()
+            self.umount()
+            self.trace_stop()
+
+        self.trace_open()
+        self.set_pktlist()
+        (filehandle, open_stateid, deleg_stateid) = self.find_open(filename=self.files[1])
+        self.read_deleg = False if deleg_stateid is None else True
+        self.pktt.rewind()
+        (filehandle, open_stateid, deleg_stateid) = self.find_open(filename=self.files[2])
+        self.write_deleg = False if deleg_stateid is None else True
+        if not self.read_deleg:
+            self.dprint('INFO', "READ  delegations are not available -- skipping tests expecting read  delegations")
+        if not self.write_deleg:
+            self.dprint('INFO', "WRITE delegations are not available -- skipping tests expecting write delegations")
+
+    def setup(self, **kwargs):
+        """Setup test environment"""
+        if self.rsize != self.wsize:
+            raise Exception("CONFIG error: options rsize and wsize must have the same value")
+        elif self.rsize % self.PAGESIZE > 0:
+            raise Exception("CONFIG error: option rsize must be a multiple of %d (PAGESIZE)" % self.PAGESIZE)
+
+        self.umount()
+        self.trace_start()
+        self.mount()
+        statfs = os.statvfs(self.mtpoint)
+
+        if len(self.basename) == 0 and statfs.f_bsize < 3*self.rsize:
+            raise Exception("CONFIG error: mount options rsize and wsize must be greater than or equal to 3 times the value of option rsize")
+
+        super(DioTest, self).setup(**kwargs)
+
+        self.umount()
+        self.trace_stop()
+
+        if self.nfs_version > 3:
+            self.trace_open()
+            self.set_pktlist()
+            (filehandle, open_stateid, deleg_stateid) = self.find_open(filename=self.files[0])
+            (layoutget, layoutget_res) = self.find_layoutget(filehandle)
+            self.find_getdeviceinfo()
+            if layoutget and len(self.dslist):
+                self.ispnfs = True
+
+            if self.ispnfs:
+                self.stripe_size = self.layout['stripe_size']
+                if self.stripe_size < 3*self.rsize:
+                    raise Exception("CONFIG error: option rsize must be less or equal to %d (stripe size / 3)" % self.stripe_size/3)
+
+            # Check if delegations are granted
+            self._check_delegations()
+
+        # Non-aligned contiguous vectors on aligned offset
+        self.file_handles = {False:None, True:None}
+        tinfo = [
+            {'size':self.rsize, 'aligned':False, 'server':MDS},
+            {'size':self.rsize, 'aligned':False, 'server':MDS},
+            {'size':self.rsize, 'aligned':False, 'server':MDS},
+        ]
+        self.mount()
+        out = self.vectored_io(tinfo, write=False, contiguous=True, check=True)
+        self.umount()
+        self.newstyle = len(out) == 1 and out[0] == 3*self.rsize
+        if self.newstyle:
+            self.dprint('INFO', "Direct I/O data is sent to the DS regardless of buffer alignment")
 
     def mem_alloc(self, size, aligned=True, fill=False, offset=0):
         """Allocate buffer.
@@ -1538,74 +1632,7 @@ class DioTest(TestUtil):
 x = DioTest(usage=USAGE, testnames=TESTNAMES, sid=SCRIPT_ID)
 
 try:
-    if x.rsize != x.wsize:
-        raise Exception("CONFIG error: options rsize and wsize must have the same value")
-    elif x.rsize % x.PAGESIZE > 0:
-        raise Exception("CONFIG error: option rsize must be a multiple of %d (PAGESIZE)" % x.PAGESIZE)
-
-    x.umount()
-    x.trace_start()
-    x.mount()
-    statfs = os.statvfs(x.mtpoint)
-    x.f_bsize = statfs.f_bsize
     x.setup(nfiles = 2)
-    x.trace_stop()
-    x.trace_open()
-    x.set_pktlist()
-    (filehandle, open_stateid, deleg_stateid) = x.find_open(filename=x.files[0])
-    (layoutget, layoutget_res) = x.find_layoutget(filehandle)
-    x.find_getdeviceinfo()
-    x.ispnfs = False if layoutget is None or len(x.dslist) == 0 else True
-
-    if x.ispnfs:
-        x.stripe_size = x.layout['stripe_size']
-
-    if len(x.basename) == 0 and x.f_bsize < 3*x.rsize:
-        raise Exception("CONFIG error: mount options rsize and wsize must be greater than or equal to 3 times the value of option rsize")
-    elif x.ispnfs and x.stripe_size < 3*x.rsize:
-        raise Exception("CONFIG error: option rsize must be less or equal to %d (stripe size / 3)" % x.stripe_size/3)
-
-    # Check if delegations are granted
-    x.umount()
-    x.trace_start()
-    x.mount()
-    oofile = x.abspath(x.files[0])
-    x.dprint('DBG3', "Open file %s so open owner sticks around" % oofile)
-    ofd = open(oofile, 'r')
-    x.create_file()
-    rfile = x.abspath(x.files[1])
-    x.dprint('DBG3', "Open file %s for reading" % rfile)
-    fd = open(rfile, 'r')
-    fd.read(x.rsize)
-    ofd.close()
-    fd.close()
-    x.umount()
-    x.trace_stop()
-    x.trace_open()
-    x.set_pktlist()
-    (filehandle, open_stateid, deleg_stateid) = x.find_open(filename=x.files[1])
-    x.read_deleg = False if deleg_stateid is None else True
-    x.pktt.rewind()
-    (filehandle, open_stateid, deleg_stateid) = x.find_open(filename=x.files[2])
-    x.write_deleg = False if deleg_stateid is None else True
-    if not x.read_deleg:
-        x.dprint('INFO', "READ  delegations are not available -- skipping tests expecting read  delegations")
-    if not x.write_deleg:
-        x.dprint('INFO', "WRITE delegations are not available -- skipping tests expecting write delegations")
-
-    # Non-aligned contiguous vectors on aligned offset
-    x.file_handles = {False:None, True:None}
-    tinfo = [
-        {'size':x.rsize, 'aligned':False, 'server':MDS},
-        {'size':x.rsize, 'aligned':False, 'server':MDS},
-        {'size':x.rsize, 'aligned':False, 'server':MDS},
-    ]
-    x.mount()
-    out = x.vectored_io(tinfo, write=False, contiguous=True, check=True)
-    x.umount()
-    x.newstyle = len(out) == 1 and out[0] == 3*x.rsize
-    if x.newstyle:
-        x.dprint('INFO', "Direct I/O data is sent to the DS regardless of buffer alignment")
 
     # Run all the tests
     x.run_tests()
