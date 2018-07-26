@@ -18,6 +18,7 @@ import posix
 import ctypes
 import traceback
 import nfstest_config as c
+from packet.nfs.nfs3_const import *
 from packet.nfs.nfs4_const import *
 from nfstest.test_util import TestUtil
 
@@ -25,7 +26,7 @@ from nfstest.test_util import TestUtil
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.3"
+__version__   = "1.4"
 
 USAGE = """%prog --server <server> [options]
 
@@ -160,8 +161,8 @@ class DioTest(TestUtil):
         self.read_deleg  = False
         self.write_deleg = False
 
-        if self.nfs_version < 4:
-            self.config("Option nfsversion must be 4 or above")
+        if self.nfs_version < 3:
+            self.config("Option nfsversion must be 3 or above")
 
         # Process --iotype option
         self.io_list = self.get_list(self.iotype, {'read':False, 'write':True})
@@ -577,14 +578,20 @@ class DioTest(TestUtil):
             self.set_pktlist()
             (filehandle, open_stateid, deleg_stateid) = self.find_open(filename=filename)
             stateid = deleg_stateid if deleg_stateid else open_stateid
-            pkt = self.pktt.match("NFS.argop == %d and NFS.stateid.other == '%s'" % (OP_READ, self.pktt.escape(stateid)))
+
+            if self.nfs_version < 4:
+                match_str = "NFS.argop == %d and NFS.fh == '%s'" % (NFSPROC3_READ, self.pktt.escape(filehandle))
+            else:
+                match_str = "NFS.argop == %d and NFS.stateid.other == '%s'" % (OP_READ, self.pktt.escape(stateid))
+
+            pkt = self.pktt.match(match_str)
             self.test(pkt, "READ should be sent to the server")
             if pkt:
                 roffset = pkt.NFSop.offset
                 rcount = pkt.NFSop.count
                 self.test(roffset == 0 and rcount == self.rsize, "READ should be sent with correct offset (%d) and count (%d)" % (0, self.rsize))
             if read_ahead:
-                pkt = self.pktt.match("NFS.argop == %d and NFS.stateid.other == '%s'" % (OP_READ, self.pktt.escape(stateid)))
+                pkt = self.pktt.match(match_str)
                 self.test(not pkt, "Extra READs should not be sent to the server")
         except Exception:
             self.test(False, traceback.format_exc())
@@ -699,10 +706,14 @@ class DioTest(TestUtil):
             ofd = None
             io_str  = "WRITE" if write else "READ"
             io_mode = posix.O_WRONLY|posix.O_CREAT if write else posix.O_RDONLY
-            io_op   = OP_WRITE if write else OP_READ
             bio_str  = "WRITE" if buffered_write else "READ"
             bio_mode = os.O_WRONLY|os.O_CREAT if buffered_write else os.O_RDONLY
-            bio_op   = OP_WRITE if buffered_write else OP_READ
+            if self.nfs_version < 4:
+                io_op  = NFSPROC3_WRITE if write else NFSPROC3_READ
+                bio_op = NFSPROC3_WRITE if buffered_write else NFSPROC3_READ
+            else:
+                io_op  = OP_WRITE if write else OP_READ
+                bio_op = OP_WRITE if buffered_write else OP_READ
 
             if not bsize:
                 bsize = self.rsize/2
@@ -808,11 +819,16 @@ class DioTest(TestUtil):
             self.find_getdeviceinfo()
             self.pktt.rewind(save_index)
 
+            if self.nfs_version < 4:
+                match_str = "NFS.argop == %d and NFS.fh == '%s'" % (io_op, self.pktt.escape(filehandle))
+            else:
+                match_str = "NFS.argop == %d and NFS.stateid.other == '%s'" % (io_op, self.pktt.escape(stateid))
+
             idx = 0
             xids = {}
             io_h = {}
             err_h = {}
-            while self.pktt.match("NFS.argop == %d and NFS.stateid.other == '%s'" % (io_op, self.pktt.escape(stateid))):
+            while self.pktt.match(match_str):
                 save_index = self.pktt.get_index()
                 pkt     = self.pktt.pkt
                 roffset = pkt.NFSop.offset
@@ -904,7 +920,12 @@ class DioTest(TestUtil):
                 total_size = 0
                 rmatch = True
                 xids = {}
-                while self.pktt.match("NFS.argop == %d and NFS.stateid.other == '%s'" % (bio_op, self.pktt.escape(stateid))):
+                if self.nfs_version < 4:
+                    match_str = "NFS.argop == %d and NFS.fh == '%s'" % (bio_op, self.pktt.escape(filehandle))
+                else:
+                    match_str = "NFS.argop == %d and NFS.stateid.other == '%s'" % (bio_op, self.pktt.escape(stateid))
+
+                while self.pktt.match(match_str):
                     roffset = self.pktt.pkt.NFSop.offset
                     xid     = self.pktt.pkt.rpc.xid
                     if xids.get(xid, None) is None:
@@ -1078,7 +1099,12 @@ class DioTest(TestUtil):
             off_str = "@%d " % offset if offset else ""
             io_str  = "WRITE" if write else "READ"
             io_mode = posix.O_WRONLY|posix.O_CREAT if write else posix.O_RDONLY
-            io_op   = OP_WRITE if write else OP_READ
+
+            if self.nfs_version < 4:
+                io_op  = NFSPROC3_WRITE if write else NFSPROC3_READ
+            else:
+                io_op  = OP_WRITE if write else OP_READ
+
             if not check:
                 self.test_group("Verify %s %s%scontiguous vector [%s]" % (io_str, off_str, con_str, ", ".join(head_vec)))
 
@@ -1156,11 +1182,17 @@ class DioTest(TestUtil):
                     if self.server_ipaddr == item['ipaddr'] and self.port == item['port']:
                         dsismds = True
                         break
+
+            if self.nfs_version < 4:
+                match_str = "NFS.argop == %d and NFS.fh == '%s'" % (io_op, self.pktt.escape(filehandle))
+            else:
+                match_str = "NFS.argop == %d and NFS.stateid.other == '%s'" % (io_op, self.pktt.escape(self.stateid))
+
             xids = {}
             ret = []
             received = []
             pkt_hash = {}
-            while self.pktt.match("NFS.argop == %d and NFS.stateid.other == '%s'" % (io_op, self.pktt.escape(self.stateid))):
+            while self.pktt.match(match_str):
                 ipaddr = self.pktt.pkt.ip.dst
                 port   = self.pktt.pkt.tcp.dst_port
                 xid    = self.pktt.pkt.rpc.xid
