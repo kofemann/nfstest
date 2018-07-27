@@ -98,7 +98,7 @@ class Header(BaseObj):
         self.dump_length = ulist[4]
         self.link_type   = ulist[5]
 
-class Pktt(BaseObj, Unpack):
+class Pktt(BaseObj):
     """Packet trace object
 
        Usage:
@@ -160,6 +160,7 @@ class Pktt(BaseObj, Unpack):
         self.progdone  = 0    # Display last progress only once
         self.timestart = time.time() # Time reference base
         self.reply_matched = False   # Matching a reply
+        self._cleanup_done = False   # Cleanup of attributes has been done
 
         # TCP stream map: to keep track of the different TCP streams within
         # the trace file -- used to deal with RPC packets spanning multiple
@@ -183,13 +184,39 @@ class Pktt(BaseObj, Unpack):
                 for tfile in self.tfiles:
                     self.pktt_list.append(Pktt(tfile))
 
+    def close(self):
+        """Gracefully close the tcpdump trace file and cleanup attributes."""
+        if self._cleanup_done:
+            return
+
+        # Cleanup is done just once
+        self._cleanup_done = True
+
+        if self.fh:
+            # Close packet trace
+            self.fh.close()
+            self.fh = None
+        elif self.pktt_list:
+            # Close all packet traces
+            for pktt in self.pktt_list:
+                pktt.close()
+
+        # Cleanup object attributes to release memory
+        del self.pkt
+        del self.pktlist
+        del self.rdbuffer
+        del self.pktt_list
+        del self.pkt_call
+        del self._match_xid_list
+        del self._tcp_stream_map
+        del self._rpc_xid_map
+
     def __del__(self):
         """Destructor
 
            Gracefully close the tcpdump trace file if it is opened.
         """
-        if self.fh:
-            self.fh.close()
+        self.close()
 
     def __iter__(self):
         """Make this object iterable."""
