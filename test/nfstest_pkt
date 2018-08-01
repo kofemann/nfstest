@@ -25,7 +25,7 @@ from optparse import OptionParser,OptionGroup,IndentedHelpFormatter
 __author__    = "Jorge Mora (mora@netapp.com)"
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.3"
+__version__   = "1.4"
 
 USAGE = """%prog [options] <trace1.cap> [<trace2.cap> ...]
 
@@ -171,6 +171,10 @@ dhelp = "Print specific packet or part of a packet [default: %default]"
 opts.add_option("-d", "--display", default="pkt", help=dhelp)
 hhelp = "Time zone to use to display timestamps"
 opts.add_option("-z", "--tz", default=None, help=hhelp)
+hhelp  = "Process packet traces one after the other in the order in which they"
+hhelp += " are given. The default is to open all files first and then display"
+hhelp += " the packets ordered according to their timestamps."
+opts.add_option("--serial", action="store_true", default=False, help=hhelp)
 hhelp = "Display progress bar [default: %default]"
 opts.add_option("--progress", type="int", default=1, help=hhelp)
 
@@ -319,28 +323,40 @@ def display_packet(pkttobj):
 
 ################################################################################
 # Entry point
-pkttobj = Pktt(args)
-pkttobj.showprog = vopts.progress
-if vopts.start > 1:
-    pkttobj[vopts.start - 1]
-if vopts.strsize > 0:
-    pkttobj.strsize(vopts.strsize)
-if len(vopts.debug_level):
-    pkttobj.debug_level(vopts.debug_level)
-
-maxindex = None
-if vopts.end > 0:
-    maxindex = vopts.end
-
-if vopts.match == "True":
-    # Do not use the match method, instead use the iterator method
-    # which is about 36% faster than match
-    for pkt in pkttobj:
-        if maxindex is not None and pkt.record.index >= maxindex:
-            break
-        display_packet(pkttobj)
+if vopts.serial:
+    # Process each file at a time
+    trace_files = args
 else:
-    while pkttobj.match(vopts.match, rewind=False, reply=vopts.reply, maxindex=maxindex):
-        display_packet(pkttobj)
+    # Open all files at once and display packets according
+    # to their timestamps
+    trace_files = [args]
 
-pkttobj.show_progress(True)
+for tfile in trace_files:
+    if vopts.serial:
+        print "Processing", tfile
+    pkttobj = Pktt(tfile)
+    pkttobj.showprog = vopts.progress
+    if vopts.start > 1:
+        pkttobj[vopts.start - 1]
+    if vopts.strsize > 0:
+        pkttobj.strsize(vopts.strsize)
+    if len(vopts.debug_level):
+        pkttobj.debug_level(vopts.debug_level)
+
+    maxindex = None
+    if vopts.end > 0:
+        maxindex = vopts.end
+
+    if vopts.match == "True":
+        # Do not use the match method, instead use the iterator method
+        # which is about 36% faster than match
+        for pkt in pkttobj:
+            if maxindex is not None and pkt.record.index >= maxindex:
+                break
+            display_packet(pkttobj)
+    else:
+        while pkttobj.match(vopts.match, rewind=False, reply=vopts.reply, maxindex=maxindex):
+            display_packet(pkttobj)
+
+    pkttobj.show_progress(True)
+    pkttobj.close()
