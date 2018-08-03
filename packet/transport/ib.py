@@ -30,7 +30,7 @@ import packet.application.rpcordma_const as rdma
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2017 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.0"
+__version__   = "1.1"
 
 # Operation Code Transport Services (3 most significant bits)
 ib_transport_services = {
@@ -335,6 +335,14 @@ class AtomicETH(BaseObj):
         self.swap_dt = ulist[2]
         self.cmp_dt  = ulist[3]
 
+nak_codes = {
+    0b00000 : "PSN_SEQ_ERR",
+    0b00001 : "INVALID_REQUEST_ERR",
+    0b00010 : "REMOTE_ACCESS_ERR",
+    0b00011 : "REMOTE_OPERATIONAL_ERR",
+    0b00100 : "INVALID_RD_REQUEST_ERR",
+}
+
 class AETH(BaseObj):
     """ACK EXTENDED TRANSPORT HEADER (AETH) - 4 BYTES
 
@@ -353,13 +361,21 @@ class AETH(BaseObj):
        )
     """
     # Class attributes
-    _attrlist = ("syndrome", "msn")
+    _attrlist = ("syndrome", "msn", "nakcode")
+    _strfmt1 = ""
+    _strfmt2 = ""
 
     def __init__(self, unpack):
         # End-to-End Context identifier
         data = unpack.unpack(4, "!I")[0]
         self.syndrome = data >> 24
         self.msn      = data & 0x00ffffff
+        if self.syndrome & 0xe0 == 0x60:
+            # Get NAK code
+            self.nakcode = self.syndrome & 0x1F
+            NAKcode = nak_codes.get(self.nakcode, self.nakcode)
+            self._strfmt1 = NAKcode
+            self._strfmt2 = NAKcode
 
 class AtomicAckETH(BaseObj):
     """ATOMIC ACKNOWLEDGE EXTENDED TRANSPORT HEADER (ATOMICACKETH) - 8 BYTES
@@ -994,11 +1010,11 @@ class IB(BaseObj):
                 if self.grh is None:
                     # This is not a IB packet
                     return
-            self._strfmt1 = "%-5s {0} {2}" % self._strname
-            self._strfmt2 = "{2}"
+            self._strfmt1 = "%-5s {0} {2} {8}" % self._strname
+            self._strfmt2 = "{2} {8}"
         else:
-            self._strfmt1 = "{0} %-5s {2}" % self._strname
-            self._strfmt2 = "{0} {2}"
+            self._strfmt1 = "{0} %-5s {2} {8}" % self._strname
+            self._strfmt2 = "{0} {2} {8}"
 
             # Decode the IB LRH layer header
             self.lrh = LRH(unpack)
@@ -1020,8 +1036,8 @@ class IB(BaseObj):
 
         if self.grh:
             # The GRH payload length includes the ICRC
-            self._strfmt1 = "{1} %-5s {2}" % self._strname
-            self._strfmt2 = "{1} {2}"
+            self._strfmt1 = "{1} %-5s {2} {8}" % self._strname
+            self._strfmt2 = "{1} {2} {8}"
 
         if ((self.lrh is None and self.grh is None) or
             (self.lrh and self.lrh.lnh == 0x02) or
