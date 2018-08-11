@@ -57,6 +57,8 @@ from rexec import Rexec
 import nfstest_config as c
 from baseobj import BaseObj
 from nfs_util import NFSUtil
+import packet.nfs.nfs3_const as nfs3_const
+import packet.nfs.nfs4_const as nfs4_const
 from optparse import OptionParser, OptionGroup, IndentedHelpFormatter
 
 # Module constants
@@ -216,6 +218,11 @@ class TestUtil(NFSUtil):
         self.rexecobj_list = []
         # List of remote files
         self.remote_files = []
+        self.nfserr_list  = None
+        self.nfs3err_list = [nfs3_const.NFS3ERR_NOENT]
+        self.nfs4err_list = [nfs4_const.NFS4ERR_NOENT]
+        self.nlm4err_list = []
+        self.mnt3err_list = []
 
         for tid in _test_map:
             self._msg_count[tid] = 0
@@ -432,6 +439,8 @@ class TestUtil(NFSUtil):
         self.dbg_opgroup.add_option("--rpcdebug", default=self.rpcdebug, help=hmsg)
         hmsg = "Display main packets related to the given test"
         self.dbg_opgroup.add_option("--pktdisp", action="store_true", default=False, help=hmsg)
+        hmsg = "Fail every NFS error found in the packet trace"
+        self.dbg_opgroup.add_option("--nfserrors", action="store_true", default=False, help=hmsg)
         self.opts.add_option_group(self.dbg_opgroup)
 
         usage = self.usage
@@ -879,6 +888,53 @@ class TestUtil(NFSUtil):
         self.umount()
         self.dprint('DBG7', "CLEANUP done")
 
+    def set_nfserr_list(self, nfs3list=[], nfs4list=[], nlm4list=[], mnt3list=[]):
+        """Temporaly set the NFS list of expected NFS errors in the next call
+           to trace_open
+        """
+        self.nfserr_list = {
+            "nfs3":   nfs3list,
+            "nfs4":   nfs4list,
+            "nlm4":   nlm4list,
+            "mount3": mnt3list,
+        }
+
+    def trace_open(self, *kwts, **kwds):
+        """This is a wrapper to the original trace_open method where the
+           packet trace is scanned for NFS errors and a failure is logged
+           for each error found not given on the list of expected errors
+           set with method set_nfserr_list. Scanning for NFS error is done
+           only if --nfserrors option has been specified.
+        """
+        # Open the packet trace
+        super(TestUtil, self).trace_open(*kwts, **kwds)
+        if self.nfserrors:
+            if self.nfserr_list is None:
+                # Use default lists
+                self.nfserr_list = {
+                    "nfs3":   self.nfs3err_list,
+                    "nfs4":   self.nfs4err_list,
+                    "nlm4":   self.nlm4err_list,
+                    "mount3": self.mnt3err_list,
+                }
+            # Scan for NFS errors
+            for pkt in self.pktt:
+                for objname in ("nfs", "nlm", "mount"):
+                    nfsobj = getattr(pkt, objname, None)
+                    if nfsobj:
+                        # Get status
+                        status = getattr(nfsobj, "status", 0)
+                        if status != 0:
+                            nfsver = pkt.rpc.version
+                            name = objname + str(nfsver)
+                            exp_err_list = self.nfserr_list.get(name)
+                            if exp_err_list is not None and status not in exp_err_list:
+                                # Report error not on list of expected errors
+                                self.test(False, str(nfsobj))
+            self.nfserr_list = None
+            self.pktt.rewind()
+        return self.pktt
+
     def create_rexec(self, servername=None, **kwds):
         """Create remote server object."""
         if self.rexeclog:
@@ -1034,7 +1090,11 @@ class TestUtil(NFSUtil):
                 self._print_msg(msg + tmsg, sgtid)
                 sys.stdout.flush()
         if self.createtraces:
-            self.trace_stop()
+            traceproc = self.traceproc
+            if traceproc and self.tracefile:
+                self.trace_stop()
+                self.trace_open()
+                self.pktt.close()
         self._test_time()
 
     def _subgroup_id(self, subgroup, tid, subtest):
