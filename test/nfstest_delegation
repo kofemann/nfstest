@@ -668,6 +668,8 @@ class DelegTest(TestUtil):
                     self.test(expr, "DELEGRETURN should be sent with the delegation stateid")
         except Exception:
             self.test(False, traceback.format_exc())
+        finally:
+            self.pktt.close()
 
     def recall_deleg_test(self, deleg_type, conflict_type=None, lock=False, nfiles=0, target=False, claim_cur=None):
         """Delegation recall tests"""
@@ -867,6 +869,8 @@ class DelegTest(TestUtil):
             self.trace_stop()
 
         try:
+            if conflict_op == OP_REMOVE or (conflict_op == OP_RENAME and target):
+                self.set_nfserr_list(nfs4list=[NFS4ERR_NOENT, NFS4ERR_STALE, NFS4ERR_BAD_STATEID])
             self.trace_open()
             self.set_pktlist()
 
@@ -1075,6 +1079,8 @@ class DelegTest(TestUtil):
             self.verify_io_packets(deleg_type, open_fh, stid_type, stateid, status=mds_stat, ds_status=ds_stat, delegret=True)
         except Exception:
             self.test(False, traceback.format_exc())
+        finally:
+            self.pktt.close()
 
     def basic01_test(self):
         """Basic read delegation test"""

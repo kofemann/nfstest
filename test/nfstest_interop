@@ -17,6 +17,8 @@ import inspect
 import traceback
 import nfstest_config as c
 from nfstest.test_util import TestUtil
+import packet.nfs.nfs3_const as nfs3_const
+import packet.nfs.nfs4_const as nfs4_const
 
 # Module constants
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
@@ -78,6 +80,8 @@ class InteropTest(TestUtil):
         self.scan_options()
         # NFS version mount option for NFSv4
         self.nfsvers4 = 4.0
+        # Disable createtraces option
+        self.createtraces = False
 
     def setup(self, **kwargs):
         """Setup test environment"""
@@ -133,6 +137,11 @@ class InteropTest(TestUtil):
             mtargs["mtpoint"] = self.mtpoint
             self.trace_start()
             self.mount(**mtargs)
+
+            self.set_nfserr_list(
+                nfs3list=[nfs3_const.NFS3ERR_NOENT, nfs3_const.NFS3ERR_JUKEBOX],
+                nfs4list=[nfs4_const.NFS4ERR_NOENT, nfs4_const.NFS4ERR_DELAY],
+            )
 
             # Get a new file name
             testfile = self.get_filename()
@@ -190,6 +199,8 @@ class InteropTest(TestUtil):
                 self.clients.pop()
             self.umount()
             self.trace_stop()
+            self.trace_open()
+            self.pktt.close()
 
     def test01_test(self):
         """Verify appending data with NFSv3 is correctly read using NFSv3"""

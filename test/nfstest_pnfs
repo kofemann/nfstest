@@ -668,6 +668,7 @@ class pNFSTest(TestUtil):
             return
 
         try:
+            self.trace_start()
             testfile = self.abspath(self.files[0])
             orig_data = self.data_pattern(0, self.filesize)
             files = []
@@ -706,11 +707,16 @@ class pNFSTest(TestUtil):
                 self.umount()
         except Exception:
             self.test(False, traceback.format_exc())
+        finally:
+            self.trace_stop()
+            self.trace_open()
+            self.pktt.close()
 
         self.test_group("Verify files created with different versions of NFS are read correctly from pNFS")
         try:
             self.mount()
             index = 0
+            self.trace_start()
             for testfile in files:
                 fstat = os.stat(testfile)
                 self.test(fstat.st_size == self.filesize, "Size of file on pNFS should be correct", failmsg=", expecting %d and got %d" % (self.filesize, fstat.st_size))
@@ -725,6 +731,10 @@ class pNFSTest(TestUtil):
             self.umount()
         except Exception:
             self.test(False, traceback.format_exc())
+        finally:
+            self.trace_stop()
+            self.trace_open()
+            self.pktt.close()
 
     def verify_ds_connect_needed(self, ds_index=0):
         """Verify client only connects to the DS with I/O by writing only
@@ -791,6 +801,8 @@ class pNFSTest(TestUtil):
             self.verify_layoutreturn(layout_list)
         except Exception:
             self.test(False, traceback.format_exc())
+        finally:
+            self.pktt.close()
 
     def read_file(self, filename, msg=None):
         """Read whole file"""
@@ -882,6 +894,8 @@ class pNFSTest(TestUtil):
             self.verify_destroy_session()
         except Exception:
             self.test(False, traceback.format_exc())
+        finally:
+            self.pktt.close()
 
     def do_lock(self, iomode, setattr=False):
         """Verify traffic for locked file using pNFS."""
@@ -934,6 +948,7 @@ class pNFSTest(TestUtil):
             (multipath_ds_list, openfh) = self.verify_file(filename, iomode=iomode, lock=True)
             layout_list = [self.layout]
             self.verify_layoutreturn(layout_list)
+            self.pktt.close()
 
     def do_setattr(self, size=0, lock=False):
         """Verify setattr traffic for file using pNFS."""
@@ -986,6 +1001,7 @@ class pNFSTest(TestUtil):
             self.test(False, "Unable to get size of file")
 
         self.verify_close(openfh, False, False)
+        self.pktt.close()
 
     def read_test(self):
         """Verify basic pNFS functionality on a couple of files opened for
@@ -1072,6 +1088,8 @@ class pNFSTest(TestUtil):
             self.verify_layoutreturn(layout_list)
         except Exception:
             self.test(False, traceback.format_exc())
+        finally:
+            self.pktt.close()
 
     def rw_write_test(self):
         """Verify traffic for file opened for read and write: writing file first."""
@@ -1123,6 +1141,8 @@ class pNFSTest(TestUtil):
             self.verify_layoutreturn(layout_list)
         except Exception:
             self.test(False, traceback.format_exc())
+        finally:
+            self.pktt.close()
 
     def read_holes_test(self):
         """Verify client correctly handles read with holes."""
@@ -1203,6 +1223,8 @@ class pNFSTest(TestUtil):
                 self.test(False, "Could not get DS list from GETDEVICEINFO")
         except Exception:
             self.test(False, traceback.format_exc())
+        finally:
+            self.pktt.close()
 
     def one_ds_test(self):
         """Verify client only connects to the DS with I/O."""
@@ -1261,6 +1283,8 @@ class pNFSTest(TestUtil):
             self.verify_layoutreturn(layout_list)
         except Exception:
             self.test(False, traceback.format_exc())
+        finally:
+            self.pktt.close()
 
     def rsize_test(self):
         """Verify traffic for file using pNFS when mount option rsize < 4096."""
@@ -1297,6 +1321,8 @@ try:
             break
         except Exception as e:
             pass
+        finally:
+            x.pktt.close()
 
     # Run all the tests
     x.run_tests()

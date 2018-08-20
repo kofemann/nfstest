@@ -236,6 +236,7 @@ class DioTest(TestUtil):
             self.dprint('INFO', "READ  delegations are not available -- skipping tests expecting read  delegations")
         if not self.write_deleg:
             self.dprint('INFO', "WRITE delegations are not available -- skipping tests expecting write delegations")
+        self.pktt.close()
 
     def setup(self, **kwargs):
         """Setup test environment"""
@@ -270,6 +271,7 @@ class DioTest(TestUtil):
                 self.stripe_size = self.layout['stripe_size']
                 if self.stripe_size < 3*self.rsize:
                     raise Exception("CONFIG error: option rsize must be less or equal to %d (stripe size / 3)" % self.stripe_size/3)
+            self.pktt.close()
 
             # Check if delegations are granted
             self._check_delegations()
@@ -595,6 +597,8 @@ class DioTest(TestUtil):
                 self.test(not pkt, "Extra READs should not be sent to the server")
         except Exception:
             self.test(False, traceback.format_exc())
+        finally:
+            self.pktt.close()
 
     def read_test(self):
         """Verify READ is sent after writing when the file is open for
@@ -946,6 +950,8 @@ class DioTest(TestUtil):
                 self.test(not rmatch, "%ss should be cached for buffered I/O" % bio_str)
         except Exception:
             self.test(False, traceback.format_exc())
+        finally:
+            self.pktt.close()
 
     def basic_dio(self, testname):
         """Verify basic direct I/O functionality for given testname."""
@@ -1259,6 +1265,7 @@ class DioTest(TestUtil):
             if fd:
                 fd.close()
             self.free_buffers()
+            self.pktt.close()
 
     def _vectored_io_test(self):
         """Verify vectored I/O functionality."""

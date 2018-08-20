@@ -982,6 +982,7 @@ class SSCTest(TestUtil):
             # Verify correct packets are sent to server(s)
             ####################################################################
             copy_index = None
+            self.set_nfserr_list(nfs4list=[NFS4ERR_NOENT, NFS4ERR_NOTSUPP])
             self.trace_open()
             # Search some packets on source server
             args = {"ipaddr": self.server_ipaddr, "port": self.port, "noreset":True}

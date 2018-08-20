@@ -21,6 +21,9 @@ import traceback
 from formatstr import *
 import nfstest_config as c
 from nfstest.test_util import TestUtil
+import packet.nfs.nfs3_const as nfs3_const
+import packet.nfs.nfs4_const as nfs4_const
+import packet.nfs.nlm4_const as nlm4_const
 from fcntl import fcntl,F_RDLCK,F_WRLCK,F_UNLCK,F_SETLK,F_SETLKW,F_GETLK
 
 # Module constants
@@ -742,6 +745,8 @@ class LockTest(TestUtil):
                 execobj.run(os.close, fdx)
             if self.subtraces:
                 self.trace_stop()
+                self.trace_open()
+                self.pktt.close()
 
     def do_basic_lock(self, execobj, offset2, length2, overlap=False):
         """This is the main locking method for testing all different
@@ -781,6 +786,13 @@ class LockTest(TestUtil):
 
             if self.tverbose == 2:
                 self.dprint("INFO", "Running %s test %02d" % (self.testname, self.testidx))
+
+            if execobj.pid is None or self.nfs_version < 4:
+                self.set_nfserr_list(
+                    nfs3list=[nfs3_const.NFS3ERR_NOENT, nfs3_const.NFS3ERR_NOTEMPTY],
+                    nfs4list=[nfs4_const.NFS4ERR_NOENT, nfs4_const.NFS4ERR_DENIED],
+                    nlm4list=[nlm4_const.NLM4_BLOCKED, nlm4_const.NLM4_DENIED],
+                )
 
             # Do actual test
             self.basic_lock(execobj, oltype, ltype, octype, ctype, offset2, length2, stype)
@@ -858,6 +870,8 @@ class LockTest(TestUtil):
                         os.close(fd)
                     if self.subtraces:
                         self.trace_stop()
+                        self.trace_open()
+                        self.pktt.close()
 
     def ntest01(self, execobj):
         """Locking non-overlapping range from a second process where end2 < start1

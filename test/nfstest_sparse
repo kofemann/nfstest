@@ -192,6 +192,7 @@ class SparseTest(TestUtil):
                 expr = werror and werror.errno == errno.ENXIO
                 tmsg = "SEEK should fail with ENXIO searching for the next %s when file ends in a hole" % segstr
                 self.test(expr, tmsg+msg, failmsg=fmsg)
+                self.set_nfserr_list(nfs4list=[NFS4ERR_NOENT, NFS4ERR_NXIO])
             else:
                 tmsg = "SEEK should succeed searching for the next %s" % segstr
                 self.test(werror is None, tmsg+msg, failmsg=fmsg)
@@ -377,6 +378,7 @@ class SparseTest(TestUtil):
             self.trace_stop()
 
         try:
+            self.set_nfserr_list(nfs4list=[NFS4ERR_NOENT, NFS4ERR_NXIO])
             self.trace_open()
             self.get_stateid(sfile.filename)
             (pktcall, pktreply) = self.find_nfs_op(OP_SEEK, status=None)

@@ -25,6 +25,8 @@ import traceback
 from time import sleep
 import nfstest_config as c
 from nfstest.test_util import TestUtil
+import packet.nfs.nfs3_const as nfs3_const
+import packet.nfs.nfs4_const as nfs4_const
 
 # Module constants
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
@@ -1025,6 +1027,12 @@ class PosixTest(TestUtil):
         """
         self.test_group("Verify POSIX API open() on %s" % self.nfsstr())
 
+        self.set_nfserr_list(
+            nfs3list=[nfs3_const.NFS3ERR_NOENT, nfs3_const.NFS3ERR_INVAL],
+            nfs4list=[nfs4_const.NFS4ERR_NOENT, nfs4_const.NFS4ERR_INVAL,
+                      nfs4_const.NFS4ERR_OPENMODE],
+        )
+
         flist = []
         flag_list = list(open_flag_list)
         try:
@@ -1379,6 +1387,10 @@ class PosixTest(TestUtil):
         """Verify POSIX API rmdir() by removing a directory. Verify that the
            parent's st_ctime and st_mtime are updated.
         """
+        self.set_nfserr_list(
+            nfs3list=[nfs3_const.NFS3ERR_NOENT, nfs3_const.NFS3ERR_NOTEMPTY],
+            nfs4list=[nfs4_const.NFS4ERR_NOENT, nfs4_const.NFS4ERR_NOTEMPTY],
+        )
         self.test_group("Verify POSIX API rmdir() on %s" % self.nfsstr())
 
         dir = self.create_dir()

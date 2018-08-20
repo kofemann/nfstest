@@ -376,6 +376,8 @@ class AllocTest(TestUtil):
                 self.test(pktreply.nfs.status == 0, "%s should return NFS4_OK" % opstr.upper())
         except Exception:
             self.test(False, traceback.format_exc())
+        finally:
+            self.pktt.close()
 
     def alloc01_test(self):
         """Verify ALLOCATE succeeds on files opened as write only"""
@@ -484,6 +486,8 @@ class AllocTest(TestUtil):
                 os.close(fd)
             self.umount()
             self.trace_stop()
+            self.trace_open()
+            self.pktt.close()
 
     def alloc03_test(self):
         """Verify ALLOCATE fails on files opened as read only"""
@@ -554,6 +558,8 @@ class AllocTest(TestUtil):
                 os.close(fd)
             self.umount()
             self.trace_stop()
+            self.trace_open()
+            self.pktt.close()
 
     def alloc04_test(self):
         """Verify ALLOCATE fails with EINVAL for invalid offset or length"""
@@ -622,6 +628,8 @@ class AllocTest(TestUtil):
                 os.close(fd)
             self.umount()
             self.trace_stop()
+            self.trace_open()
+            self.pktt.close()
 
     def alloc05_test(self):
         """Verify ALLOCATE fails with ESPIPE when using a named pipe file handle"""
@@ -745,6 +753,7 @@ class AllocTest(TestUtil):
             self.trace_stop()
 
         try:
+            self.set_nfserr_list(nfs4list=[NFS4ERR_NOENT, NFS4ERR_NOSPC])
             self.trace_open()
             self.set_pktlist()
             # Find OPEN and correct stateid to use
@@ -847,6 +856,8 @@ class AllocTest(TestUtil):
                     self.test(False, "WRITE to non-allocated file should be sent")
         except Exception:
             self.test(False, traceback.format_exc())
+        finally:
+            self.pktt.close()
 
     def alloc06_test(self):
         """Verify ALLOCATE reserves the disk space"""
@@ -1058,6 +1069,7 @@ class AllocTest(TestUtil):
             self.trace_stop()
 
         try:
+            self.set_nfserr_list(nfs4list=[NFS4ERR_NOENT, NFS4ERR_NOSPC])
             self.trace_open()
             self.set_pktlist()
             # Find OPEN and correct stateid to use
@@ -1123,6 +1135,8 @@ class AllocTest(TestUtil):
                 self.test(False, "WRITE within the deallocated region should be sent")
         except Exception:
             self.test(False, traceback.format_exc())
+        finally:
+            self.pktt.close()
 
     def dealloc06_test(self):
         """Verify DEALLOCATE unreserves the disk space"""
