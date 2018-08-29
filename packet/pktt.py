@@ -158,6 +158,7 @@ class Pktt(BaseObj):
         self.prevoff   = 0    # Previous offset
         self.showprog  = 0    # If this is true the progress will be displayed
         self.progdone  = 0    # Display last progress only once
+        self.maxindex  = None # Global maxindex default
         self.timestart = time.time() # Time reference base
         self.reply_matched = False   # Matching a reply
         self._cleanup_done = False   # Cleanup of attributes has been done
@@ -981,6 +982,10 @@ class Pktt(BaseObj):
             pkt_list   = self.pktlist
             save_index = self.pindex
         self.dprint('PKT1', ">>> %d: match(%s)" % (save_index, expr))
+
+        if maxindex is None:
+            # Use global max index as default
+            maxindex = self.maxindex
 
         # Search one packet at a time
         for pkt in pkt_list:
