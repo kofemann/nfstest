@@ -52,6 +52,7 @@ SCRIPT_ID = "PNFS"
 TESTNAMES = [
     'read',
     'write',
+    'read_write',
     'write_read',
     'read_lock',
     'write_lock',
@@ -879,9 +880,10 @@ class pNFSTest(TestUtil):
             self.verify_file(filename2, iomode=iomode, nocreate=True, multipath_ds_list=multipath_ds_list)
             layout_list.append(self.layout)
 
-            if write:
-                if 'deleg_stateid' in openfh and openfh['deleg_stateid'] is not None:
+            if swrite or write:
+                if write and 'deleg_stateid' in openfh and openfh['deleg_stateid'] is not None:
                     # Client should not send another open while holding a delegation
+                    # unless holding a read delegation and second open is for writing
                     delegreturn = True
                 else:
                     # Client should send another open
@@ -1023,6 +1025,13 @@ class pNFSTest(TestUtil):
            the same mount.
         """
         self.basic_pnfs(write=True, swrite=True)
+
+    def read_write_test(self):
+        """Verify basic pNFS functionality on a couple of files opened for
+           reading and then re-opening the first file for writing within
+           the same mount.
+        """
+        self.basic_pnfs(write=False, swrite=True)
 
     def write_read_test(self):
         """Verify basic pNFS functionality on a couple of files opened for
