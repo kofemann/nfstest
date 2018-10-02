@@ -181,19 +181,23 @@ stid_map = {
     DELEG_STID : "DELEG",
 }
 
-def open_mode(deleg_type):
-    """Open mode according to delegation type."""
-    if deleg_type == OPEN_DELEGATE_READ:
-        return os.O_RDONLY
-    else:
-        return os.O_WRONLY|os.O_CREAT
+OPEN_READ  = 0
+OPEN_WRITE = 1
 
-def open_mode_str(deleg_type):
-    """String representation for open mode according to delegation type."""
-    if deleg_type == OPEN_DELEGATE_READ:
-        return 'READ'
-    else:
-        return 'WRITE'
+open_flags = {
+    OPEN_READ  : os.O_RDONLY,
+    OPEN_WRITE : os.O_WRONLY|os.O_CREAT,
+}
+
+open_str = {
+    OPEN_READ  : "READ",
+    OPEN_WRITE : "WRITE",
+}
+
+deleg_map = {
+    OPEN_READ  : OPEN_DELEGATE_READ,
+    OPEN_WRITE : OPEN_DELEGATE_WRITE,
+}
 
 class BaseName(Exception):
     """Exception used to stop recall tests when --basename option is set"""
@@ -256,18 +260,18 @@ class DelegTest(TestUtil):
             if len(self.testlist) == 0:
                 self.opts.error("no test to run, specify option --client for --runtest='%s'" % self.runtest)
 
-    def lock_file(self, fd, lock_type, absfile):
+    def lock_file(self, fd, open_type, absfile):
         """Lock file given by the file descriptor.
 
            fd:
                Opened file descriptor of file
-           lock_type:
-               Lock type
+           open_type:
+               Open type
            absfile:
                File path to display as debug info
         """
-        lock_type = fcntl.F_RDLCK if lock_type == OPEN_DELEGATE_READ else fcntl.F_WRLCK
-        lock_str = "F_RDLCK" if lock_type == OPEN_DELEGATE_READ else "F_WRLCK"
+        lock_type = fcntl.F_RDLCK if open_type == OPEN_READ else fcntl.F_WRLCK
+        lock_str = "F_RDLCK" if open_type == OPEN_READ else "F_WRLCK"
         try:
             fmsg = ""
             self.dprint('DBG3', "Lock %s (F_SETLKW, %s) start=%d len=%d" % (absfile, lock_str, self.lock_offset, self.lock_len))
@@ -278,14 +282,14 @@ class DelegTest(TestUtil):
         dmsg = "Lock file with %s" % lock_str
         self.test(len(fmsg) == 0, "%s should succeed" % dmsg, failmsg=fmsg)
 
-    def open_file(self, absfile, deleg_type, lock=False, lexec=False, msg=''):
+    def open_file(self, absfile, open_type, lock=False, lexec=False, msg=''):
         """Open file, lock it and do some I/O on the file.
            Return the file descriptor of the opened file.
 
            absfile:
                File name to open
-           deleg_type:
-               Delegation type to get
+           open_type:
+               Open type
            lock:
                Get a lock on the file if true [default: False]
            lexec:
@@ -295,29 +299,29 @@ class DelegTest(TestUtil):
         """
         pidstr = " from a different process" if lexec else ""
         msg = msg if len(msg) == 0 else " %s" % msg
-        mode_str = open_mode_str(deleg_type)
+        mode_str = open_str[open_type]
 
         try:
             fmsg = ""
             dmsg = "Open file for %s%s%s" % (mode_str, pidstr, msg)
             self.dprint('DBG2', "%s [%s]" % (dmsg, absfile))
             if lexec:
-                fd = self.lexecobj.run(os.open, absfile, open_mode(deleg_type))
+                fd = self.lexecobj.run(os.open, absfile, open_flags[open_type])
             else:
-                fd = os.open(absfile, open_mode(deleg_type))
+                fd = os.open(absfile, open_flags[open_type])
         except OSError as exerr:
             fmsg = ", failed with %s" % exerr
         self.test(len(fmsg) == 0, "%s should succeed" % dmsg, failmsg=fmsg)
 
         if lock:
-            self.lock_file(fd, deleg_type, absfile)
+            self.lock_file(fd, open_type, absfile)
 
         try:
             fmsg = ""
             dmsg = "%s file%s%s" % (mode_str.capitalize(), pidstr, msg)
             self.dprint("DBG3", "%s [%s]" % (dmsg, absfile))
             # Read/Write file
-            if deleg_type == OPEN_DELEGATE_READ:
+            if open_type == OPEN_READ:
                 if lexec:
                     self.lexecobj.run(os.read, fd, self.rsize)
                 else:
@@ -346,7 +350,7 @@ class DelegTest(TestUtil):
         self.rexecobj.run(os.close, fdrd)
         self.rexecobj.run(os.close, fdko)
 
-    def setup_test(self, deleg_type, mount=False, nfiles=0, lexec=False):
+    def setup_test(self, open_type, mount=False, nfiles=0, lexec=False):
         """Setup test by mounting server and hold open a file so that the open
            owner sticks around so a delegation is granted on next open using
            the same open owner -- this is done to avoid a bug on the client
@@ -377,7 +381,7 @@ class DelegTest(TestUtil):
             self.clientobj.mount()
 
         if nfiles == 0:
-            if deleg_type == OPEN_DELEGATE_READ:
+            if open_type == OPEN_READ:
                 # Use existing file
                 self.filename = self.files[1]
                 self.absfile = self.abspath(self.filename)
@@ -517,10 +521,9 @@ class DelegTest(TestUtil):
                             break
                 self.test(stat == nlen, "%ss should return %s from the %s%s" % (io_str, nfsstat4.get(status[idx], status[idx]), sv_str, dr_str))
 
-    def verify_io_packets(self, deleg_type, open_fh, stid_type, stateid, status=[NFS4_OK], ds_status=[NFS4_OK], delegret=False):
+    def verify_io_packets(self, op_type, open_fh, stid_type, stateid, status=[NFS4_OK], ds_status=[NFS4_OK], delegret=False):
         """Verify I/O packets"""
         io_list = []
-        op_type =  OP_READ if deleg_type == OPEN_DELEGATE_READ else OP_WRITE
         if self.layout and self.dslist:
             # Get I/O packets sent to the DS
             dsindex = 0
@@ -536,12 +539,13 @@ class DelegTest(TestUtil):
         io_list = self.find_ios(op_type, open_fh, self.server_ipaddr, self.port)
         self.verify_io_per_server(io_list, op_type, stid_type, stateid, status, delegret=delegret)
 
-    def basic_deleg_test(self, deleg_type, lock=False, stat=False, nfiles=0):
+    def basic_deleg_test(self, open_type, lock=False, stat=False, nfiles=0):
         """Basic delegation tests"""
         try:
             fds = []
             self.fdko = None
-            mode_str = open_mode_str(deleg_type)
+            deleg_type = deleg_map[open_type]
+            mode_str = open_str[open_type]
             if lock:
                 extra_str = " with file lock"
             elif stat:
@@ -549,7 +553,7 @@ class DelegTest(TestUtil):
             else:
                 extra_str = ""
             self.test_group("Basic %s delegation test%s" % (mode_str, extra_str))
-            self.setup_test(deleg_type, nfiles=nfiles, lexec=True)
+            self.setup_test(open_type, nfiles=nfiles, lexec=True)
 
             if stat:
                 try:
@@ -562,22 +566,22 @@ class DelegTest(TestUtil):
                 self.test(len(fmsg) == 0, "%s should succeed" % dmsg, failmsg=fmsg)
 
             # Open file, should get a DELEGATION
-            fds.append(self.open_file(self.absfile, deleg_type, lock=lock))
+            fds.append(self.open_file(self.absfile, open_type, lock=lock))
 
             # Open same file on same process for reading
-            fds.append(self.open_file(self.absfile, OPEN_DELEGATE_READ, msg="on same process"))
+            fds.append(self.open_file(self.absfile, OPEN_READ, msg="on same process"))
 
-            if deleg_type == OPEN_DELEGATE_WRITE:
+            if open_type == OPEN_WRITE:
                 # Open same file on same process for writing
-                fds.append(self.open_file(self.absfile, deleg_type, msg="on same process"))
+                fds.append(self.open_file(self.absfile, OPEN_WRITE, msg="on same process"))
 
             # Access file from a different process
-            fd = self.open_file(self.absfile, OPEN_DELEGATE_READ, lexec=True)
+            fd = self.open_file(self.absfile, OPEN_READ, lexec=True)
             self.lexecobj.run(os.close, fd)
 
-            if deleg_type == OPEN_DELEGATE_WRITE:
+            if open_type == OPEN_WRITE:
                 # Open same file on different process for writing
-                fd = self.open_file(self.absfile, deleg_type, lexec=True)
+                fd = self.open_file(self.absfile, OPEN_WRITE, lexec=True)
                 self.lexecobj.run(os.close, fd)
         except Exception:
             self.test(False, traceback.format_exc())
@@ -642,7 +646,8 @@ class DelegTest(TestUtil):
                 self.test(lockcall is None, "LOCK should not be sent to the server")
 
             # Verify I/O packets
-            self.verify_io_packets(deleg_type, fh, DELEG_STID, deleg_stid)
+            op_type = OP_READ if open_type == OPEN_READ else OP_WRITE
+            self.verify_io_packets(op_type, fh, DELEG_STID, deleg_stid)
 
             # Rewind trace file to saved packet index
             if deleg_type == OPEN_DELEGATE_READ:
@@ -671,21 +676,18 @@ class DelegTest(TestUtil):
         finally:
             self.pktt.close()
 
-    def recall_deleg_test(self, deleg_type, conflict_type=None, lock=False, nfiles=0, target=False, claim_cur=None):
+    def recall_deleg_test(self, open_type, conflict_type=OPEN_DELEGATE_WRITE, lock=False, nfiles=0, target=False, claim_cur=None):
         """Delegation recall tests"""
         if self.clientobj is None:
-            return
-        if deleg_type == OPEN_DELEGATE_READ and conflict_type == OPEN_DELEGATE_READ:
             return
         try:
             fd = None
             fdsec = None
             self.fdko = None
             target_str = ""
-            mode_str = open_mode_str(deleg_type)
-            if conflict_type is None:
-                # Conflict OPEN type for both READ and WRITE
-                conflict_type = OPEN_DELEGATE_WRITE
+            deleg_type = deleg_map[open_type]
+            mode_str = open_str[open_type]
+            op_type = OP_READ if open_type == OPEN_READ else OP_WRITE
             if conflict_type == OP_SETATTR:
                 conflict_str = "SETATTR (chmod)"
                 conflict_op = OP_SETATTR
@@ -697,7 +699,8 @@ class DelegTest(TestUtil):
                 conflict_op = OP_RENAME
                 target_str = " (DST)" if target else " (SRC)"
             else:
-                conflict_str = "OPEN (%s)" % open_mode_str(conflict_type)
+                ctype = "READ" if conflict_type == OPEN_DELEGATE_READ else "WRITE"
+                conflict_str = "OPEN (%s)" % ctype
                 conflict_op = OP_OPEN
             lock_str = " and file lock" if lock else ""
 
@@ -714,20 +717,20 @@ class DelegTest(TestUtil):
             other_read_deleg = deleg_type == OPEN_DELEGATE_READ and claim_cur is None
 
             self.test_group("Recall %s delegation with %s%s%s%s" % (mode_str, conflict_str, target_str, lock_str, claim_str))
-            self.setup_test(deleg_type, mount=True, nfiles=nfiles, lexec=(claim_cur is not None))
+            self.setup_test(open_type, mount=True, nfiles=nfiles, lexec=(claim_cur is not None))
 
             # Open file, should get a DELEGATION
             try:
                 fmsg = ""
                 dmsg = "Open file for %s" % mode_str
                 self.dprint('DBG2', "%s [%s]" % (dmsg, self.absfile))
-                fd = os.open(self.absfile, open_mode(deleg_type))
+                fd = os.open(self.absfile, open_flags[open_type])
             except OSError as exerr:
                 fmsg = ", failed with %s" % exerr
             self.test(len(fmsg) == 0, "%s should succeed" % dmsg, failmsg=fmsg)
 
             if lock:
-                self.lock_file(fd, deleg_type, self.absfile)
+                self.lock_file(fd, open_type, self.absfile)
 
             iosize = int(self.PAGESIZE/2)
 
@@ -755,7 +758,7 @@ class DelegTest(TestUtil):
                 fmsg = ""
                 dmsg = "%s file on client holding delegation" % mode_str.capitalize()
                 self.dprint("DBG3", "%s [%s]" % (dmsg, self.absfile))
-                if deleg_type == OPEN_DELEGATE_READ:
+                if open_type == OPEN_READ:
                     os.read(fd, iosize)
                 else:
                     os.write(fd, self.data_pattern(0, iosize, PATTERN))
@@ -997,7 +1000,7 @@ class DelegTest(TestUtil):
                 # Verify I/O packets
                 stid_type = LOCK_STID if lock and lock_stid else OPEN_STID
                 stateid = lock_stid if stid_type == LOCK_STID else open_stid
-                self.verify_io_packets(deleg_type, open_fh, stid_type, stateid, delegret=True)
+                self.verify_io_packets(op_type, open_fh, stid_type, stateid, delegret=True)
             else:
                 self.test(cbcall, "CB_RECALL should be sent to the client after a conflicting %s is received from a second client" % conflict_str)
             if cbcall is None:
@@ -1076,7 +1079,7 @@ class DelegTest(TestUtil):
                 mds_stat = [NFS4ERR_STALE]
 
             # Verify I/O packets
-            self.verify_io_packets(deleg_type, open_fh, stid_type, stateid, status=mds_stat, ds_status=ds_stat, delegret=True)
+            self.verify_io_packets(op_type, open_fh, stid_type, stateid, status=mds_stat, ds_status=ds_stat, delegret=True)
         except Exception:
             self.test(False, traceback.format_exc())
         finally:
@@ -1084,137 +1087,137 @@ class DelegTest(TestUtil):
 
     def basic01_test(self):
         """Basic read delegation test"""
-        self.basic_deleg_test(OPEN_DELEGATE_READ)
+        self.basic_deleg_test(OPEN_READ)
 
     def basic02_test(self):
         """Basic write delegation test"""
-        self.basic_deleg_test(OPEN_DELEGATE_WRITE)
+        self.basic_deleg_test(OPEN_WRITE)
 
     def basic03_test(self):
         """Basic read delegation test with file stat"""
-        self.basic_deleg_test(OPEN_DELEGATE_READ, stat=True)
+        self.basic_deleg_test(OPEN_READ, stat=True)
 
     def basic04_test(self):
         """Basic write delegation test with file stat"""
-        self.basic_deleg_test(OPEN_DELEGATE_WRITE, stat=True, nfiles=1)
+        self.basic_deleg_test(OPEN_WRITE, stat=True, nfiles=1)
 
     def basic05_test(self):
         """Basic read delegation test with file lock"""
-        self.basic_deleg_test(OPEN_DELEGATE_READ, lock=True)
+        self.basic_deleg_test(OPEN_READ, lock=True)
 
     def basic06_test(self):
         """Basic write delegation test with file lock"""
-        self.basic_deleg_test(OPEN_DELEGATE_WRITE, lock=True)
+        self.basic_deleg_test(OPEN_WRITE, lock=True)
 
     def recall01_test(self):
         """Recall read delegation by writing from a second client"""
-        self.recall_deleg_test(OPEN_DELEGATE_READ)
+        self.recall_deleg_test(OPEN_READ)
 
     def recall02_test(self):
         """Recall write delegation by writing from a second client"""
-        self.recall_deleg_test(OPEN_DELEGATE_WRITE)
+        self.recall_deleg_test(OPEN_WRITE)
 
     def recall03_test(self):
         """Recall read delegation by writing from a second client with file lock"""
-        self.recall_deleg_test(OPEN_DELEGATE_READ, lock=True)
+        self.recall_deleg_test(OPEN_READ, lock=True)
 
     def recall04_test(self):
         """Recall write delegation by writing from a second client with file lock"""
-        self.recall_deleg_test(OPEN_DELEGATE_WRITE, lock=True)
+        self.recall_deleg_test(OPEN_WRITE, lock=True)
 
     def recall05_test(self):
         """Recall write delegation by reading from a second client"""
-        self.recall_deleg_test(OPEN_DELEGATE_WRITE, conflict_type=OPEN_DELEGATE_READ)
+        self.recall_deleg_test(OPEN_WRITE, conflict_type=OPEN_DELEGATE_READ)
 
     def recall06_test(self):
         """Recall write delegation by reading from a second client with file lock"""
-        self.recall_deleg_test(OPEN_DELEGATE_WRITE, conflict_type=OPEN_DELEGATE_READ, lock=True)
+        self.recall_deleg_test(OPEN_WRITE, conflict_type=OPEN_DELEGATE_READ, lock=True)
 
     def recall07_test(self):
         """Recall read delegation by changing the permissions to the file"""
-        self.recall_deleg_test(OPEN_DELEGATE_READ, conflict_type=OP_SETATTR)
+        self.recall_deleg_test(OPEN_READ, conflict_type=OP_SETATTR)
 
     def recall08_test(self):
         """Recall write delegation by changing the permissions to the file"""
-        self.recall_deleg_test(OPEN_DELEGATE_WRITE, conflict_type=OP_SETATTR)
+        self.recall_deleg_test(OPEN_WRITE, conflict_type=OP_SETATTR)
 
     def recall09_test(self):
         """Recall read delegation by changing the permissions to the file with file lock"""
-        self.recall_deleg_test(OPEN_DELEGATE_READ, conflict_type=OP_SETATTR, lock=True)
+        self.recall_deleg_test(OPEN_READ, conflict_type=OP_SETATTR, lock=True)
 
     def recall10_test(self):
         """Recall write delegation by changing the permissions to the file with file lock"""
-        self.recall_deleg_test(OPEN_DELEGATE_WRITE, conflict_type=OP_SETATTR, lock=True)
+        self.recall_deleg_test(OPEN_WRITE, conflict_type=OP_SETATTR, lock=True)
 
     def recall11_test(self):
         """Recall read delegation by removing the file"""
-        self.recall_deleg_test(OPEN_DELEGATE_READ, conflict_type=OP_REMOVE, nfiles=1)
+        self.recall_deleg_test(OPEN_READ, conflict_type=OP_REMOVE, nfiles=1)
 
     def recall12_test(self):
         """Recall write delegation by removing the file"""
-        self.recall_deleg_test(OPEN_DELEGATE_WRITE, conflict_type=OP_REMOVE, nfiles=1)
+        self.recall_deleg_test(OPEN_WRITE, conflict_type=OP_REMOVE, nfiles=1)
 
     def recall13_test(self):
         """Recall read delegation by removing the file with file lock"""
-        self.recall_deleg_test(OPEN_DELEGATE_READ, conflict_type=OP_REMOVE, nfiles=1, lock=True)
+        self.recall_deleg_test(OPEN_READ, conflict_type=OP_REMOVE, nfiles=1, lock=True)
 
     def recall14_test(self):
         """Recall write delegation by removing the file with file lock"""
-        self.recall_deleg_test(OPEN_DELEGATE_WRITE, conflict_type=OP_REMOVE, nfiles=1, lock=True)
+        self.recall_deleg_test(OPEN_WRITE, conflict_type=OP_REMOVE, nfiles=1, lock=True)
 
     def recall15_test(self):
         """Recall read delegation by renaming the file"""
-        self.recall_deleg_test(OPEN_DELEGATE_READ, conflict_type=OP_RENAME, nfiles=1)
+        self.recall_deleg_test(OPEN_READ, conflict_type=OP_RENAME, nfiles=1)
 
     def recall16_test(self):
         """Recall write delegation by renaming the file"""
-        self.recall_deleg_test(OPEN_DELEGATE_WRITE, conflict_type=OP_RENAME, nfiles=1)
+        self.recall_deleg_test(OPEN_WRITE, conflict_type=OP_RENAME, nfiles=1)
 
     def recall17_test(self):
         """Recall read delegation by renaming the file with file lock"""
-        self.recall_deleg_test(OPEN_DELEGATE_READ, conflict_type=OP_RENAME, nfiles=1, lock=True)
+        self.recall_deleg_test(OPEN_READ, conflict_type=OP_RENAME, nfiles=1, lock=True)
 
     def recall18_test(self):
         """Recall write delegation by renaming the file with file lock"""
-        self.recall_deleg_test(OPEN_DELEGATE_WRITE, conflict_type=OP_RENAME, nfiles=1, lock=True)
+        self.recall_deleg_test(OPEN_WRITE, conflict_type=OP_RENAME, nfiles=1, lock=True)
 
     def recall19_test(self):
         """Recall read delegation by renaming into the file"""
-        self.recall_deleg_test(OPEN_DELEGATE_READ, conflict_type=OP_RENAME, nfiles=2, target=True)
+        self.recall_deleg_test(OPEN_READ, conflict_type=OP_RENAME, nfiles=2, target=True)
 
     def recall20_test(self):
         """Recall write delegation by renaming into the file"""
-        self.recall_deleg_test(OPEN_DELEGATE_WRITE, conflict_type=OP_RENAME, nfiles=2, target=True)
+        self.recall_deleg_test(OPEN_WRITE, conflict_type=OP_RENAME, nfiles=2, target=True)
 
     def recall21_test(self):
         """Recall read delegation by renaming into the file with file lock"""
-        self.recall_deleg_test(OPEN_DELEGATE_READ, conflict_type=OP_RENAME, nfiles=2, target=True, lock=True)
+        self.recall_deleg_test(OPEN_READ, conflict_type=OP_RENAME, nfiles=2, target=True, lock=True)
 
     def recall22_test(self):
         """Recall write delegation by renaming into the file with file lock"""
-        self.recall_deleg_test(OPEN_DELEGATE_WRITE, conflict_type=OP_RENAME, nfiles=2, target=True, lock=True)
+        self.recall_deleg_test(OPEN_WRITE, conflict_type=OP_RENAME, nfiles=2, target=True, lock=True)
 
     def recall23_test(self):
         """Recall read delegation by writing from a second client with file lock,
            having a pending read open"""
-        self.recall_deleg_test(OPEN_DELEGATE_READ, claim_cur=os.O_RDONLY, lock=True)
+        self.recall_deleg_test(OPEN_READ, claim_cur=os.O_RDONLY, lock=True)
 
     def recall24_test(self):
         """Recall read delegation by writing from a second client with file lock,
            having a pending write open.
            Delegation is returned by the client when the second open is done so
            there is no delegation recall"""
-        self.recall_deleg_test(OPEN_DELEGATE_READ, claim_cur=os.O_WRONLY, lock=True)
+        self.recall_deleg_test(OPEN_READ, claim_cur=os.O_WRONLY, lock=True)
 
     def recall25_test(self):
         """Recall write delegation by writing from a second client with file lock,
            having a pending read open"""
-        self.recall_deleg_test(OPEN_DELEGATE_WRITE, claim_cur=os.O_RDONLY, lock=True)
+        self.recall_deleg_test(OPEN_WRITE, claim_cur=os.O_RDONLY, lock=True)
 
     def recall26_test(self):
         """Recall write delegation by writing from a second client with file lock,
            having a pending write open"""
-        self.recall_deleg_test(OPEN_DELEGATE_WRITE, claim_cur=os.O_WRONLY, lock=True)
+        self.recall_deleg_test(OPEN_WRITE, claim_cur=os.O_WRONLY, lock=True)
 
 ################################################################################
 # Entry point
