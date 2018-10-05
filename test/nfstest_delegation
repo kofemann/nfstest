@@ -676,7 +676,7 @@ class DelegTest(TestUtil):
         finally:
             self.pktt.close()
 
-    def recall_deleg_test(self, open_type, conflict_type=OPEN_DELEGATE_WRITE, lock=False, nfiles=0, target=False, claim_cur=None):
+    def recall_deleg_test(self, open_type, conflict_type=OP_WRITE, lock=False, nfiles=0, target=False, claim_cur=None):
         """Delegation recall tests"""
         if self.clientobj is None:
             return
@@ -699,7 +699,7 @@ class DelegTest(TestUtil):
                 conflict_op = OP_RENAME
                 target_str = " (DST)" if target else " (SRC)"
             else:
-                ctype = "READ" if conflict_type == OPEN_DELEGATE_READ else "WRITE"
+                ctype = "READ" if conflict_type == OP_READ else "WRITE"
                 conflict_str = "OPEN (%s)" % ctype
                 conflict_op = OP_OPEN
             lock_str = " and file lock" if lock else ""
@@ -800,7 +800,7 @@ class DelegTest(TestUtil):
                         self.absfile  = aname
                         self.filename = fname
                         self.rexecobj.run(os.rename, self.absfile, newname)
-                elif conflict_type == OPEN_DELEGATE_READ:
+                elif conflict_type == OP_READ:
                     dmsg = "Read same file from another client"
                     self.dprint("DBG2", "%s to recall delegation [%s]" % (dmsg, self.absfile))
                     fdrd = self.rexecobj.run(os.open, self.absfile, os.O_RDONLY)
@@ -1127,11 +1127,11 @@ class DelegTest(TestUtil):
 
     def recall05_test(self):
         """Recall write delegation by reading from a second client"""
-        self.recall_deleg_test(OPEN_WRITE, conflict_type=OPEN_DELEGATE_READ)
+        self.recall_deleg_test(OPEN_WRITE, conflict_type=OP_READ)
 
     def recall06_test(self):
         """Recall write delegation by reading from a second client with file lock"""
-        self.recall_deleg_test(OPEN_WRITE, conflict_type=OPEN_DELEGATE_READ, lock=True)
+        self.recall_deleg_test(OPEN_WRITE, conflict_type=OP_READ, lock=True)
 
     def recall07_test(self):
         """Recall read delegation by changing the permissions to the file"""
