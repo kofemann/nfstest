@@ -104,12 +104,20 @@ TESTNAMES_SETATTR = [
     "recall08",
     "recall09",
     "recall10",
+    "recall35",
+    "recall36",
+    "recall37",
+    "recall38",
 ]
 TESTNAMES_REMOVE = [
     "recall11",
     "recall12",
     "recall13",
     "recall14",
+    "recall39",
+    "recall40",
+    "recall41",
+    "recall42",
 ]
 TESTNAMES_RENAME = [
     "recall15",
@@ -120,21 +128,41 @@ TESTNAMES_RENAME = [
     "recall20",
     "recall21",
     "recall22",
+    "recall43",
+    "recall44",
+    "recall45",
+    "recall46",
+    "recall47",
+    "recall48",
+    "recall49",
+    "recall50",
 ]
 TESTNAMES_PENDING = [
     "recall23",
     "recall24",
     "recall25",
     "recall26",
+    "recall51",
+    "recall52",
+    "recall53",
+    "recall54",
 ]
-TESTNAMES_REMOTE = [
+TESTNAMES_REMOTE = sorted([
     "recall01",
     "recall02",
     "recall03",
     "recall04",
     "recall05",
     "recall06",
-] + TESTNAMES_SETATTR + TESTNAMES_REMOVE + TESTNAMES_RENAME + TESTNAMES_PENDING
+    "recall27",
+    "recall28",
+    "recall29",
+    "recall30",
+    "recall31",
+    "recall32",
+    "recall33",
+    "recall34",
+] + TESTNAMES_SETATTR + TESTNAMES_REMOVE + TESTNAMES_RENAME + TESTNAMES_PENDING)
 
 # Include the test groups in the list of test names
 # so they are displayed in the help
@@ -708,13 +736,13 @@ class DelegTest(TestUtil):
             fd = None
             fdsec = None
             self.fdko = None
-            target_str = ""
+            extra_str = ""
             deleg_type = deleg_map[open_type]
             mode_str = deleg_str[deleg_type]
-            op_type = OP_READ if open_type == OPEN_READ else OP_WRITE
             if io_type is None:
                 io_type = OPEN_READ if open_type == OPEN_READ else OPEN_WRITE
             io_str = open_str[io_type]
+            op_type = OP_READ if io_type == OPEN_READ else OP_WRITE
             if conflict_type == OP_SETATTR:
                 conflict_str = "SETATTR (chmod)"
                 conflict_op = OP_SETATTR
@@ -724,12 +752,17 @@ class DelegTest(TestUtil):
             elif conflict_type == OP_RENAME:
                 conflict_str = "RENAME"
                 conflict_op = OP_RENAME
-                target_str = " (DST)" if target else " (SRC)"
+                conflict_str += " (DST)" if target else " (SRC)"
             else:
                 ctype = "READ" if conflict_type == OP_READ else "WRITE"
                 conflict_str = "OPEN (%s)" % ctype
                 conflict_op = OP_OPEN
-            lock_str = " and file lock" if lock else ""
+
+            if open_type == OPEN_RDWR:
+                iostr = "reading" if io_type == OPEN_READ else "writing"
+                extra_str = " using RDWR open while %s" % iostr
+
+            lock_str = " with file lock" if lock else ""
 
             claim_str = ""
             if claim_cur == os.O_RDONLY:
@@ -743,7 +776,8 @@ class DelegTest(TestUtil):
             # delegation should not be recalled
             other_read_deleg = deleg_type == OPEN_DELEGATE_READ and claim_cur is None
 
-            self.test_group("Recall %s delegation with %s%s%s%s" % (mode_str, conflict_str, target_str, lock_str, claim_str))
+            extra_str += "%s%s" % (lock_str, claim_str)
+            self.test_group("Recall %s delegation with %s%s" % (mode_str, conflict_str, extra_str))
             self.setup_test(open_type, io_type, mount=True, nfiles=nfiles, lexec=(claim_cur is not None))
 
             # Open file, should get a DELEGATION
@@ -757,7 +791,7 @@ class DelegTest(TestUtil):
             self.test(len(fmsg) == 0, "%s should succeed" % dmsg, failmsg=fmsg)
 
             if lock:
-                self.lock_file(fd, open_type, self.absfile)
+                self.lock_file(fd, io_type, self.absfile)
 
             iosize = int(self.PAGESIZE/2)
 
@@ -785,7 +819,7 @@ class DelegTest(TestUtil):
                 fmsg = ""
                 dmsg = "%s file on client holding delegation" % io_str.capitalize()
                 self.dprint("DBG3", "%s [%s]" % (dmsg, self.absfile))
-                if open_type == OPEN_READ:
+                if io_type == OPEN_READ:
                     os.read(fd, iosize)
                 else:
                     os.write(fd, self.data_pattern(0, iosize, PATTERN))
@@ -854,7 +888,7 @@ class DelegTest(TestUtil):
                 dmsg = "%s file after conflicting operation" % io_str.capitalize()
                 self.dprint("DBG3", "%s [%s]" % (dmsg, self.absfile))
                 # Read/Write file
-                if deleg_type == OPEN_DELEGATE_READ:
+                if io_type == OPEN_READ:
                     # Read should not fail
                     expfail = False
                     os.read(fd, self.filesize - iosize)
@@ -1086,7 +1120,7 @@ class DelegTest(TestUtil):
 
             self.pktt.rewind(delegreturn_index)
 
-            # Find OPEN reply from the second client
+            # Find conflicting operation reply from the second client
             xid = opencall.rpc.xid
             openreply = self.pktt.match("RPC.xid == %d and NFS.resop == %d" % (xid, conflict_op))
             self.test(openreply != None, "%s reply should be sent to the second client after the %s delegation has been returned" % (conflict_str, mode_str))
@@ -1269,6 +1303,146 @@ class DelegTest(TestUtil):
         """Recall write delegation by writing from a second client with file lock,
            having a pending write open"""
         self.recall_deleg_test(OPEN_WRITE, claim_cur=os.O_WRONLY, lock=True)
+
+    def recall27_test(self):
+        """Recall write delegation by reading from a second client using RDWR
+           open while reading"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_READ, conflict_type=OP_READ)
+
+    def recall28_test(self):
+        """Recall write delegation by reading from a second client using RDWR
+           open while writing"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_WRITE, conflict_type=OP_READ)
+
+    def recall29_test(self):
+        """Recall write delegation by writing from a second client using RDWR
+           open while reading"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_READ, conflict_type=OP_WRITE)
+
+    def recall30_test(self):
+        """Recall write delegation by writing from a second client using RDWR
+           open while writing"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_WRITE, conflict_type=OP_WRITE)
+
+    def recall31_test(self):
+        """Recall write delegation by reading from a second client using RDWR
+           open while reading with file lock"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_READ, conflict_type=OP_READ, lock=True)
+
+    def recall32_test(self):
+        """Recall write delegation by reading from a second client using RDWR
+           open while writing with file lock"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_WRITE, conflict_type=OP_READ, lock=True)
+
+    def recall33_test(self):
+        """Recall write delegation by writing from a second client using RDWR
+           open while reading with file lock"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_READ, conflict_type=OP_WRITE, lock=True)
+
+    def recall34_test(self):
+        """Recall write delegation by writing from a second client using RDWR
+           open while writing with file lock"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_WRITE, conflict_type=OP_WRITE, lock=True)
+
+    def recall35_test(self):
+        """Recall write delegation by changing the permissions to the file
+           from a second client using RDWR open while reading"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_READ, conflict_type=OP_SETATTR)
+
+    def recall36_test(self):
+        """Recall write delegation by changing the permissions to the file
+           from a second client using RDWR open while writing"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_WRITE, conflict_type=OP_SETATTR)
+
+    def recall37_test(self):
+        """Recall write delegation by changing the permissions to the file
+           from a second client using RDWR open while reading with file lock"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_READ, conflict_type=OP_SETATTR, lock=True)
+
+    def recall38_test(self):
+        """Recall write delegation by changing the permissions to the file
+           from a second client using RDWR open while writing with file lock"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_WRITE, conflict_type=OP_SETATTR, lock=True)
+
+    def recall39_test(self):
+        """Recall write delegation by removing the file from a second client
+           using RDWR open while reading"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_READ, conflict_type=OP_REMOVE, nfiles=1)
+
+    def recall40_test(self):
+        """Recall write delegation by removing the file from a second client
+           using RDWR open while writing"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_WRITE, conflict_type=OP_REMOVE, nfiles=1)
+
+    def recall41_test(self):
+        """Recall write delegation by removing the file from a second client
+           using RDWR open while reading with file lock"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_READ, conflict_type=OP_REMOVE, nfiles=1, lock=True)
+
+    def recall42_test(self):
+        """Recall write delegation by removing the file from a second client
+           using RDWR open while writing with file lock"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_WRITE, conflict_type=OP_REMOVE, nfiles=1, lock=True)
+
+    def recall43_test(self):
+        """Recall write delegation by renaming the file from a second client
+           using RDWR open while reading"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_READ, conflict_type=OP_RENAME, nfiles=1)
+
+    def recall44_test(self):
+        """Recall write delegation by renaming the file from a second client
+           using RDWR open while writing"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_WRITE, conflict_type=OP_RENAME, nfiles=1)
+
+    def recall45_test(self):
+        """Recall write delegation by renaming the file from a second client
+           using RDWR open while reading with file lock"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_READ, conflict_type=OP_RENAME, nfiles=1, lock=True)
+
+    def recall46_test(self):
+        """Recall write delegation by renaming the file from a second client
+           using RDWR open while writing with file lock"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_WRITE, conflict_type=OP_RENAME, nfiles=1, lock=True)
+
+    def recall47_test(self):
+        """Recall write delegation by renaming the file from a second client
+           using RDWR open while reading"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_READ, conflict_type=OP_RENAME, nfiles=2, target=True)
+
+    def recall48_test(self):
+        """Recall write delegation by renaming the file from a second client
+           using RDWR open while writing"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_WRITE, conflict_type=OP_RENAME, nfiles=2, target=True)
+
+    def recall49_test(self):
+        """Recall write delegation by renaming the file from a second client
+           using RDWR open while reading with file lock"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_READ, conflict_type=OP_RENAME, nfiles=2, target=True, lock=True)
+
+    def recall50_test(self):
+        """Recall write delegation by renaming the file from a second client
+           using RDWR open while writing with file lock"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_WRITE, conflict_type=OP_RENAME, nfiles=2, target=True, lock=True)
+
+    def recall51_test(self):
+        """Recall write delegation by writing from a second client using RDWR
+           open while reading with file lock, having a pending read open"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_READ, claim_cur=os.O_RDONLY, lock=True)
+
+    def recall52_test(self):
+        """Recall write delegation by writing from a second client using RDWR
+           open while reading with file lock, having a pending write open"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_READ, claim_cur=os.O_WRONLY, lock=True)
+
+    def recall53_test(self):
+        """Recall write delegation by writing from a second client using RDWR
+           open while writing with file lock, having a pending read open"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_WRITE, claim_cur=os.O_RDONLY, lock=True)
+
+    def recall54_test(self):
+        """Recall write delegation by writing from a second client using RDWR
+           open while writing with file lock, having a pending write open"""
+        self.recall_deleg_test(OPEN_RDWR, io_type=OPEN_WRITE, claim_cur=os.O_WRONLY, lock=True)
 
 ################################################################################
 # Entry point
