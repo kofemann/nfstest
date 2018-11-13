@@ -25,7 +25,7 @@ from nfstest.test_util import TestUtil
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.6"
+__version__   = "1.7"
 
 USAGE = """%prog --server <server> [--client <client>] [options]
 
@@ -242,6 +242,12 @@ deleg_str = {
     OPEN_DELEGATE_WRITE : "WRITE",
 }
 
+def file_lock(fd, open_type, absfile, lock_offset=0, lock_len=0):
+    """Lock file given by the file descriptor"""
+    lock_type = fcntl.F_RDLCK if open_type == OPEN_READ else fcntl.F_WRLCK
+    lockdata = struct.pack('hhllhh', lock_type, 0, lock_offset, lock_len, 0, 0)
+    return fcntl.fcntl(fd, fcntl.F_SETLKW, lockdata)
+
 class BaseName(Exception):
     """Exception used to stop recall tests when --basename option is set"""
     pass
@@ -269,8 +275,10 @@ class DelegTest(TestUtil):
         self.test_opgroup.add_option("--client", default=None, help=hhelp)
         hhelp = "Starting offset for lock [default: %default]"
         self.test_opgroup.add_option("--lock-offset", type="int", default=0, help=hhelp)
+        hhelp = "Starting offset for lock on pending open [default: %default]"
+        self.test_opgroup.add_option("--lock-poffset", type="int", default=8192, help=hhelp)
         hhelp = "Number of bytes to lock [default: %default]"
-        self.test_opgroup.add_option("--lock-len", type="int", default=0, help=hhelp)
+        self.test_opgroup.add_option("--lock-len", type="int", default=4096, help=hhelp)
         hhelp = "Truncate file when writing from the second file for the recall tests"
         self.test_opgroup.add_option("--truncate", action="store_true", default=False, help=hhelp)
         self.scan_options()
@@ -303,7 +311,7 @@ class DelegTest(TestUtil):
             if len(self.testlist) == 0:
                 self.opts.error("no test to run, specify option --client for --runtest='%s'" % self.runtest)
 
-    def lock_file(self, fd, open_type, absfile):
+    def lock_file(self, fd, open_type, absfile, lock_offset=0, lock_len=0):
         """Lock file given by the file descriptor.
 
            fd:
@@ -312,14 +320,16 @@ class DelegTest(TestUtil):
                Open type
            absfile:
                File path to display as debug info
+           lock_offset:
+               Lock offset [default: 0]
+           lock_len:
+               Lock length [default: 0]
         """
-        lock_type = fcntl.F_RDLCK if open_type == OPEN_READ else fcntl.F_WRLCK
         lock_str = "F_RDLCK" if open_type == OPEN_READ else "F_WRLCK"
         try:
             fmsg = ""
-            self.dprint('DBG3', "Lock %s (F_SETLKW, %s) start=%d len=%d" % (absfile, lock_str, self.lock_offset, self.lock_len))
-            lockdata = struct.pack('hhllhh', lock_type, 0, self.lock_offset, self.lock_len, 0, 0)
-            rv = fcntl.fcntl(fd, fcntl.F_SETLKW, lockdata)
+            self.dprint('DBG3', "Lock %s (F_SETLKW, %s) start=%d len=%d" % (absfile, lock_str, lock_offset, lock_len))
+            file_lock(fd, open_type, absfile, lock_offset, lock_len)
         except OSError as exerr:
             fmsg = ", failed with %s" % exerr
         dmsg = "Lock file with %s" % lock_str
@@ -362,7 +372,7 @@ class DelegTest(TestUtil):
         self.test(len(fmsg) == 0, "%s should succeed" % dmsg, failmsg=fmsg)
 
         if lock:
-            self.lock_file(fd, io_type, absfile)
+            self.lock_file(fd, io_type, absfile, self.lock_offset, self.lock_len)
 
         try:
             fmsg = ""
@@ -421,6 +431,8 @@ class DelegTest(TestUtil):
             rexecobj_save = self.rexecobj
             self.lexecobj = self.create_rexec()
             self.rexecobj = rexecobj_save
+            self.lexecobj.rimport("fcntl")
+            self.lexecobj.rcode(file_lock)
 
         self.trace_start()
         self.mount()
@@ -791,10 +803,11 @@ class DelegTest(TestUtil):
             self.test(len(fmsg) == 0, "%s should succeed" % dmsg, failmsg=fmsg)
 
             if lock:
-                self.lock_file(fd, io_type, self.absfile)
+                self.lock_file(fd, io_type, self.absfile, self.lock_offset, self.lock_len)
 
             iosize = int(self.PAGESIZE/2)
 
+            cio_type = None
             if claim_cur is not None:
                 try:
                     fmsg = ""
@@ -802,6 +815,17 @@ class DelegTest(TestUtil):
                     self.dprint('DBG2', "%s [%s]" % (dmsg, self.absfile))
                     fdsec = self.lexecobj.run(os.open, self.absfile, claim_cur)
                 except OSError as exerr:
+                    fmsg = ", failed with %s" % exerr
+                self.test(len(fmsg) == 0, "%s should succeed" % dmsg, failmsg=fmsg)
+
+                try:
+                    fmsg = ""
+                    dmsg = "Lock file in a different process"
+                    cio_type = OPEN_READ if claim_cur == os.O_RDONLY else OPEN_WRITE
+                    cio_lstr = "F_RDLCK" if claim_cur == os.O_RDONLY else "F_WRLCK"
+                    self.dprint('DBG3', "Lock %s in a different process (F_SETLKW, %s) start=%d len=%d" % (self.absfile, cio_lstr, self.lock_poffset, self.lock_len))
+                    self.lexecobj.run(file_lock, fdsec, cio_type, self.absfile, self.lock_poffset, self.lock_len)
+                except IOError as exerr:
                     fmsg = ", failed with %s" % exerr
                 self.test(len(fmsg) == 0, "%s should succeed" % dmsg, failmsg=fmsg)
 
@@ -1107,10 +1131,18 @@ class DelegTest(TestUtil):
             if lock and delegreturncall:
                 self.pktt.rewind(open_index)
                 # Find the LOCK before DELEGRETURN
-                (lockcall, lockreply) = self.find_nfs_op(OP_LOCK, src_ipaddr=self.client_ipaddr, maxindex=delegreturn_index)
+                mstr = "NFS.offset == %d" % self.lock_offset
+                (lockcall, lockreply) = self.find_nfs_op(OP_LOCK, match=mstr, src_ipaddr=self.client_ipaddr, maxindex=delegreturn_index)
                 self.test(lockcall, "LOCK should be sent before returning the %s delegation" % mode_str)
                 if lockreply and lockreply.nfs.status == NFS4_OK:
                     lock_stid = lockreply.NFSop.stateid.other
+
+                if cio_type is not None:
+                    self.pktt.rewind(open_index)
+                    # Find the LOCK before DELEGRETURN -- second process
+                    mstr = "NFS.offset == %d" % self.lock_poffset
+                    (lockcall, lockreply) = self.find_nfs_op(OP_LOCK, match=mstr, src_ipaddr=self.client_ipaddr, maxindex=delegreturn_index)
+                    self.test(lockcall, "LOCK should be sent before returning the %s delegation for the second process" % mode_str)
 
             self.test(delegreturncall, "DELEGRETURN should be sent")
             if delegreturncall is None:
