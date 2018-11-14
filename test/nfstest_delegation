@@ -246,7 +246,7 @@ def file_lock(fd, open_type, absfile, lock_offset=0, lock_len=0):
     """Lock file given by the file descriptor"""
     lock_type = fcntl.F_RDLCK if open_type == OPEN_READ else fcntl.F_WRLCK
     lockdata = struct.pack('hhllhh', lock_type, 0, lock_offset, lock_len, 0, 0)
-    return fcntl.fcntl(fd, fcntl.F_SETLKW, lockdata)
+    return fcntl.fcntl(fd, fcntl.F_SETLK, lockdata)
 
 class BaseName(Exception):
     """Exception used to stop recall tests when --basename option is set"""
@@ -311,6 +311,13 @@ class DelegTest(TestUtil):
             if len(self.testlist) == 0:
                 self.opts.error("no test to run, specify option --client for --runtest='%s'" % self.runtest)
 
+        # Verify the lock ranges do not overlap
+        end1 = self.lock_offset  + self.lock_len - 1
+        end2 = self.lock_poffset + self.lock_len - 1
+        if end1 >= self.lock_poffset and end2 >= self.lock_offset:
+            # Ranges overlap
+            self.opts.error("Lock ranges overlap: (lock-offset, lock-len) and (lock-poffset, lock-len)")
+
     def lock_file(self, fd, open_type, absfile, lock_offset=0, lock_len=0):
         """Lock file given by the file descriptor.
 
@@ -328,7 +335,7 @@ class DelegTest(TestUtil):
         lock_str = "F_RDLCK" if open_type == OPEN_READ else "F_WRLCK"
         try:
             fmsg = ""
-            self.dprint('DBG3', "Lock %s (F_SETLKW, %s) start=%d len=%d" % (absfile, lock_str, lock_offset, lock_len))
+            self.dprint('DBG3', "Lock %s (F_SETLK, %s) start=%d len=%d" % (absfile, lock_str, lock_offset, lock_len))
             file_lock(fd, open_type, absfile, lock_offset, lock_len)
         except OSError as exerr:
             fmsg = ", failed with %s" % exerr
@@ -854,7 +861,7 @@ class DelegTest(TestUtil):
                     dmsg = "Lock file in a different process"
                     cio_type = OPEN_READ if claim_cur == os.O_RDONLY else OPEN_WRITE
                     cio_lstr = "F_RDLCK" if claim_cur == os.O_RDONLY else "F_WRLCK"
-                    self.dprint('DBG3', "Lock %s in a different process (F_SETLKW, %s) start=%d len=%d" % (self.absfile, cio_lstr, self.lock_poffset, self.lock_len))
+                    self.dprint('DBG3', "Lock %s in a different process (F_SETLK, %s) start=%d len=%d" % (self.absfile, cio_lstr, self.lock_poffset, self.lock_len))
                     self.lexecobj.run(file_lock, fdsec, cio_type, self.absfile, self.lock_poffset, self.lock_len)
                 except IOError as exerr:
                     fmsg = ", failed with %s" % exerr
