@@ -599,6 +599,37 @@ class DelegTest(TestUtil):
         io_list = self.find_ios(op_type, open_fh, self.server_ipaddr, self.port)
         self.verify_io_per_server(io_list, op_type, stid_type, stateid, status, delegret=delegret)
 
+    def verify_lock(self, io_type, mode_str, open_stid, offset, start_index, max_index, msg="", lock_owner=None, lock_stid=None):
+        """Verify correct lock is sent to the server"""
+        lock_stateid = None
+        self.pktt.rewind(start_index)
+        # Find LOCK call and reply using the lock offset
+        mstr = "NFS.offset == %d" % offset
+        (lockcall, lockreply) = self.find_nfs_op(OP_LOCK, match=mstr, status=None, src_ipaddr=self.client_ipaddr, maxindex=max_index)
+        self.test(lockcall, "LOCK should be sent before returning the %s delegation%s" % (mode_str, msg))
+        if lockcall:
+            # Verify lock info sent to the server
+            ltype = READ_LT if io_type == OPEN_READ else WRITE_LT
+            self.test(lockcall.NFSop.locktype == ltype, "LOCK should be sent with correct lock type")
+            self.test(lockcall.NFSop.length == self.lock_len, "LOCK should be sent with correct lock range")
+            self.test(lockcall.NFSop.locker.open_owner.stateid == open_stid, "LOCK should be sent with correct OPEN stateid")
+            if lock_owner is not None:
+                # Verify lock has a different lock owner than the one given
+                expr = lock_owner != lockcall.NFSop.locker.open_owner.lock_owner.owner
+                self.test(expr, "LOCK should be sent with a different open owner")
+        if lockreply:
+            # Verify lock reply
+            lstatus = lockreply.nfs.status
+            fmsg = ", failed with %s" % nfsstat4.get(lstatus, lstatus)
+            self.test(lstatus == NFS4_OK, "LOCK should return NFS4_OK", failmsg=fmsg)
+            if lockreply.nfs.status == NFS4_OK:
+                lock_stateid = lockreply.NFSop.stateid.other
+                if lock_stid is not None:
+                    # Verify lock stateid is different than the one given
+                    expr = lock_stid != lock_stateid
+                    self.test(expr, "LOCK should return a different lock stateid")
+        return lock_stateid
+
     def basic_deleg_test(self, open_type, io_type=None, lock=False, stat=False, nfiles=0):
         """Basic delegation tests"""
         try:
@@ -1128,21 +1159,18 @@ class DelegTest(TestUtil):
                 self.pktt.rewind(open_index)
 
             lock_stid = None
+            lock_owner = None
             if lock and delegreturncall:
-                self.pktt.rewind(open_index)
-                # Find the LOCK before DELEGRETURN
-                mstr = "NFS.offset == %d" % self.lock_offset
-                (lockcall, lockreply) = self.find_nfs_op(OP_LOCK, match=mstr, src_ipaddr=self.client_ipaddr, maxindex=delegreturn_index)
-                self.test(lockcall, "LOCK should be sent before returning the %s delegation" % mode_str)
-                if lockreply and lockreply.nfs.status == NFS4_OK:
-                    lock_stid = lockreply.NFSop.stateid.other
-
+                # Verify the LOCK before DELEGRETURN
+                lop_stid = open_stid if op_stid2 is None else op_stid2
+                lock_stid = self.verify_lock(io_type, mode_str, lop_stid, self.lock_offset, open_index, delegreturn_index)
+                if self.pktcall:
+                    # Save lock owner
+                    lock_owner = self.pktcall.NFSop.locker.open_owner.lock_owner.owner
                 if cio_type is not None:
-                    self.pktt.rewind(open_index)
-                    # Find the LOCK before DELEGRETURN -- second process
-                    mstr = "NFS.offset == %d" % self.lock_poffset
-                    (lockcall, lockreply) = self.find_nfs_op(OP_LOCK, match=mstr, src_ipaddr=self.client_ipaddr, maxindex=delegreturn_index)
-                    self.test(lockcall, "LOCK should be sent before returning the %s delegation for the second process" % mode_str)
+                    # Verify the LOCK before DELEGRETURN -- second process
+                    msg = " for the second process"
+                    self.verify_lock(cio_type, mode_str, lop_stid, self.lock_poffset, open_index, delegreturn_index, msg=msg, lock_owner=lock_owner, lock_stid=lock_stid)
 
             self.test(delegreturncall, "DELEGRETURN should be sent")
             if delegreturncall is None:
