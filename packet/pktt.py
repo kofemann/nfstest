@@ -459,9 +459,11 @@ class Pktt(BaseObj):
                         self.index = obj.mindex + 1
             else:
                 # Reset the current packet index and offset to the first packet
-                self.offset = self.ioffset
-                self.index  = 0
-                self.eof    = False
+                self.offset  = self.ioffset
+                self.boffset = 0
+                self.index   = 0
+                self.frame   = 0
+                self.eof     = False
 
                 # Position the file pointer to the offset of the first packet
                 self.seek(self.ioffset)
