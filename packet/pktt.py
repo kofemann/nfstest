@@ -1021,10 +1021,7 @@ class Pktt(BaseObj):
         if rewind:
             # No packet matched, re-position the file pointer back to where
             # the search started
-            if self.pktlist is None:
-                self.rewind(save_index)
-            else:
-                self.pindex = save_index
+            self.rewind(save_index)
         self.pkt = None
         self.dprint('PKT1', ">>> %d: match() -> False" % self.get_index())
         return None
