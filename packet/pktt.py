@@ -62,7 +62,7 @@ from packet.link.ethernet import ETHERNET
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "2.4"
+__version__   = "2.5"
 
 BaseObj.debug_map(0x100000000, 'pkt1', "PKT1: ")
 BaseObj.debug_map(0x200000000, 'pkt2', "PKT2: ")
@@ -249,7 +249,7 @@ class Pktt(BaseObj):
            Examples:
                pkt = x[index]
         """
-        self.dprint('PKT4', ">>> __getitem__(%d)" % index)
+        self.dprint('PKT4', ">>> %d: __getitem__(%d)" % (self.get_index(), index))
         if index < 0:
             # No negative index is allowed
             raise IndexError
@@ -440,7 +440,7 @@ class Pktt(BaseObj):
            e.g., when the given index is greater than the maximum number
            of packets processed so far.
         """
-        self.dprint('PKT1', ">>> rewind(%d)" % index)
+        self.dprint('PKT1', ">>> %d: rewind(%d)" % (self.get_index(), index))
         if self.pktlist is not None:
             self.pindex = index
             return True
@@ -700,7 +700,7 @@ class Pktt(BaseObj):
             lhs, opr, rhs = self._split_match(uargs)
             expr = self._process_match(obj, lhs, opr, rhs)
             texpr = eval(expr)
-        self.dprint('PKT2', "    %d: match_%s(%s) -> %r" % (self.pkt.record.index, layer, uargs, texpr))
+        self.dprint('PKT3', "    %d: match_%s(%s) -> %r" % (self.pkt.record.index, layer, uargs, texpr))
         return texpr
 
     def get_index(self):
@@ -718,6 +718,8 @@ class Pktt(BaseObj):
            and forth but only on a particular set of packets.
            See the match() method for an example of buffered matching.
         """
+        pstr = "None" if pktlist is None else "[...]"
+        self.dprint('PKT1', ">>> %d: set_pktlist(%s)" % (self.get_index(), pstr))
         self.pindex  = 0
         self.pktlist = pktlist
 
@@ -829,7 +831,7 @@ class Pktt(BaseObj):
            operation.
         """
         texpr = self._match_nfs(uargs)
-        self.dprint('PKT2', "    %d: match_nfs(%s) -> %r" % (self.pkt.record.index, uargs, texpr))
+        self.dprint('PKT3', "    %d: match_nfs(%s) -> %r" % (self.pkt.record.index, uargs, texpr))
         return texpr
 
     def _convert_match(self, ast):
@@ -1003,6 +1005,7 @@ class Pktt(BaseObj):
                     self.dprint('PKT1', ">>> %d: match() -> True: reply" % pkt.record.index)
                     self._match_xid_list.remove(pkt.rpc.xid)
                     self.reply_matched = True
+                    self.dprint('PKT2', "    %s" % pkt)
                     return pkt
                 if eval(pdata):
                     # Return matched packet
@@ -1010,6 +1013,7 @@ class Pktt(BaseObj):
                     if reply and pkt == "rpc" and pkt.rpc.type == 0:
                         # Save xid of matched call
                         self._match_xid_list.append(pkt.rpc.xid)
+                    self.dprint('PKT2', "    %s" % pkt)
                     return pkt
             except Exception:
                 pass
@@ -1022,7 +1026,7 @@ class Pktt(BaseObj):
             else:
                 self.pindex = save_index
         self.pkt = None
-        self.dprint('PKT1', ">>> match() -> False")
+        self.dprint('PKT1', ">>> %d: match() -> False" % self.get_index())
         return None
 
     def show_progress(self, done=False):
