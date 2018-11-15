@@ -134,10 +134,11 @@ class Pktt(BaseObj):
         self.bfile   = tfile  # Base trace file name
         self.live    = live   # Set to True if dealing with a live tcpdump file
         self.offset  = 0      # Current file offset
-        self.boffset = 0      # File offset of current packet
+        self.boffset = -1     # File offset of current packet
         self.ioffset = 0      # File offset of first packet
         self.index   = 0      # Current packet index
-        self.frame   = 1      # Current frame number
+        self.frame   = 0      # Current frame number
+        self.dframe  = 0      # Frame number was incremented when set to 1
         self.mindex  = 0      # Maximum packet index for current trace file
         self.findex  = 0      # Current tcpdump file index (used with self.live)
         self.pindex  = 0      # Current packet index (for pktlist)
@@ -350,12 +351,17 @@ class Pktt(BaseObj):
                 self._rpc_xid_map    = {}
                 pktt_obj.next()
 
+            if pktt_obj.dframe:
+                # Increment cumulative frame number
+                self.frame += 1
+
             # Overwrite attributes seen by the caller with the attributes
             # from the current packet trace object
             self.pkt = pktt_obj.pkt
             self.pkt_call = pktt_obj.pkt_call
             self.tfile = pktt_obj.tfile
             self.pkt.record.index = self.index  # Use a cumulative index
+            self.pkt.record.frame = self.frame  # Use a cumulative frame
             self.offset += pktt_obj.offset - pktt_obj.boffset
 
             try:
@@ -394,6 +400,9 @@ class Pktt(BaseObj):
             # The frame number can be used to match packets with other tools
             # like wireshark
             self.frame += 1
+            self.dframe = 1
+        else:
+            self.dframe = 0
 
         # Save file offset for this packet
         self.boffset = self.offset
@@ -448,6 +457,7 @@ class Pktt(BaseObj):
             if len(self.pktt_list) > 1:
                 # Dealing with multiple trace files
                 self.index = 0
+                self.frame = 0
                 for obj in self.pktt_list:
                     if not obj.eof or index <= obj.mindex:
                         obj.rewind()
