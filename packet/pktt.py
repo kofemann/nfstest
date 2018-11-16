@@ -346,14 +346,18 @@ class Pktt(BaseObj):
                 self.offset = self.filesize
                 self.show_progress(True)
                 raise StopIteration
-            elif len(self._tcp_stream_map):
+            elif len(self._tcp_stream_map) or len(self._rdma_info):
                 # This packet trace file should be processed serially
                 # Have all state transferred to next packet object
                 pktt_obj.rewind()
-                pktt_obj._tcp_stream_map = self._tcp_stream_map
-                pktt_obj._rpc_xid_map    = self._rpc_xid_map
-                self._tcp_stream_map = {}
-                self._rpc_xid_map    = {}
+                if len(self._tcp_stream_map):
+                    pktt_obj._tcp_stream_map = self._tcp_stream_map
+                    pktt_obj._rpc_xid_map    = self._rpc_xid_map
+                    self._tcp_stream_map = {}
+                    self._rpc_xid_map    = {}
+                if len(self._rdma_info):
+                    pktt_obj._rdma_info = self._rdma_info
+                    self._rdma_info = RDMAinfo()
                 pktt_obj.next()
 
             if pktt_obj.dframe:
@@ -389,6 +393,7 @@ class Pktt(BaseObj):
                     # Save current state
                     self._tcp_stream_map = pktt_obj._tcp_stream_map
                     self._rpc_xid_map    = pktt_obj._rpc_xid_map
+                    self._rdma_info      = pktt_obj._rdma_info
 
             self.show_progress()
 
