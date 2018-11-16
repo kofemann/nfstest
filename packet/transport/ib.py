@@ -693,6 +693,16 @@ class RDMAinfo(RDMAbase):
         # RDMA Reads/Writes/Reply segments {key: handle, value: RDMAsegment}
         self._rdma_segments = {}
 
+    def size(self):
+        """Return the number RDMA segments"""
+        return len(self._rdma_segments)
+    __len__ = size
+
+    def reset(self):
+        """Clear RDMA segments"""
+        self._rdma_segments = {}
+    __del__ = reset
+
     def get_rdma_segment(self, handle):
         """Return RDMA segment identified by the given handle"""
         return self._rdma_segments.get(handle)
