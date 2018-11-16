@@ -1001,6 +1001,7 @@ class SSCTest(TestUtil):
             diff_server = False
             if inter and self.dst:
                 # Get attributes from mount packets (destination server)
+                self.pktt.rewind()
                 dst_ipaddr    = self.dst.server_ipaddr
                 dst_clientid  = self.get_clientid(ipaddr=dst_ipaddr)
                 dst_sessionid = self.get_sessionid(clientid=dst_clientid, ipaddr=None)
@@ -1008,7 +1009,7 @@ class SSCTest(TestUtil):
                 if dst_rootfh is not None:
                     dst_ipaddr = self.pktcall.ip.dst
                 dst_export = os.path.join(self.dst_export, self.datadir)
-                dst_topfh  = self.get_pathfh(dst_export, dirfh=dst_rootfh)
+                dst_topfh  = self.get_pathfh(dst_export, dirfh=dst_rootfh, ipaddr=dst_ipaddr)
                 args["fh"] = dst_topfh
                 if src_clientid is not None and dst_clientid is not None and src_clientid != dst_clientid:
                     diff_server = True
