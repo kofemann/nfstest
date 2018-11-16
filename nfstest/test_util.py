@@ -730,11 +730,25 @@ class TestUtil(NFSUtil):
             # Set NFS version -- the actual value will be set after the mount
             self.nfs_version = float(self.nfsversion)
 
+            # Option basename is use for debugging purposes only, specifically
+            # when debugging the assertions of a test script without actually
+            # running the test itself. When this option is given the client
+            # does not mount the NFS server so the test is run in a local file
+            # system (it must have rw permissions) and it takes the packet
+            # traces previously created by a different run to check the results.
+            # If packet traces come from a different client and server the
+            # following options can be used to reflect the values used when
+            # the packet traces were created:
+            #   server = <server-ip-addr-to-use>
+            #   export = </export/path/to/use>
+            #   datadir = <data/dir/to/use>
+            #   client-ipaddr = <client-ip-addr-to-use>
             if len(self.basename) > 0:
                 self._name      = self.basename
                 self.nomount    = True
                 self.notrace    = True
                 self.keeptraces = True
+
             if self.bugmsgs is not None:
                 try:
                     for line in open(self.bugmsgs, 'r'):
