@@ -1616,7 +1616,7 @@ class NFSUtil(Host):
                 self.rootfh = getfh.fh
                 return getfh.fh
 
-    def get_pathfh(self, path, dirfh=None):
+    def get_pathfh(self, path, **kwargs):
         """Return the file handle for the given path by searching the packet
            trace for every component in the path.
            The file handle for each component is used to search for the file
@@ -1626,9 +1626,20 @@ class NFSUtil(Host):
                File system path
            dirfh:
                Directory file handle to start with [default: None]
+           ipaddr:
+               Destination IP address [default: self.server_ipaddr]
+           port:
+               Destination port [default: self.port]
         """
+        dst = ""
         self.pktcall  = None
         self.pktreply = None
+        dirfh  = kwargs.pop('dirfh', None)
+        ipaddr = kwargs.pop('ipaddr', self.server_ipaddr)
+        port   = kwargs.pop('port', self.port)
+        if ipaddr is not None:
+            dst = self.pktt.ip_tcp_dst_expr(ipaddr, port) + " and "
+
         # Break path into its directory components
         path_list = split_path(path)
         while len(path_list):
@@ -1640,7 +1651,7 @@ class NFSUtil(Host):
                 dirmatch = "crc32(nfs.fh) == %d and " % crc32(dirfh)
             # Match any operation with a name attribute,
             # e.g., LOOKUP, CREATE, etc.
-            mstr = "%snfs.name == '%s'" % (dirmatch, name)
+            mstr = "%s%snfs.name == '%s'" % (dst, dirmatch, name)
             while self.pktt.match(mstr, rewind=False, reply=True):
                 pkt = self.pktt.pkt
                 if pkt.rpc.type == 0:
