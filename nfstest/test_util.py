@@ -65,7 +65,7 @@ from optparse import OptionParser, OptionGroup, IndentedHelpFormatter
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.6"
+__version__   = "1.7"
 
 # Constants
 PASS = 0
@@ -441,6 +441,8 @@ class TestUtil(NFSUtil):
         self.dbg_opgroup.add_option("--pktdisp", action="store_true", default=False, help=hmsg)
         hmsg = "Fail every NFS error found in the packet trace"
         self.dbg_opgroup.add_option("--nfserrors", action="store_true", default=False, help=hmsg)
+        hmsg = "IP address of localhost"
+        self.dbg_opgroup.add_option("--client-ipaddr", default=None, help=hmsg)
         self.opts.add_option_group(self.dbg_opgroup)
 
         usage = self.usage
@@ -702,15 +704,16 @@ class TestUtil(NFSUtil):
             # Get IP address of server
             self.server_ipaddr = self.get_ip_address(host=self.server, ipv6=ipv6)
             # Get IP address of client
-            self.client_ipaddr = self.get_ip_address(ipv6=ipv6)
-            if self.interface is None:
-                out = self.get_route(self.server_ipaddr)
-                if out[1] is not None:
-                    self.interface = out[1]
-                    if out[2] is not None:
-                        self.client_ipaddr = out[2]
-                else:
-                    self.interface = c.NFSTEST_INTERFACE
+            if self.client_ipaddr is None:
+                self.client_ipaddr = self.get_ip_address(ipv6=ipv6)
+                if self.interface is None:
+                    out = self.get_route(self.server_ipaddr)
+                    if out[1] is not None:
+                        self.interface = out[1]
+                        if out[2] is not None:
+                            self.client_ipaddr = out[2]
+                    else:
+                        self.interface = c.NFSTEST_INTERFACE
             self.ipaddr = self.client_ipaddr
 
             self.tverbose = _tverbose_map.get(self.tverbose)
