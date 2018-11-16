@@ -985,10 +985,6 @@ class IB(BaseObj):
     _fattrs   = ("bth",)
     _strname  = "IB" # Layer name (IB, RoCE or RRoCE) to display
 
-    # The following is a class attribute which can be modified and shared
-    # by all IB packets:
-    _rdma_info = RDMAinfo()
-
     def __init__(self, pktt):
         """Constructor
 
@@ -1007,6 +1003,10 @@ class IB(BaseObj):
 
         pkt = pktt.pkt
         unpack = pktt.unpack
+
+        # All IB packets must have access to the RDMAinfo object for
+        # reassembly. Dereference the Pktt attribute for ease of use.
+        self._rdma_info = pktt._rdma_info
 
         if pkt.ethernet:
             if pkt.ip:

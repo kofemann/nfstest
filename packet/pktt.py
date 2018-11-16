@@ -56,6 +56,7 @@ from packet.link.erf import ERF
 from packet.unpack import Unpack
 from packet.record import Record
 from packet.pkt import Pkt, PKT_layers
+from packet.transport.ib import RDMAinfo
 from packet.link.ethernet import ETHERNET
 
 # Module constants
@@ -169,6 +170,9 @@ class Pktt(BaseObj):
         # TCP packets or to handle a TCP packet having multiple RPC packets
         self._tcp_stream_map = {}
 
+        # RDMA reassembly object
+        self._rdma_info = RDMAinfo()
+
         # RPC xid map: to keep track of packet calls
         self._rpc_xid_map = {}
         # List of outstanding xids to match
@@ -212,6 +216,7 @@ class Pktt(BaseObj):
         del self._match_xid_list
         del self._tcp_stream_map
         del self._rpc_xid_map
+        del self._rdma_info
 
     def __del__(self):
         """Destructor
