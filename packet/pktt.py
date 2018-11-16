@@ -486,6 +486,7 @@ class Pktt(BaseObj):
                 # Clear state
                 self._tcp_stream_map = {}
                 self._rpc_xid_map    = {}
+                self._rdma_info = RDMAinfo()
 
             # Move to the packet before the specified by the index so the
             # next packet fetched will be the one given by index
