@@ -13,6 +13,7 @@
 # FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 #===============================================================================
 import os
+import math
 import time
 import fcntl
 import struct
@@ -109,6 +110,32 @@ class pNFSTest(TestUtil):
         self.stripe_size = None
         if self.nfs_version < 4.1:
             self.config("Cannot use %s for pNFS testing" % self.nfsstr())
+
+    def get_ds_io_list(self, offset, size, nds):
+        """Get a list of DS's where I/O is sent"""
+        stripe_size = self.layout['stripe_size']
+        first_index = self.layout['first_stripe_index']
+
+        # Get first DS index where I/O is sent
+        N = (first_index + (offset / stripe_size)) % nds
+        # Get last DS index + 1
+        M = int(math.ceil((1.0*offset+size) / stripe_size))
+        M = (first_index + M) % nds
+
+        ds_io_list = []
+        if (size > 0 and M == N) or (nds > 1 and size > (nds-1)*stripe_size):
+            # Size is large enough to read/write to all DS's
+            ds_io_list += [True  for i in range(nds)]
+        elif M < N:
+            # Wrapped around
+            ds_io_list += [True  for i in range(M)]
+            ds_io_list += [False for i in range(N-M)]
+            ds_io_list += [True  for i in range(nds-N)]
+        else:
+            ds_io_list += [False for i in range(N)]
+            ds_io_list += [True  for i in range(M-N)]
+            ds_io_list += [False for i in range(nds-M)]
+        return ds_io_list
 
     def verify_stateid(self, openfh, sent_stateid):
         """Return expected stateid of I/O and verify it with stateid sent
@@ -431,6 +458,10 @@ class pNFSTest(TestUtil):
                Find DELEGRETURN request [default: False]
            verify_close:
                Verify file close [default: True]
+           offset:
+               Verify file for I/O starting at this offset [default: None]
+           size:
+               Size of I/O when offset option is given [default: None]
 
            Return a tuple (multipath_ds_list, openfh).
         """
@@ -449,6 +480,8 @@ class pNFSTest(TestUtil):
         noclose           = kwargs.pop('noclose', False)
         delegreturn       = kwargs.pop('delegreturn', False)
         verify_close      = kwargs.pop('verify_close', True)
+        offset            = kwargs.pop('offset', None)
+        size              = kwargs.pop('size', None)
 
         self.session_ids = {}
 
@@ -582,6 +615,10 @@ class pNFSTest(TestUtil):
         save_index = self.pktt.get_index()
 
         if not nolayoutget or 'samefile' in openfh:
+            if len(write_list) == 0 and offset is not None and size is not None:
+                nds = len(multipath_ds_list)
+                if nds > 1:
+                    write_list = self.get_ds_io_list(offset, size, nds)
             self.verify_pnfs_functionality(openfh, iomode, filesize, multipath_ds_list, need_getdev, nocreate, nocreate_list, write_list, max_iosize, nmax_iosize)
             # Rewind trace file to saved packet index
             self.pktt.rewind(save_index)
@@ -1101,7 +1138,7 @@ class pNFSTest(TestUtil):
                 layout_stateid = None
 
             openfh['samefile'] = True
-            self.verify_file(filename, iomode=LAYOUTIOMODE4_RW, nocreate=True, multipath_ds_list=multipath_ds_list, openfh=openfh, layout_stateid=layout_stateid)
+            self.verify_file(filename, iomode=LAYOUTIOMODE4_RW, nocreate=True, multipath_ds_list=multipath_ds_list, openfh=openfh, layout_stateid=layout_stateid, offset=wsize, size=wsize)
             self.verify_layoutreturn(layout_list)
         except Exception:
             self.test(False, traceback.format_exc())
@@ -1138,7 +1175,7 @@ class pNFSTest(TestUtil):
             self.set_pktlist()
             self.find_getdeviceinfo()
             self.pktt.rewind()
-            (multipath_ds_list, openfh) = self.verify_file(filename, iomode=LAYOUTIOMODE4_RW, noclose=True)
+            (multipath_ds_list, openfh) = self.verify_file(filename, iomode=LAYOUTIOMODE4_RW, noclose=True, offset=wsize, size=wsize)
             layout_list = [self.layout]
             if openfh is None:
                 return
@@ -1154,7 +1191,12 @@ class pNFSTest(TestUtil):
 
             self.test_group("Verify traffic for file opened for read and write: reading file after write")
             openfh['samefile'] = True
-            self.verify_file(filename, iomode=LAYOUTIOMODE4_READ, nocreate=True, multipath_ds_list=multipath_ds_list, openfh=openfh)
+            nds = len(multipath_ds_list)
+            nocreate_list = []
+            if nds > 1:
+                nocreate_list = self.get_ds_io_list(wsize, wsize, nds)
+
+            self.verify_file(filename, iomode=LAYOUTIOMODE4_READ, nocreate=True, nocreate_list=nocreate_list, multipath_ds_list=multipath_ds_list, openfh=openfh, offset=0, size=wsize)
             self.verify_layoutreturn(layout_list)
         except Exception:
             self.test(False, traceback.format_exc())
