@@ -746,7 +746,7 @@ class NFSUtil(Host):
                 return pkt.nfs.array[idx]
         return
 
-    def verify_pnfs_supported(self, filehandle, server_type, path=None):
+    def verify_pnfs_supported(self, filehandle, server_type, path=None, fstype=False):
         """Verify pNFS is supported in the given server path.
            Finds the GETATTR asking for FATTR4_SUPPORTED_ATTRS(bit 0 and its
            reply to verify FATTR4_FS_LAYOUT_TYPES is supported for the path.
@@ -775,8 +775,12 @@ class NFSUtil(Host):
         self.test(pktcall, "GETATTR should be sent to %s asking for FATTR4_FS_LAYOUT_TYPES%s" % (server_type, pmsg))
         if pktreply:
             # Get list of fs layout types supported by the server
-            fs_layout_types = pktreply.NFSop.attributes[FATTR4_FS_LAYOUT_TYPES]
-            self.test(LAYOUT4_NFSV4_1_FILES in fs_layout_types, "NFS server should return LAYOUT4_NFSV4_1_FILES in fs_layout_types%s" % pmsg)
+            # Do not fail with a python error when there is no
+            # FATTR4_FS_LAYOUT_TYPES attribute
+            fs_layout_types = pktreply.NFSop.attributes.get(FATTR4_FS_LAYOUT_TYPES, [])
+            if fstype or len(fs_layout_types) > 0:
+                # Make sure to check this assertion when fstype is true
+                self.test(LAYOUT4_NFSV4_1_FILES in fs_layout_types, "NFS server should return LAYOUT4_NFSV4_1_FILES in fs_layout_types%s" % pmsg)
         elif pktcall:
             self.test(False, "GETATTR reply was not found")
 
@@ -937,7 +941,10 @@ class NFSUtil(Host):
             fsid_list = []
             if self.rootfsid is not None:
                 fsid_list.append(self.rootfsid)
+
+            ncount = len(path_list)
             for path in path_list:
+                ncount -= 1
                 # Find the LOOKUP
                 fullpath = os.path.join(fullpath, path)
                 match = "NFS.name == '%s'" % path
@@ -960,7 +967,7 @@ class NFSUtil(Host):
                         # Save the fsid so it won't be verified again
                         fsid_list.append(fsid)
                         # Verify this path supports pNFS
-                        self.verify_pnfs_supported(filehandle, server_type, path=fullpath)
+                        self.verify_pnfs_supported(filehandle, server_type, path=fullpath, fstype=(ncount == 0))
             self.pktt.rewind(save_index)
         return self.sessionid
 
