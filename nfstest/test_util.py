@@ -224,6 +224,12 @@ class TestUtil(NFSUtil):
         self.nlm4err_list = []
         self.mnt3err_list = []
 
+        # Trace marker info
+        self.trace_marker_name = "F__NFSTEST_MARKER__F__"
+        self.trace_marker_list = []
+        self.trace_marker_index = 0
+        self.trace_marker_id = 0
+
         for tid in _test_map:
             self._msg_count[tid] = 0
         self.dindent(4)
@@ -915,6 +921,55 @@ class TestUtil(NFSUtil):
             "nlm4":   nlm4list,
             "mount3": mnt3list,
         }
+
+    def insert_trace_marker(self, name=None):
+        """Send a LOOKUP for an unknown file to have a marker in
+           the packet trace and return the trace marker id
+
+           name:
+               Use this name as the trace marker but the caller must make
+               sure this is a unique name in order to find the correct
+               index for this marker. This could also be used to add any
+               arbitrary information to the packet trace [default: None]
+        """
+        self.trace_marker_id += 1
+        if name is None:
+            # Use a unique trace marker name
+            name = self.trace_marker_name + "%02d" % self.trace_marker_id
+        self.trace_marker_list.append(name)
+        os.path.exists(self.abspath(name))
+        return self.trace_marker_id
+
+    def get_marker_index(self, marker_id=None):
+        """Find packet index of the trace marker given by the marker id
+
+           marker_id:
+               ID of trace marker to find in the packet trace, if this is
+               not given the current marker id is used [default: None]
+        """
+        if marker_id is None:
+            # Use current marker id
+            marker_id = self.trace_marker_id
+        name = self.trace_marker_list[marker_id - 1]
+        marker_str = "NFS.name == '%s'" % name
+        if self.nfs_version < 4:
+            nfsop = nfs3_const.NFSPROC3_LOOKUP
+        else:
+            nfsop = nfs4_const.OP_LOOKUP
+        pktcall, pktreply = self.find_nfs_op(nfsop, match=marker_str, call_only=True)
+        self.trace_marker_index = pktcall.record.index
+        return self.trace_marker_index
+
+    def trace_start(self, *kwts, **kwds):
+        """This is a wrapper to the original trace_start method to reset
+           the trace marker state
+        """
+        self.trace_marker_list = []
+        self.trace_marker_index = 0
+        self.trace_marker_id = 0
+
+        # Start the packet trace
+        return super(TestUtil, self).trace_start(*kwts, **kwds)
 
     def trace_open(self, *kwts, **kwds):
         """This is a wrapper to the original trace_open method where the
