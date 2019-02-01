@@ -855,8 +855,6 @@ class pNFSTest(TestUtil):
     def basic_pnfs(self, write=False, swrite=False):
         """Basic pNFS test"""
         try:
-            marker_offset = 0
-            trace_marker = "TRACE_MARKER"
             wstr = "WRITE" if write else "READ"
             self.test_group("Verify traffic for file using pNFS - %s" % wstr)
             iomode = LAYOUTIOMODE4_RW if write else LAYOUTIOMODE4_READ
@@ -879,9 +877,8 @@ class pNFSTest(TestUtil):
                 self.read_file(filename2)
 
             if swrite or write:
-                # Send a LOOKUP for an unknown file to have a marker in
-                # the packet trace
-                os.path.exists(self.abspath(trace_marker))
+                # Insert a marker in the packet trace
+                self.insert_trace_marker()
 
             if swrite:
                 self.dprint('DBG3', "Open first file again on same session [%s] writing %d@%d" % (filename, self.filesize, 0))
@@ -903,10 +900,7 @@ class pNFSTest(TestUtil):
             self.find_getdeviceinfo()
             if swrite or write:
                 # Find trace marker and set the default maxindex to use
-                marker_str = "NFS.name == '%s'" % trace_marker
-                pktcall, pktreply = self.find_nfs_op(OP_LOOKUP, match=marker_str, call_only=True)
-                marker_offset = pktcall.record.index
-                self.pktt.maxindex = marker_offset
+                self.pktt.maxindex = self.get_marker_index()
             self.pktt.rewind()
             (multipath_ds_list, openfh) = self.verify_file(filename, iomode=iomode)
             layout = self.layout
@@ -932,7 +926,7 @@ class pNFSTest(TestUtil):
                 openfh['samefile'] = True
                 openfh['dtcached'] = True
                 self.pktt.maxindex = None
-                self.pktt.rewind(marker_offset)
+                self.pktt.rewind(self.trace_marker_index)
                 self.verify_file(filename, iomode=siomode, nocreate=True, multipath_ds_list=multipath_ds_list, openfh=openfh, delegreturn=delegreturn)
 
             self.verify_layoutreturn(layout_list)
