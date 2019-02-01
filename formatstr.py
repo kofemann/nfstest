@@ -30,7 +30,7 @@ from string import Formatter
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.5"
+__version__   = "1.6"
 
 # Display variables
 CRC16 = True
@@ -53,6 +53,22 @@ _max_map = {
         0xffffffffffffffff: "umax64",
     },
 }
+
+# Ordinal number (long names)
+_ordinal_map = {
+    0: "zeroth",
+    1: "first",
+    2: "second",
+    3: "third",
+    4: "fourth",
+    5: "fifth",
+    6: "sixth",
+    7: "seventh",
+    8: "eighth",
+    9: "ninth",
+   10: "tenth",
+}
+_ordinal_max = max(_ordinal_map.keys())
 
 # Unit modifiers
 UNIT_NAME = 0
@@ -124,6 +140,21 @@ def str_time(value):
     if hh > 0:
         ret += "%d:" % hh
     return ret + "%02d:%02d" % (mm, ss)
+
+def ordinal_number(value, short=0):
+    """Return the ordinal number for the given integer"""
+    value = int(value)
+    maxlong = 0 if short else _ordinal_max
+    if not short and value >= 0 and value <= maxlong:
+        # Return long name
+        return _ordinal_map[value]
+    else:
+        # Return short name
+        suffix = ["th", "st", "nd", "rd", "th"][min(value % 10, 4)]
+        if (value % 100) in (11, 12, 13):
+            # Change suffix for number ending in *11, *12 and *13
+            suffix = "th"
+    return str(value) + suffix
 
 def crc32(value):
     """Convert string to its crc32 representation"""
@@ -226,6 +257,13 @@ class FormatStr(Formatter):
            #         the max name is displayed, else the value is displayed
            out = x.format("{0:max32}", 0x7fffffff) # out = "max32"
            out = x.format("{0:max32}", 35)         # out = "35"
+
+           # Number extension to display the value as an ordinal number
+           # Format: {0:ord[:s]}
+           # Output: display value as an ordinal number,
+           #         use the ":s" option to display the short name
+           out = x.format("{0:ord}", 3)    # out = "third"
+           out = x.format("{0:ord:s}", 3)  # out = "3rd"
 
            # Number extension to display the value with units
            # Format: {0:units[.precision]}
@@ -357,6 +395,16 @@ class FormatStr(Formatter):
                         usec = "%06d" % (1000000 * (value - int(value)))
                         dfmt = dfmt.replace("%q", usec)
                 return time.strftime(dfmt, time.localtime(value))
+            elif fmt[:3] == "ord":
+                # Format: {0:ord[:s]}
+                # Output: display value as an ordinal number
+                #         value: 3
+                #         display: 'third'
+                fmts = fmt.split(":", 1)
+                short = 0
+                if len(fmts) == 2:
+                    short = fmts[1][0] == "s"
+                return ordinal_number(value, short)
         return format(value, format_spec)
 
     def get_value(self, key, args, kwargs):
