@@ -20,6 +20,7 @@ import struct
 import traceback
 import nfstest_config as c
 from packet.nfs.nfs4_const import *
+from formatstr import ordinal_number
 from nfstest.test_util import TestUtil
 
 # Module constants
@@ -236,7 +237,6 @@ class pNFSTest(TestUtil):
         (stateid, stid_str, stid_failmsg) = self.verify_stateid(openfh, self.stateid)
 
         # Get number of DS's in layout
-        nds = 0
         nds = len(multipath_ds_list)
 
         # Check if file size is big enough to send traffic to all DS's
@@ -774,38 +774,30 @@ class pNFSTest(TestUtil):
             self.trace_open()
             self.pktt.close()
 
-    def verify_ds_connect_needed(self, ds_index=0):
+    def verify_ds_connect_needed(self, stripe_index=0):
         """Verify client only connects to the DS with I/O by writing only
-           to the DS given by ds_index and verifying client only connects
+           to the DS given by stripe_index and verifying client only connects
            to such DS.
-           Test will not be done if only one DS is available or the ds_index
+           Test will not run if only one DS is available or the stripe_index
            if out of bounds.
 
-           ds_index:
-               Data server index to use for writing [default: 0]
+           stripe_index:
+               Stripe index to use for writing [default: 0]
         """
         run_test = True
-        ds_count = 0
-        write_list = []
-        nocreate_list = []
-        stripe_str = ['first', 'second', 'third', 'fourth']
+        ds_count = len(getattr(self, "dslist", []))
 
-        if hasattr(self, 'dslist'):
-            for item in self.dslist:
-                ds_count += 1
-                nocreate_list.append(True)
-                write_list.append(False)
-        if ds_count < 2 or ds_count <= ds_index:
+        if ds_count < 2 or ds_count <= stripe_index:
             # Nothing to verify, server has only one DS or not enough DS's
             run_test = False
             if len(self.testlist) > 1:
                 return
 
-        self.test_group("Verify client only connects to the DS with I/O -- writing to %s stripe only" % stripe_str[ds_index])
+        self.test_group("Verify client only connects to the DS with I/O -- writing to %s stripe only" % ordinal_number(stripe_index+1))
 
         try:
             if not run_test:
-                msg = "Server does not have enough data servers" if ds_count <= ds_index else "Server has only one data server"
+                msg = "Server does not have enough data servers" if ds_count <= stripe_index else "Server has only one data server"
                 self.test(False, msg + ", unable to perform test")
                 return
 
@@ -817,15 +809,16 @@ class pNFSTest(TestUtil):
             self.trace_start()
             self.mount()
 
-            # Create file on first stripe only
-            self.dprint('DBG3', "Create file on %s stripe only [stripe size: %d]" % (stripe_str[ds_index], self.stripe_size))
+            # Create file on Nth stripe only
+            self.dprint('DBG3', "Create file on %s stripe only [stripe size: %d]" % (ordinal_number(stripe_index+1), self.stripe_size))
             wsize = int(self.stripe_size/2)
-            offset = ds_index * self.stripe_size
+            offset = stripe_index * self.stripe_size
             self.create_file(offset=offset, size=wsize)
             filesize = offset + wsize
 
-            nocreate_list[ds_index] = False
-            write_list[ds_index] = True
+            # Get list of DS with I/O
+            write_list = self.get_ds_io_list(offset, wsize, ds_count)
+            nocreate_list = [not x for x in write_list]
 
             self.umount()
             self.trace_stop()
@@ -1281,11 +1274,11 @@ class pNFSTest(TestUtil):
 
     def one_ds_test(self):
         """Verify client only connects to the DS with I/O."""
-        # Verify client only connects to the DS with I/O -- writing to first stripe only
-        self.verify_ds_connect_needed(ds_index=0)
-
-        # Verify client only connects to the DS with I/O -- writing to second stripe only
-        self.verify_ds_connect_needed(ds_index=1)
+        index = 0
+        while index < len(getattr(self, "dslist", [])):
+            # Verify client only connects to the DS with I/O -- writing to Nth stripe only
+            self.verify_ds_connect_needed(stripe_index=index)
+            index += 1
 
     def verify_rwsize(self, rsize=None, wsize=None):
         """Verify traffic for file using pNFS when mount option rsize < 4096 and/or wsize < 4096."""
