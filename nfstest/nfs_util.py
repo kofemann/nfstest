@@ -866,6 +866,8 @@ class NFSUtil(Host):
             self.test(not pktcall, "CREATE_SESSION should not be sent to %s%s" % (server_type, dsmds))
         else:
             self.test(pktcall, "CREATE_SESSION should be sent to %s" % server_type)
+            expr = len(pktcall.nfs.array) == 1
+            self.test(expr, "CREATE_SESSION should be the only operation in the compound")
             if pktreply:
                 if cs_status:
                     self.test(pktreply.NFSop.status == cs_status, "CREATE_SESSION reply should return %s(%d)" % (nfsstat4[cs_status], cs_status))
