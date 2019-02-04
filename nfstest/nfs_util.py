@@ -1012,6 +1012,10 @@ class NFSUtil(Host):
                 self.test(True, "LAYOUTGET should not be sent for the same file if data has been cached")
                 openfh['nolayoutget'] = True
                 self.layout = openfh['layout']
+            elif 'samefile' in openfh and self.layout and openfh['layout']['iomode'] != self.layout['iomode']:
+                self.test(True, "LAYOUTGET should be sent for the same file if iomode is different")
+                openfh['layout_stateid'] = openfh['layout']['stateid']
+                check_layoutget = True
             elif openfh['layout']['return_on_close']:
                 self.test(self.layout, "LAYOUTGET should be sent for the same file when return_on_close is set")
                 check_layoutget = True
