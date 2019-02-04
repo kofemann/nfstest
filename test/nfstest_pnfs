@@ -27,7 +27,7 @@ from nfstest.test_util import TestUtil
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.4"
+__version__   = "1.5"
 
 USAGE = """%prog --server <server> [options]
 
@@ -619,6 +619,7 @@ class pNFSTest(TestUtil):
                 nds = len(multipath_ds_list)
                 if nds > 1:
                     write_list = self.get_ds_io_list(offset, size, nds)
+                    nocreate_list = [not x for x in write_list]
             self.verify_pnfs_functionality(openfh, iomode, filesize, multipath_ds_list, need_getdev, nocreate, nocreate_list, write_list, max_iosize, nmax_iosize)
             # Rewind trace file to saved packet index
             self.pktt.rewind(save_index)
@@ -1091,13 +1092,17 @@ class pNFSTest(TestUtil):
             self.dprint('DBG3', "Open file [%s] for both reading and writing" % filename)
             fd = os.open(self.abspath(filename), os.O_RDWR|os.O_CREAT|os.O_SYNC)
             try:
-                self.dprint('DBG3', "Reading file @0")
-                while len(os.read(fd, self.rsize)): pass
+                rsize = 0
+                self.dprint('DBG3', "Reading file %d@0" % self.rsize)
+                rsize = len(os.read(fd, self.rsize))
 
-                wsize = int(self.filesize/2)
-                self.dprint('DBG3', "Writing %d@%d" % (wsize, wsize))
-                os.lseek(fd, wsize, 0)
-                os.write(fd, self.data_pattern(wsize, wsize))
+                # Insert a marker in the packet trace
+                self.insert_trace_marker()
+
+                offset = int(self.filesize/2)
+                self.dprint('DBG3', "Writing %d@%d" % (self.wsize, offset))
+                os.lseek(fd, offset, 0)
+                os.write(fd, self.data_pattern(offset, self.wsize))
             finally:
                 os.close(fd)
             self.umount()
@@ -1106,8 +1111,10 @@ class pNFSTest(TestUtil):
             self.trace_open()
             self.set_pktlist()
             self.find_getdeviceinfo()
+            # Find trace marker and set the default maxindex to use
+            self.pktt.maxindex = self.get_marker_index()
             self.pktt.rewind()
-            (multipath_ds_list, openfh) = self.verify_file(filename, iomode=LAYOUTIOMODE4_READ, noclose=True)
+            (multipath_ds_list, openfh) = self.verify_file(filename, iomode=LAYOUTIOMODE4_READ, noclose=True, offset=0, size=rsize)
             layout_list = [self.layout]
 
             # Re-position trace file after the last READ call/reply
@@ -1116,6 +1123,8 @@ class pNFSTest(TestUtil):
                 pass
 
             self.test_group("Verify traffic for file opened for read and write: writing file after read")
+            self.pktt.maxindex = None
+            self.pktt.rewind(self.trace_marker_index)
             if openfh != None and openfh.get('layout') and openfh['layout']['iomode'] == LAYOUTIOMODE4_READ:
                 # Got READ layout, expect a WRITE layout
                 t_layout = openfh.pop('layout')
@@ -1125,7 +1134,7 @@ class pNFSTest(TestUtil):
                 layout_stateid = None
 
             openfh['samefile'] = True
-            self.verify_file(filename, iomode=LAYOUTIOMODE4_RW, nocreate=True, multipath_ds_list=multipath_ds_list, openfh=openfh, layout_stateid=layout_stateid, offset=wsize, size=wsize)
+            self.verify_file(filename, iomode=LAYOUTIOMODE4_RW, nocreate=True, multipath_ds_list=multipath_ds_list, openfh=openfh, layout_stateid=layout_stateid, offset=offset, size=self.wsize)
             self.verify_layoutreturn(layout_list)
         except Exception:
             self.test(False, traceback.format_exc())
@@ -1143,17 +1152,22 @@ class pNFSTest(TestUtil):
             self.dprint('DBG3', "Open file [%s] for both reading and writing" % filename)
             fd = os.open(self.abspath(filename), os.O_RDWR|os.O_CREAT|os.O_SYNC)
             try:
-                wsize = int(self.filesize/2)
-                self.dprint('DBG3', "Writing %d@%d" % (wsize, wsize))
-                os.lseek(fd, wsize, 0)
-                os.write(fd, self.data_pattern(wsize, wsize))
+                rsize = 0
+                offset = int(self.filesize/2)
+                self.dprint('DBG3', "Writing %d@%d" % (self.wsize, offset))
+                os.lseek(fd, offset, 0)
+                os.write(fd, self.data_pattern(offset, self.wsize))
                 # Flush data to make sure the client sends the write first
                 os.fsync(fd)
 
-                self.dprint('DBG3', "Reading file @0")
+                # Insert a marker in the packet trace
+                self.insert_trace_marker()
+
+                self.dprint('DBG3', "Reading file %d@0" % self.rsize)
                 os.lseek(fd, 0, 0)
-                while len(os.read(fd, self.rsize)): pass
+                rsize = len(os.read(fd, self.rsize))
             finally:
+                self.dprint('DBG3', "Closing file")
                 os.close(fd)
             self.umount()
             self.trace_stop()
@@ -1161,8 +1175,10 @@ class pNFSTest(TestUtil):
             self.trace_open()
             self.set_pktlist()
             self.find_getdeviceinfo()
+            # Find trace marker and set the default maxindex to use
+            self.pktt.maxindex = self.get_marker_index()
             self.pktt.rewind()
-            (multipath_ds_list, openfh) = self.verify_file(filename, iomode=LAYOUTIOMODE4_RW, noclose=True, offset=wsize, size=wsize)
+            (multipath_ds_list, openfh) = self.verify_file(filename, iomode=LAYOUTIOMODE4_RW, noclose=True, offset=offset, size=self.wsize)
             layout_list = [self.layout]
             if openfh is None:
                 return
@@ -1179,11 +1195,9 @@ class pNFSTest(TestUtil):
             self.test_group("Verify traffic for file opened for read and write: reading file after write")
             openfh['samefile'] = True
             nds = len(multipath_ds_list)
-            nocreate_list = []
-            if nds > 1:
-                nocreate_list = self.get_ds_io_list(wsize, wsize, nds)
-
-            self.verify_file(filename, iomode=LAYOUTIOMODE4_READ, nocreate=True, nocreate_list=nocreate_list, multipath_ds_list=multipath_ds_list, openfh=openfh, offset=0, size=wsize)
+            self.pktt.maxindex = None
+            self.pktt.rewind(self.trace_marker_index)
+            self.verify_file(filename, iomode=LAYOUTIOMODE4_READ, nocreate=True, multipath_ds_list=multipath_ds_list, openfh=openfh, offset=0, size=rsize)
             self.verify_layoutreturn(layout_list)
         except Exception:
             self.test(False, traceback.format_exc())
