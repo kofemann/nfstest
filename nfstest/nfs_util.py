@@ -843,6 +843,8 @@ class NFSUtil(Host):
             self.test(not pktcall, "EXCHANGE_ID should not be sent to %s%s" % (server_type, dsmds))
         else:
             self.test(pktcall, "EXCHANGE_ID should be sent to %s" % server_type)
+            expr = len(pktcall.nfs.array) == 1
+            self.test(expr, "EXCHANGE_ID should be the only operation in the compound")
             if pktreply:
                 if exchid_status:
                     self.test(pktreply.NFSop.status == exchid_status, "EXCHANGE_ID reply should return %s(%d)" % (nfsstat4[exchid_status], exchid_status))
