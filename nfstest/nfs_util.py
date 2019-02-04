@@ -1103,6 +1103,10 @@ class NFSUtil(Host):
                 length = NFS4_UINT64_MAX
             self.test(layout.offset == offset and layout.length == length, "LAYOUTGET reply should be: (offset=%d, length=%d)" % (offset, length))
 
+        if check_layoutget and layoutget.stateid == openfh.get('layout_stateid'):
+            expr = layoutget_res.stateid.seqid == layoutget.stateid.seqid + 1
+            self.test(expr, "LAYOUTGET reply stateid seqid should be incremented")
+
         return bool(self.layout)
 
     def verify_io(self, iomode, stateid, ipaddr=None, port=None, src_ipaddr=None, filehandle=None, ds_index=None, init=False, maxindex=None, pattern=None):
