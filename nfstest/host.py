@@ -35,7 +35,7 @@ from packet.pktt import Pktt
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.4"
+__version__   = "1.5"
 
 class Host(BaseObj):
     """Host object
@@ -299,7 +299,7 @@ class Host(BaseObj):
             cmd = 'ssh -t -t %s%s "%s"' % (user, self.host, cmd.replace('"', '\\"'))
 
         self.dprint(dlevel, msg + cmd)
-        self.process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.process = subprocess.Popen(cmd, shell=True, close_fds=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if not wait:
             self.process_list.append(self.process)
             self.process_dmap[self.process.pid] = dlevel
