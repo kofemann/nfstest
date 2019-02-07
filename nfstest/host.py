@@ -357,9 +357,16 @@ class Host(BaseObj):
                 if terminate:
                     if proc.pid in self.process_smap:
                         # This process was started with sudo so kill it with
-                        # sudo since terminate() fails to actually kill the
-                        # command in RHEL or python 2.6
-                        self.run_cmd("kill %d" % proc.pid, sudo=True, dlevel=dlevel, msg=msg)
+                        # sudo since terminate() will fail
+                        count = 0
+                        while proc.poll() is None and count < 10:
+                            try:
+                                if count > 0:
+                                    time.sleep(0.25)
+                                self.run_cmd("kill %d" % proc.pid, sudo=True, dlevel=dlevel, msg=msg)
+                            except:
+                                pass
+                            count += 1
                         self.process_smap.pop(proc.pid)
                     else:
                         self.dprint(dlevel, msg + "stopping process %d" % proc.pid)
