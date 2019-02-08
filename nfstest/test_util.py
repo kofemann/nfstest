@@ -512,23 +512,19 @@ class TestUtil(NFSUtil):
         return slist
 
     @staticmethod
-    def get_list(value, hash, type=str):
-        """Return a list of elements from the comma separated string.
-           Validate and translate these elements using the input dictionary
-           'hash' where every element in the string is the key of 'hash'
-           and its value is appended to the returned list.
+    def get_list(value, nmap, sep=","):
+        """Given the value as a string of 'comma' separated elements, return
+           a list where each element is mapped using the dictionary 'nmap'.
+               nmap = {"one":1, "two":2}
+               out = x.get_list("one", nmap)        # out = [1]
+               out = x.get_list("one,two", nmap)    # out = [1,2]
+               out = x.get_list("two,one", nmap)    # out = [2,1]
+               out = x.get_list("one,three", nmap)  # out = None
         """
-        rlist = []
-        slist = TestUtil.str_list(value)
-        if slist is None:
+        try:
+            return [nmap[x] for x in TestUtil.str_list(value, sep=sep)]
+        except:
             return
-        for i_item in slist:
-            item = i_item.lower()
-            if hash.has_key(item):
-                rlist.append(hash[item])
-            else:
-                return
-        return rlist
 
     def scan_options(self):
         """Process command line options.
