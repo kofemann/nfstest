@@ -526,6 +526,63 @@ class TestUtil(NFSUtil):
         except:
             return
 
+    def process_option(self, value, arglist=[], typemap={}):
+        """Process option with a list of items separated by "," and each
+           item in the list could have different arguments separated by ":".
+
+           value:
+               String of comma separated elements
+           arglist:
+               Positional order of arguments, if this list is empty,
+               then use named arguments only [default: []]
+           typemap:
+               Dictionary to convert arguments to their given types,
+               where the key is the argument name and its value is the
+               type function to use to convert the argument [default: {}]
+        """
+        option_list = []
+        # Process each item definition separated by a comma ","
+        for opt_item in self.str_list(value):
+            if opt_item is None:
+                # Redefine empty item definitions like ",,"
+                opt_item = ""
+            # Get arguments for this item definition
+            clargs = self.str_list(opt_item, sep=":")
+            # Item info dictionary for this definition
+            cldict = {}
+            index = 0
+            while len(clargs) > 0:
+                # Try it as a positional argument first
+                val = clargs.pop(0)
+                # Process each argument for this item definition
+                if val is not None:
+                    if index < len(arglist):
+                        # Get argument name from ordered list
+                        arg = arglist[index]
+                    elif len(arglist):
+                        # More arguments given than positional arguments,
+                        # ignore the rest of the arguments
+                        break
+                    else:
+                        # No ordered list was given
+                        arg = None
+                    # Name arguments are specified as "name=value"
+                    dlist = val.split("=")
+                    if len(dlist) == 2:
+                        # This is specified as a named argument
+                        arg, val = dlist
+                    if arg is not None:
+                        # Convert value if necessary
+                        typefunc = typemap.get(arg)
+                        if typefunc is not None:
+                            val = typefunc(val)
+                        # Add argument to the description
+                        cldict[arg] = val
+                index += 1
+            # Add item description to list
+            option_list.append(cldict)
+        return option_list
+
     def scan_options(self):
         """Process command line options.
 
