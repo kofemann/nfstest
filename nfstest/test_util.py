@@ -65,7 +65,7 @@ from optparse import OptionParser, OptionGroup, IndentedHelpFormatter
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.7"
+__version__   = "1.8"
 
 # Constants
 PASS = 0
@@ -106,6 +106,13 @@ _test_map_c = {
 
 _tverbose_map = {'group': 0, 'normal': 1, 'verbose': 2, '0':0, '1':1, '2':2}
 _rtverbose_map = dict(zip(_tverbose_map.values(),_tverbose_map))
+
+# Mount options
+MOUNT_OPTS = ["client", "server", "export", "nfsversion", "port", "proto", "sec"]
+# Client option list of arguments separated by ":"
+CLIENT_OPTS = MOUNT_OPTS + ["mtpoint"]
+# Convert the following arguments to their correct types
+MOUNT_TYPE_MAP = {"port":int}
 
 BaseObj.debug_map(0x100, 'opts', "OPTS: ")
 
@@ -582,6 +589,132 @@ class TestUtil(NFSUtil):
             # Add item description to list
             option_list.append(cldict)
         return option_list
+
+    def compare_mount_args(self, mtopts1, mtopts2):
+        """Compare mount arguments"""
+        for item in MOUNT_OPTS:
+            # Mount argument default value
+            value = getattr(self, item, None)
+            if mtopts1.get(item, value) != mtopts2.get(item, value):
+                return False
+        return True
+
+    def process_client_option(self, option="client", remote=True, count=1):
+        """Process the client option
+
+           Clients are separated by a "," and each client definition can have
+           the following options separated by ":":
+               client:server:export:nfsversion:port:proto:sec:mtpoint
+
+           option:
+               Option name [default: "client"]
+           remote:
+               Expect a client hostname or IP address in the definition
+               [default: True]
+           count:
+               Number of client definitions to expect. If remote is True,
+               return the number of definitions listed in the given option
+               up to this number. If remote is False, return exactly this
+               number of definitions [default: 1]
+
+           Examples:
+               # Using positional arguments with nfsversion=4.1 for client1
+               client=client1:::4.1,client2
+
+               # Using named arguments instead
+               client=client1:nfsversion=4.1,client2
+        """
+        if count < 1:
+            # No clients/processes are required
+            return []
+
+        option_val = getattr(self, option, None)
+        if option_val is None:
+            if remote:
+                # Must have a client definition
+                return []
+            else:
+                # Process definition is optional so include at least one
+                option_val = ""
+
+        # Process the client option to get a list of client items
+        client_list = self.process_option(option_val, CLIENT_OPTS, MOUNT_TYPE_MAP)[:count]
+        count -= len(client_list)
+
+        # Verify if client name is required
+        for client_item in client_list:
+            if remote and client_item.get("client", "") == "":
+                # Client definition should have a client
+                self.config("Info list should have a client name or IP address: %s = %s" % (option, option_val))
+            elif not remote and client_item.get("client", "") != "":
+                # Process definition should not have a client
+                self.config("Info list should not have a client name or IP address: %s = %s" % (option, option_val))
+
+        if remote:
+            if len(client_list) > 0 and client_list[0].get("mtpoint") is None:
+                # Set mtpoint for the first client definition if it is not given
+                # This is needed later to compare mount definitions against each
+                # other to know which ones need to be mounted
+                client_list[0]["mtpoint"] = self.mtpoint
+                client_list[0]["mount"] = 1
+        else:
+            # Add process definitions to get the required number
+            for idx in range(count):
+                client_list.append({})
+            # Include current object's mount info
+            # for comparison purposes only
+            cldict = {"mount":1}
+            for arg in CLIENT_OPTS[1:]:
+                val = getattr(self, arg)
+                typefunc = MOUNT_TYPE_MAP.get(arg)
+                if typefunc is not None:
+                    val = typefunc(val)
+                cldict[arg] = val
+            client_list.insert(0, cldict)
+
+        # Verify that there are no conflicting mounts and which
+        # definitions need to be mounted
+        index = 1
+        for client_item in client_list[1:]:
+            mount = 0
+            mtpoint = client_item.get("mtpoint")
+            if mtpoint is None:
+                # The mount point is not given, select the correct one to use
+                # by comparing against previous definitions
+                for item in client_list[0:index]:
+                    if self.compare_mount_args(client_item, item):
+                        # This is the same mount definition so use the same
+                        # mount point -- it should not be mounted again
+                        client_item["mtpoint"] = item.get("mtpoint")
+                        break
+                if client_item.get("mtpoint") is None:
+                    # This is a different mount definition so choose a
+                    # new mount point -- it should be mounted
+                    client_item["mtpoint"] = self.mtpoint + "_%02d" % index
+                    mount = 1
+            else:
+                # Should be mounted if mount definition has mtpoint defined
+                mount = 1
+                # Check if mount does not conflict with previous definitions
+                for item in client_list[0:index]:
+                    if mtpoint == item.get("mtpoint"):
+                        if self.compare_mount_args(client_item, item):
+                            # Mount definitions are the same so just do not
+                            # mount it
+                            mount = 0
+                            break
+                        else:
+                            # Mount definitions are different for the same
+                            # mount point
+                            self.config("conflicting mtpoint in --%s = %s" % (option, option_val))
+            client_item["mount"] = mount
+            index += 1
+
+        if not remote:
+            # Remove the first client definition from the process list since
+            # it was just added to compare the mount definitions
+            client_list.pop(0)
+        return client_list
 
     def scan_options(self):
         """Process command line options.
