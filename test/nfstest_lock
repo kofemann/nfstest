@@ -20,6 +20,7 @@ import struct
 import traceback
 from formatstr import *
 import nfstest_config as c
+from baseobj import BaseObj
 from nfstest.test_util import TestUtil
 import packet.nfs.nfs3_const as nfs3_const
 import packet.nfs.nfs4_const as nfs4_const
@@ -30,7 +31,7 @@ from fcntl import fcntl,F_RDLCK,F_WRLCK,F_UNLCK,F_SETLK,F_SETLKW,F_GETLK
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2013 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.2"
+__version__   = "1.3"
 
 USAGE = """%prog --server <server> [--client <client>] [options]
 
@@ -182,6 +183,47 @@ def get_range(offset, length):
         end = offset + length - 1
     return (offset, end)
 
+class ProcInfo(BaseObj):
+    """ProcInfo object"""
+    # Class attributes:
+    # ProcInfo object could be used as a direct replacement for Rexec object
+    _fattrs = ("execobj",)
+    # ProcInfo local and remote ordinal number
+    _procidx = [2, 2]
+
+    def __init__(self, clientobj, execobj):
+        self.clientobj = clientobj  # Host object associated with this process
+        self.execobj = execobj      # Rexec object for this process
+        self.offset = 0  # Lock offset for this process
+        self.length = 0  # Lock length for this process
+        self.fd = None   # File descriptor associated with this process
+        self.result = None  # Output of locking operation
+        self.need_unlock = None # Lock was granted and it needs to be unlocked
+        self.isoverlap = None   # Lock overlaps with main lock
+        # Ordinal number for this object
+        self.proc_ordnum = ordinal_number(self._procidx[self.remote])
+        # Increment local or remote ordinal number
+        self._procidx[self.remote] += 1
+
+    def close_fd(self):
+        """Close opened file"""
+        if self.fd is not None:
+            self.run(os.close, self.fd)
+            self.fd = None
+
+    def reset(self):
+        """Reset lock info"""
+        self.result = None
+        self.need_unlock = None
+
+    def lock_range(self, offset, length):
+        """Set lock range and return this object"""
+        self.offset = offset
+        self.length = length
+        self.isoverlap = None
+        self.reset()
+        return self
+
 # Main test object definition
 class LockTest(TestUtil):
     """LockTest object
@@ -295,7 +337,8 @@ class LockTest(TestUtil):
 
         # Start remote procedure server locally
         if second_process:
-            self.execobj = self.start_rexec()
+            self.create_host("")
+            self.execobj = self.start_rexec(self.clientobj)
         else:
             self.execobj = None
 
@@ -315,7 +358,7 @@ class LockTest(TestUtil):
                 self.create_host(client_name, **client_args)
                 self.clientobj.umount()
                 self.clientobj.mount()
-                self.start_rexec(client_name)
+                self.rexecobj = self.start_rexec(self.clientobj)
 
         # Unmount server on local host
         self.umount()
@@ -325,16 +368,17 @@ class LockTest(TestUtil):
         # Call base object setup method
         self.setup(**kwargs)
 
-    def start_rexec(self, clientname=""):
-        """Start remote procedure server locally or on the given host.
+    def start_rexec(self, clientobj):
+        """Start remote procedure server locally or on the host given by
+           the client object.
            Set up the remote server with helper functions to lock and
            unlock a file.
 
-           clientname:
-               Name of client where the remote procedure server will be started
+           clientobj:
+               Client object where the remote procedure server will be started
         """
         # Start remote procedure server on given client
-        execobj = self.create_rexec(clientname)
+        execobj = self.create_rexec(clientobj.host)
 
         # Setup function to lock and unlock a file
         execobj.rimport("fcntl", ["fcntl", "F_SETLK"])
@@ -344,7 +388,7 @@ class LockTest(TestUtil):
         # Set SIGALRM handler to do nothing but not ignoring the signal
         # just to interrupt a blocked lock
         execobj.reval("signal.signal(signal.SIGALRM, lambda signum,frame:None)")
-        return execobj
+        return ProcInfo(clientobj, execobj)
 
     def get_time(self):
         """Return the number of seconds since the object was instantiated"""
