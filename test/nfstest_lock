@@ -140,13 +140,6 @@ SLOCKMAP_R = {'immediate':F_SETLK, 'block':F_SETLKW}
 OPENMAP    = {os.O_RDONLY:'O_RDONLY', os.O_WRONLY:'O_WRONLY', os.O_RDWR:'O_RDWR'}
 OPENMAP_R  = {'read':os.O_RDONLY, 'write':os.O_WRONLY, 'rdwr':os.O_RDWR}
 
-# Client option list of arguments separated by ":"
-CLOPTS = ["client", "server", "export", "nfsversion", "port", "proto", "sec"]
-# Client option list of arguments that should be converted to floating point
-FLOATOPTS = ["nfsversion"]
-# Client option list of arguments that should be converted to integers
-INTOPTS = ["port"]
-
 # Locking and helper functions
 def getlock(fd, lock_type, offset=0, length=0, stype=F_SETLK, timeout=30):
     """Get byte range lock on file given by file descriptor"""
@@ -274,61 +267,6 @@ class LockTest(TestUtil):
         if self.setl_list is None:
             self.opts.error("invalid type given in --setlock [%s]" % self.setlock)
 
-        self.client_opts()
-        if len(self.client_list) > 1:
-            # As of now, only one client is allowed
-            self.opts.error("only one client is supported in --client [%s]" % self.client)
-
-    def client_opts(self):
-        """Process the client option either from the command line
-           or from the LOCK block of the config file
-
-           Clients are separated by a "," and each client definition can have
-           the following options separated by ":":
-               client:server:export:nfsversion:port:proto:sec
-
-           Examples:
-               LOCK = {
-                   # Using positional options for nfsversion=4.1
-                   client = client1:::4.1,client2
-                   # Using named options
-                   client = client1:nfsversion=4.1,client2
-               }
-        """
-        if self.client is None:
-            # Client option from LOCK block of the config file
-            clients = self.test_options("client")
-            if len(clients) > 0 and type(clients) is not list:
-                self.opts.error("client option inside the '%s' id block should be a list" % SCRIPT_ID)
-        else:
-            # Client option from command line
-            clients = self.str_list(self.client)
-
-        self.client_list = []
-        for client in clients:
-            if client is None:
-                continue
-            # Get client arguments
-            clargs = self.str_list(client, sep=":")
-            index = 0
-            cldict = {}
-            while len(clargs) > 0:
-                val = clargs.pop(0)
-                arg = CLOPTS[index]
-                index += 1
-                if val is not None:
-                    dlist = val.split("=")
-                    if len(dlist) == 2:
-                        # Named argument
-                        arg = dlist[0].replace(" ", "")
-                        val = dlist[1].replace(" ", "")
-                    if arg in INTOPTS:
-                        val = int(val)
-                    elif arg in FLOATOPTS:
-                        val = float(val)
-                    cldict[arg] = val
-            self.client_list.append(cldict)
-
     def lock_setup(self, **kwargs):
         """Setup for locking tests:
              - starts the second process if needed
@@ -348,9 +286,11 @@ class LockTest(TestUtil):
 
         # Find if remote process should be started
         remote_process = False
+        client_list = []
         for tname in NCTESTS + OCTESTS:
             if tname in self.testlist:
                 remote_process = True
+                client_list = self.process_client_option()
                 break
 
         # Start remote procedure server locally
@@ -360,7 +300,7 @@ class LockTest(TestUtil):
             self.execobj = None
 
         # Start remote procedure server on host
-        if not remote_process or len(self.client_list) < 1:
+        if not remote_process or len(client_list) < 1:
             self.rexecobj  = None
             self.clientobj = None
             for tname in NCTESTS + OCTESTS:
@@ -369,7 +309,7 @@ class LockTest(TestUtil):
             if len(self.testlist) == 0:
                 self.opts.error("no test to run, specify option --client for --runtest='%s'" % self.runtest)
         else:
-            for client_d in self.client_list:
+            for client_d in client_list:
                 client_args = dict(client_d)
                 client_name = client_args.pop('client')
                 self.create_host(client_name, **client_args)
