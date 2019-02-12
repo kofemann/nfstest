@@ -348,6 +348,9 @@ class LockTest(TestUtil):
 
            Arguments are passed to the main setup() method
         """
+        # List of local(index=0) and remote(index=1) ProcInfo items
+        self.proc_info_list = ([], [])
+
         # Find if second process should be started
         second_process = False
         nfsopts_list = []
@@ -429,7 +432,27 @@ class LockTest(TestUtil):
             clientobj.mount()
         # Start a remote procedure server locally or remotely
         pinfo = self.start_rexec(clientobj)
+        self.proc_info_list[pinfo.remote].append(pinfo)
         return pinfo
+
+    def get_info_list(self, lock_list, remote=0):
+        """Return a list of ProcInfo objects representing the locks in the
+           given list.
+
+           lock_list:
+               List of lock definitions where each definition is given by a
+               tuple (offset, length)
+           remote:
+               Using a remote client or a local process [default: 0]
+        """
+        idx = 0
+        info_list = []
+        x_info_list = self.proc_info_list[remote]
+        for offset, length in lock_list:
+            # Set the lock range in the ProcInfo object and add it to the list
+            info_list.append(x_info_list[idx].lock_range(offset, length))
+            idx += 1
+        return info_list
 
     def get_time(self):
         """Return the number of seconds since the object was instantiated"""
