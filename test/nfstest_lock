@@ -528,7 +528,7 @@ class LockTest(TestUtil):
             fd = os.open(absfile, otype)
         return fd
 
-    def do_lock_test(self, fd, ltype, offset, length, msg, submsg=None, stype=F_SETLK, block=False, error=0, execobj=None):
+    def do_lock_test(self, fd, ltype, offset=None, length=None, msg="", submsg=None, stype=F_SETLK, block=False, error=0, pinfo=None):
         """Do the actual lock on a file given by the file descriptor
 
            fd:
@@ -536,49 +536,59 @@ class LockTest(TestUtil):
            ltype:
                Lock type: F_RDLCK, F_WRLCK or F_UNLCK
            offset:
-               Starting offset of byte range lock
+               Starting offset of byte range lock [default: None]
+               If offset is None then use the offset from the ProcInfo
+               object given by pinfo
            length:
-               Length of byte range lock
+               Length of byte range lock [default: None]
+               If length is None then use the length from the ProcInfo
+               object given by pinfo
            msg:
-               Test message to display
+               Test message to display [default: ""]
            submsg:
-               Subtest message to display.
+               Subtest message to display [default: None]
            stype:
                Blocking lock type: F_SETLK or F_SETLKW [default: F_SETLK]
            block:
                Expect lock to block [default: False]
            error:
                Expected locking error [default: 0]
-           execobj:
-               Object to lock file on a different process/client [default: None]
+           pinfo:
+               ProcInfo object to lock file on a different process or client
+               [default: None]
         """
         try:
             fmsg = ""
             pexpr = False
             ioerr = None
+            if pinfo:
+                # Use the lock range given in the ProcInfo object
+                offset = pinfo.offset if offset is None else offset
+                length = pinfo.length if length is None else length
+
             # Set up debugging message options
             lmsg = "Unlock"  if ltype == F_UNLCK else "Lock"
             smsg = "F_SETLK" if stype == F_SETLK else "F_SETLKW"
             (start, end) = get_range(offset, length)
             info = "%s file (%s, %s) off=%d len=%d range(%d, %d)" % (lmsg, LOCKMAP[ltype], smsg, offset, length, start, end)
-            if execobj:
-                # Lock file in second process or remote client
-                pstr = "client" if execobj.remote else "process"
-                self.dprint('DBG3', info + " on second %s @%.2f" % (pstr, self.get_time()))
+            if pinfo:
+                # Lock file in different process or remote client
+                pstr = "client" if pinfo.remote else "process"
+                self.dprint('DBG3', info + " on %s %s @%.2f" % (pinfo.proc_ordnum, pstr, self.get_time()))
                 nowait = True if stype == F_SETLKW else False
-                out = execobj.run("getlock", fd, ltype, offset, length, stype, self.lockw_timeout, NOWAIT=nowait)
+                out = pinfo.run("getlock", fd, ltype, offset, length, stype, self.lockw_timeout, NOWAIT=nowait)
                 if nowait:
                     # It is a blocking lock, it could block if overlapping range
                     # Poll Rexec object to make sure the lock is blocked if it
                     # is expected to block
-                    pexpr = execobj.poll(0.1)
+                    pexpr = pinfo.poll(0.1)
                     if pexpr:
                         if block:
                             # Expected to block, but did not
                             fmsg = ": lock did not block"
                         elif error != errno.EAGAIN:
                             # Get lock results
-                            out = execobj.results()
+                            out = pinfo.results()
             else:
                 # Lock file locally
                 self.dprint('DBG3', info)
@@ -725,6 +735,7 @@ class LockTest(TestUtil):
 
             # Get the ProcInfo list for the second lock
             info_list = self.get_info_list([(offset2, length2)], execobj.remote)
+            pinfo = info_list[0]
 
             if self.subtraces:
                 self.trace_start()
@@ -786,7 +797,7 @@ class LockTest(TestUtil):
                 fdx = self.open_file(octype, execobj)
                 submsg = " should %s%s" % (imsg, smsg2)
                 msg = "locking with %soverlapping range on second %s" % (ostr, pstr)
-                locked = self.do_lock_test(fdx, ctype, offset2, length2, msg, submsg, stype=stype, error=error, execobj=execobj, block=blocking)
+                locked = self.do_lock_test(fdx, ctype, msg=msg, submsg=submsg, stype=stype, error=error, pinfo=pinfo, block=blocking)
                 if blocking:
                     # Wait for blocked lock to be granted by unlocking the
                     # conflicting lock
@@ -804,10 +815,10 @@ class LockTest(TestUtil):
                             xmsg = "return %s" % errno.errorcode[err]
                         submsg = " should %s%s" % (xmsg, smsg2)
                         msg = "Locking byte range on second %s" % pstr
-                        self.do_lock_test(fdx, ctype, offset2, length2, msg, submsg, stype=stype, error=err, execobj=execobj)
+                        self.do_lock_test(fdx, ctype, msg=msg, submsg=submsg, stype=stype, error=err, pinfo=pinfo)
                 if error != errno.EBADF:
                     msg = "Unlocking full file on second %s should be granted" % pstr
-                    self.do_lock_test(fdx, F_UNLCK, 0, 0, msg, smsg2, execobj=execobj)
+                    self.do_lock_test(fdx, F_UNLCK, 0, 0, msg, smsg2, pinfo=pinfo)
         except:
             self.test(False, traceback.format_exc())
         finally:
