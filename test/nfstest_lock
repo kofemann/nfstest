@@ -598,16 +598,20 @@ class LockTest(TestUtil):
             self.test(expr, msg, subtest=submsg, failmsg=fmsg)
         return ioerr is None
 
-    def wait_for_lock(self, fd, submsg, execobj):
+    def wait_for_lock(self, fd, info_list, lockmsg, submsg_list):
         """Wait for blocked lock
 
            fd:
                File descriptor of file holding the current lock, so it will
                be unlocked to let the blocked lock be granted
-           submsg:
-               Subtest message to display.
-           execobj:
-               Object on a different process/client for the blocked lock
+           info_list:
+               List of ProcInfo objects with info for each blocked lock
+               on a different process or client
+           lockmsg:
+               Description of current lock
+           submsg_list:
+               List of subtest messages to display for each lock given in
+               info_list
         """
         fmsg = ""
         out = None
@@ -628,7 +632,7 @@ class LockTest(TestUtil):
             if need_unlock and (expr or time.time() - stime >= self.unlock_delay):
                 # Unlock current file lock so the blocked lock could be granted
                 msg = "Unlocking full file after delay should be granted"
-                self.do_lock_test(fd, F_UNLCK, 0, 0, msg, submsg)
+                self.do_lock_test(fd, F_UNLCK, 0, 0, msg, lockmsg)
                 if expr:
                     # Blocked lock has already been granted
                     break
@@ -639,32 +643,45 @@ class LockTest(TestUtil):
                 delta = self.lockw_timeout/30.0
                 if delta < 0.2:
                     delta = 0.2
-            if execobj.poll(delta):
-                try:
-                    # Blocking lock just returned
-                    self.dprint('DBG3', "Getting results from blocked lock @%.2f" % self.get_time())
-                    out = execobj.results()
-                    expr = True
-                except Exception as e:
-                    # Unable to get results from blocked lock
-                    if e.errno == errno.EINTR:
-                        self.test(False, "Timeout waiting for blocked lock to be granted", subtest=submsg)
-                    else:
-                        self.test(False, "Error while getting results from blocked lock", subtest=submsg, failmsg=": %s" % e)
-                    return out
-                if need_unlock:
-                    # Need to test if unlocking conflicting lock works
+            delta_time = delta
+            idx = 0
+            ordnum = ""
+            for pinfo in info_list:
+                submsg = submsg_list[idx]
+                idx += 1
+                if len(info_list) > 1:
+                    ordnum = "%s " % ordinal_number(idx)
+                if pinfo.need_unlock is not None:
+                    # This lock has already been granted
                     continue
-                else:
-                    # Blocked lock has been granted
+                if pinfo.poll(delta_time):
+                    out = None
+                    try:
+                        # Blocking lock just returned
+                        self.dprint('DBG3', "Getting results from %sblocked lock @%.2f" % (ordnum, self.get_time()))
+                        out = pinfo.results()
+                        expr = True
+                    except Exception as e:
+                        # Unable to get results from blocked lock
+                        if e.errno == errno.EINTR:
+                            self.test(False, "Timeout waiting for %sblocked lock to be granted" % ordnum, subtest=submsg)
+                        else:
+                            self.test(False, "Error while getting results from %sblocked lock" % ordnum, subtest=submsg, failmsg=": %s" % e)
+                    pinfo.result = out
+                    pinfo.need_unlock = need_unlock
+                delta_time = min(delta/10.0, 0.01)
+            if not need_unlock:
+                if [x.need_unlock for x in info_list].count(None) == 0:
+                    # All locks have been granted or timed out
                     break
-        if need_unlock:
-            self.test(not expr, "Blocked lock is granted before conflicting lock was unlocked", subtest=submsg)
-        else:
-            self.test(expr, "Blocked lock is granted after conflicting lock is released", subtest=submsg, failmsg=fmsg)
-
-        # Return results of blocked lock
-        return out
+        idx = 0
+        for pinfo in info_list:
+            submsg = submsg_list[idx]
+            idx += 1
+            if pinfo.need_unlock:
+                self.test(not pinfo.result, "Blocked lock is granted before conflicting lock was unlocked", subtest=submsg)
+            else:
+                self.test(pinfo.result, "Blocked lock is granted after conflicting lock is released", subtest=submsg, failmsg=fmsg)
 
     def basic_lock(self, execobj, oltype, ltype, octype, ctype, offset2, length2, stype):
         """This is the main locking method for overlapping and non-overlapping
@@ -705,6 +722,9 @@ class LockTest(TestUtil):
             err = 0
             fdl = None
             fdx = None
+
+            # Get the ProcInfo list for the second lock
+            info_list = self.get_info_list([(offset2, length2)], execobj.remote)
 
             if self.subtraces:
                 self.trace_start()
@@ -770,7 +790,7 @@ class LockTest(TestUtil):
                 if blocking:
                     # Wait for blocked lock to be granted by unlocking the
                     # conflicting lock
-                    self.wait_for_lock(fdl, smsg2, execobj)
+                    self.wait_for_lock(fdl, info_list, smsg1, [smsg2])
                 else:
                     # No locking conflict so unlock local file
                     msg = "Unlocking full file should be granted"
