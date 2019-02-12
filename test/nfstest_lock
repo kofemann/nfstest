@@ -439,8 +439,8 @@ class LockTest(TestUtil):
                Rexec object if this open will be issued on a second
                process or client
         """
-        self.filename = self.files[0]
-        self.absfile = self.abspath(self.filename)
+        filename = self.files[0]
+        absfile = self.abspath(filename)
         if otype & os.O_WRONLY == os.O_WRONLY:
             ostr = "writing"
         elif otype & os.O_RDWR == os.O_RDWR:
@@ -451,12 +451,12 @@ class LockTest(TestUtil):
         if execobj:
             # OPEN on second process or remote client
             pstr = "client" if execobj.remote else "process"
-            self.dprint('DBG3', "Open file for %s [%s] on second %s" % (ostr, self.filename, pstr))
-            fd = execobj.run(os.open, self.absfile, otype)
+            self.dprint('DBG3', "Open file for %s [%s] on second %s" % (ostr, filename, pstr))
+            fd = execobj.run(os.open, absfile, otype)
         else:
             # OPEN locally
-            self.dprint('DBG3', "Open file for %s [%s]" % (ostr, self.filename))
-            fd = os.open(self.absfile, otype)
+            self.dprint('DBG3', "Open file for %s [%s]" % (ostr, filename))
+            fd = os.open(absfile, otype)
         return fd
 
     def do_lock_test(self, fd, ltype, offset, length, msg, submsg=None, stype=F_SETLK, block=False, error=0, execobj=None):
