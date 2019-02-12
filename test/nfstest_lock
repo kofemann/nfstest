@@ -50,6 +50,25 @@ and a second process or a remote client trying to lock the same file will
 be denied if a non-blocking lock is issue or will be blocked if a blocking
 lock is issue on the second process or remote client.
 
+Examples:
+    Run the tests which use only the main client (no client option):
+        %prog --server 192.168.0.2 --export /exports
+
+    Use short options instead:
+        %prog -s 192.168.0.2 -e /exports
+
+    Use positional arguments with nfsversion=3 for extra client:
+        %prog -s 192.168.0.2 -e /exports --client 192.168.0.10:::3
+
+    Use named arguments instead:
+        %prog -s 192.168.0.2 -e /exports --client 192.168.0.10:nfsversion=3
+
+    Use positional arguments with nfsversion=3 for second process:
+        %prog -s 192.168.0.2 -e /exports --nfsopts :::3
+
+    Use named arguments instead:
+        %prog -s 192.168.0.2 -e /exports --nfsopts nfsversion=3
+
 Notes:
     The user id in the local host and the host specified by --client must
     have access to run commands as root using the 'sudo' command without
@@ -244,8 +263,18 @@ class LockTest(TestUtil):
         """
         TestUtil.__init__(self, **kwargs)
         self.opts.version = "%prog " + __version__
-        hmsg = "Remote NFS client used for conflicting lock tests"
+        hmsg = "Remote NFS client and options used for conflicting lock tests. " \
+               "Clients are separated by a ',' and each client definition is " \
+               "a list of arguments separated by a ':' given in the following " \
+               "order if positional arguments is used (see examples): " \
+               "clientname:server:export:nfsversion:port:proto:sec:mtpoint"
         self.test_opgroup.add_option("--client", default=None, help=hmsg)
+        hmsg = "Local process NFS options used for conflicting lock tests. " \
+               "Processes are separated by a ',' and each process definition " \
+               "is a list of arguments separated by a ':' given in the " \
+               "following order if positional arguments is used (see examples): " \
+               ":server:export:nfsversion:port:proto:sec:mtpoint"
+        self.test_opgroup.add_option("--nfsopts", default=None, help=hmsg)
         hmsg = "Offset of first lock granted [default: %default]"
         self.test_opgroup.add_option("--offset", default="4k", help=hmsg)
         hmsg = "Length of first lock granted [default: %default]"
@@ -321,9 +350,11 @@ class LockTest(TestUtil):
         """
         # Find if second process should be started
         second_process = False
+        nfsopts_list = []
         for tname in NPTESTS + OPTESTS:
             if tname in self.testlist:
                 second_process = True
+                nfsopts_list = self.process_client_option("nfsopts", remote=False)
                 break
 
         # Find if remote process should be started
@@ -337,8 +368,8 @@ class LockTest(TestUtil):
 
         # Start remote procedure server locally
         if second_process:
-            self.create_host("")
-            self.execobj = self.start_rexec(self.clientobj)
+            for nfsopt_item in nfsopts_list:
+                self.execobj = self.create_proc_info(nfsopt_item)
         else:
             self.execobj = None
 
@@ -352,13 +383,8 @@ class LockTest(TestUtil):
             if len(self.testlist) == 0:
                 self.opts.error("no test to run, specify option --client for --runtest='%s'" % self.runtest)
         else:
-            for client_d in client_list:
-                client_args = dict(client_d)
-                client_name = client_args.pop('client')
-                self.create_host(client_name, **client_args)
-                self.clientobj.umount()
-                self.clientobj.mount()
-                self.rexecobj = self.start_rexec(self.clientobj)
+            for client_item in client_list:
+                self.rexecobj = self.create_proc_info(client_item)
 
         # Unmount server on local host
         self.umount()
@@ -389,6 +415,21 @@ class LockTest(TestUtil):
         # just to interrupt a blocked lock
         execobj.reval("signal.signal(signal.SIGALRM, lambda signum,frame:None)")
         return ProcInfo(clientobj, execobj)
+
+    def create_proc_info(self, proc_item):
+        """Create a ProcInfo object and mount server if necessary"""
+        # Create a copy of the process item
+        client_args = dict(proc_item)
+        # Create a Host object for the given client
+        client_name = client_args.pop("client", "")
+        clientobj = self.create_host(client_name, **client_args)
+        if proc_item.get("mount"):
+            # Mount only if necessary
+            clientobj.umount()
+            clientobj.mount()
+        # Start a remote procedure server locally or remotely
+        pinfo = self.start_rexec(clientobj)
+        return pinfo
 
     def get_time(self):
         """Return the number of seconds since the object was instantiated"""
@@ -430,17 +471,22 @@ class LockTest(TestUtil):
                             })
         return ret
 
-    def open_file(self, otype, execobj=None):
+    def open_file(self, otype, pinfo=None):
         """Open file with given open type on either local or remote client
 
            otype:
                Open type, either O_RDONLY, O_WRONLY or O_RDWR
-           execobj:
-               Rexec object if this open will be issued on a second
-               process or client
+           pinfo:
+               ProcInfo object to open file on a different process or client
+               [default: None]
         """
         filename = self.files[0]
-        absfile = self.abspath(filename)
+        # Use the correct mount point in the full path of file
+        if pinfo is None:
+            absfile = self.abspath(filename)
+        else:
+            absfile = pinfo.clientobj.abspath(filename)
+
         if otype & os.O_WRONLY == os.O_WRONLY:
             ostr = "writing"
         elif otype & os.O_RDWR == os.O_RDWR:
@@ -448,11 +494,11 @@ class LockTest(TestUtil):
         else:
             ostr = "reading"
 
-        if execobj:
-            # OPEN on second process or remote client
-            pstr = "client" if execobj.remote else "process"
-            self.dprint('DBG3', "Open file for %s [%s] on second %s" % (ostr, filename, pstr))
-            fd = execobj.run(os.open, absfile, otype)
+        if pinfo:
+            # OPEN on different process or remote client
+            pstr = "client" if pinfo.remote else "process"
+            self.dprint('DBG3', "Open file for %s [%s] on %s %s" % (ostr, filename, pinfo.proc_ordnum, pstr))
+            fd = pinfo.run(os.open, absfile, otype)
         else:
             # OPEN locally
             self.dprint('DBG3', "Open file for %s [%s]" % (ostr, filename))
