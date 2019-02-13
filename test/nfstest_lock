@@ -372,14 +372,10 @@ class LockTest(TestUtil):
         # Start remote procedure server locally
         if second_process:
             for nfsopt_item in nfsopts_list:
-                self.execobj = self.create_proc_info(nfsopt_item)
-        else:
-            self.execobj = None
+                self.create_proc_info(nfsopt_item)
 
         # Start remote procedure server on host
         if not remote_process or len(client_list) < 1:
-            self.rexecobj  = None
-            self.clientobj = None
             for tname in NCTESTS + OCTESTS:
                 if tname in self.testlist:
                     self.testlist.remove(tname)
@@ -387,7 +383,7 @@ class LockTest(TestUtil):
                 self.opts.error("no test to run, specify option --client for --runtest='%s'" % self.runtest)
         else:
             for client_item in client_list:
-                self.rexecobj = self.create_proc_info(client_item)
+                self.create_proc_info(client_item)
 
         # Unmount server on local host
         self.umount()
@@ -969,33 +965,30 @@ class LockTest(TestUtil):
                         self.trace_open()
                         self.pktt.close()
 
-    def ntest01(self, execobj):
+    def ntest01(self, remote=0):
         """Locking non-overlapping range from a second process where end2 < start1
              process1:                     |------------------|
              process2: |--------|
         """
-        remote = execobj.remote
-        pstr = "client" if execobj.remote else "process"
+        pstr = "client" if remote else "process"
         self.test_group("Locking non-overlapping range from a second %s where end2 < start1" % pstr)
         self.do_basic_lock(self.get_info_list([(0, int(self.offset/2))], remote))
 
-    def ntest02(self, execobj):
+    def ntest02(self, remote=0):
         """Locking non-overlapping range from a second process where end2 == start1 - 1
              process1:                     |------------------|
              process2: |------------------|
         """
-        remote = execobj.remote
-        pstr = "client" if execobj.remote else "process"
+        pstr = "client" if remote else "process"
         self.test_group("Locking non-overlapping range from a second %s where end2 == start1 - 1" % pstr)
         self.do_basic_lock(self.get_info_list([(0, self.offset)], remote))
 
-    def ntest03(self, execobj):
+    def ntest03(self, remote=0):
         """Locking non-overlapping range from a second process where start2 > end1
              process1: |------------------|
              process2:                               |--------|
         """
-        remote = execobj.remote
-        pstr = "client" if execobj.remote else "process"
+        pstr = "client" if remote else "process"
         offset2 = self.offset + self.length + int(self.length/2)
         length2 = int(self.length/2)
         self.test_group("Locking non-overlapping range from a second %s where start2 > end1" % pstr)
@@ -1004,13 +997,12 @@ class LockTest(TestUtil):
         self.test_group("Locking non-overlapping range from a second %s where start2 > end1 and end2 == EOF" % pstr)
         self.do_basic_lock(self.get_info_list([(offset2, 0)], remote))
 
-    def ntest04(self, execobj):
+    def ntest04(self, remote=0):
         """Locking non-overlapping range from a second process where start2 == end1 + 1
              process1: |------------------|
              process2:                     |------------------|
         """
-        remote = execobj.remote
-        pstr = "client" if execobj.remote else "process"
+        pstr = "client" if remote else "process"
         offset2 = self.offset + self.length
         self.test_group("Locking non-overlapping range from a second %s where start2 == end1 + 1" % pstr)
         self.do_basic_lock(self.get_info_list([(offset2, self.length)], remote))
@@ -1018,23 +1010,21 @@ class LockTest(TestUtil):
         self.test_group("Locking non-overlapping range from a second %s where start2 == end1 + 1 and end2 == EOF" % pstr)
         self.do_basic_lock(self.get_info_list([(offset2, 0)], remote))
 
-    def otest01(self, execobj):
+    def otest01(self, remote=0):
         """Locking same range from a second process
              process1:                     |------------------|
              process2:                     |------------------|
         """
-        remote = execobj.remote
-        pstr = "client" if execobj.remote else "process"
+        pstr = "client" if remote else "process"
         self.test_group("Locking same range from a second %s" % pstr)
         self.do_basic_lock(self.get_info_list([(self.offset, self.length)], remote), overlap=True)
 
-    def otest02(self, execobj):
+    def otest02(self, remote=0):
         """Locking overlapping range from a second process where start2 < start1
              process1:                     |------------------|
              process2:           |------------------|
         """
-        remote = execobj.remote
-        pstr = "client" if execobj.remote else "process"
+        pstr = "client" if remote else "process"
         offset2 = self.offset - int(self.length/2)
         if offset2 < 0:
             offset2 = 0
@@ -1047,13 +1037,12 @@ class LockTest(TestUtil):
             self.test_group("Locking overlapping range from a second %s where start2 < start1 and start2 == 0" % pstr)
             self.do_basic_lock(self.get_info_list([(0, length2)], remote), overlap=True)
 
-    def otest03(self, execobj):
+    def otest03(self, remote=0):
         """Locking overlapping range from a second process where end2 > end1
              process1:                     |------------------|
              process2:                               |------------------|
         """
-        remote = execobj.remote
-        pstr = "client" if execobj.remote else "process"
+        pstr = "client" if remote else "process"
         offset2 = self.offset + int(self.length/2)
         self.test_group("Locking overlapping range from a second %s where end2 > end1" % pstr)
         self.do_basic_lock(self.get_info_list([(offset2, self.length)], remote), overlap=True)
@@ -1061,25 +1050,23 @@ class LockTest(TestUtil):
         self.test_group("Locking overlapping range from a second %s where end2 > end1 and end2 == EOF" % pstr)
         self.do_basic_lock(self.get_info_list([(offset2, 0)], remote), overlap=True)
 
-    def otest04(self, execobj):
+    def otest04(self, remote=0):
         """Locking overlapping range from a second process where range2 is entirely within range1
              process1:                     |------------------|
              process2:                          |--------|
         """
-        remote = execobj.remote
-        pstr = "client" if execobj.remote else "process"
+        pstr = "client" if remote else "process"
         offset2 = self.offset + int(self.length/4)
         length2 = int(self.length/2)
         self.test_group("Locking overlapping range from a second %s where range2 is entirely within range1" % pstr)
         self.do_basic_lock(self.get_info_list([(offset2, length2)], remote), overlap=True)
 
-    def otest05(self, execobj):
+    def otest05(self, remote=0):
         """Locking overlapping range from a second process where range1 is entirely within range2
              process1:                     |------------------|
              process2:                |----------------------------|
         """
-        remote = execobj.remote
-        pstr = "client" if execobj.remote else "process"
+        pstr = "client" if remote else "process"
         offset2 = self.offset - int(self.length/4)
         if offset2 < 0:
             offset2 = 0
@@ -1095,20 +1082,18 @@ class LockTest(TestUtil):
         self.test_group("Locking overlapping range from a second %s where range1 is entirely within range2 and end2 == EOF" % pstr)
         self.do_basic_lock(self.get_info_list([(offset2, 0)], remote), overlap=True)
 
-    def otest06(self, execobj):
+    def otest06(self, remote=0):
         """Locking full file range from a second process"""
-        remote = execobj.remote
-        pstr = "client" if execobj.remote else "process"
+        pstr = "client" if remote else "process"
         self.test_group("Locking full file range from a second %s" % pstr)
         self.do_basic_lock(self.get_info_list([(0, 0)], remote), overlap=True)
 
-    def otest07(self, execobj):
+    def otest07(self, remote=0):
         """Locking overlapping range from a second process where end2 == start1
              process1:                     |------------------|
              process2:  |------------------|
         """
-        remote = execobj.remote
-        pstr = "client" if execobj.remote else "process"
+        pstr = "client" if remote else "process"
         offset2 = self.offset - self.length + 1
         if offset2 < 0:
             offset2 = 0
@@ -1121,13 +1106,12 @@ class LockTest(TestUtil):
             self.test_group("Locking overlapping range from a second %s where end2 == start1 and start2 == 0" % pstr)
             self.do_basic_lock(self.get_info_list([(0, length2)], remote), overlap=True)
 
-    def otest08(self, execobj):
+    def otest08(self, remote=0):
         """Locking overlapping range from a second process where start2 == end1
              process1:  |------------------|
              process2:                     |------------------|
         """
-        remote = execobj.remote
-        pstr = "client" if execobj.remote else "process"
+        pstr = "client" if remote else "process"
         offset2 = self.offset + self.length - 1
         self.test_group("Locking overlapping range from a second %s where start2 == end1" % pstr)
         self.do_basic_lock(self.get_info_list([(offset2, self.length)], remote), overlap=True)
@@ -1140,162 +1124,162 @@ class LockTest(TestUtil):
              process1:                     |------------------|
              process2: |--------|
         """
-        self.ntest01(self.execobj)
+        self.ntest01(remote=0)
 
     def nptest02_test(self):
         """Locking non-overlapping range from a second process where end2 == start1 - 1
              process1:                     |------------------|
              process2: |------------------|
         """
-        self.ntest02(self.execobj)
+        self.ntest02(remote=0)
 
     def nptest03_test(self):
         """Locking non-overlapping range from a second process where start2 > end1
              process1: |------------------|
              process2:                               |--------|
         """
-        self.ntest03(self.execobj)
+        self.ntest03(remote=0)
 
     def nptest04_test(self):
         """Locking non-overlapping range from a second process where start2 == end1 + 1
              process1: |------------------|
              process2:                     |------------------|
         """
-        self.ntest04(self.execobj)
+        self.ntest04(remote=0)
 
     def nctest01_test(self):
         """Locking non-overlapping range from a second client where end2 < start1
              client1:                      |------------------|
              client2:  |--------|
         """
-        self.ntest01(self.rexecobj)
+        self.ntest01(remote=1)
 
     def nctest02_test(self):
         """Locking non-overlapping range from a second client where end2 == start1 - 1
              client1:                      |------------------|
              client2:  |------------------|
         """
-        self.ntest02(self.rexecobj)
+        self.ntest02(remote=1)
 
     def nctest03_test(self):
         """Locking non-overlapping range from a second client where start2 > end1
              client1:  |------------------|
              client2:                                |--------|
         """
-        self.ntest03(self.rexecobj)
+        self.ntest03(remote=1)
 
     def nctest04_test(self):
         """Locking non-overlapping range from a second client where start2 == end1 + 1
              client1:  |------------------|
              client2:                      |------------------|
         """
-        self.ntest04(self.rexecobj)
+        self.ntest04(remote=1)
 
     def optest01_test(self):
         """Locking same range from a second process
              process1:                     |------------------|
              process2:                     |------------------|
         """
-        self.otest01(self.execobj)
+        self.otest01(remote=0)
 
     def optest02_test(self):
         """Locking overlapping range from a second process where start2 < start1
              process1:                     |------------------|
              process2:           |------------------|
         """
-        self.otest02(self.execobj)
+        self.otest02(remote=0)
 
     def optest03_test(self):
         """Locking overlapping range from a second process where end2 > end1
              process1:                     |------------------|
              process2:                               |------------------|
         """
-        self.otest03(self.execobj)
+        self.otest03(remote=0)
 
     def optest04_test(self):
         """Locking overlapping range from a second process where range2 is entirely within range1
              process1:                     |------------------|
              process2:                          |--------|
         """
-        self.otest04(self.execobj)
+        self.otest04(remote=0)
 
     def optest05_test(self):
         """Locking overlapping range from a second process where range1 is entirely within range2
              process1:                     |------------------|
              process2:                |----------------------------|
         """
-        self.otest05(self.execobj)
+        self.otest05(remote=0)
 
     def optest06_test(self):
         """Locking full file range from a second process"""
-        self.otest06(self.execobj)
+        self.otest06(remote=0)
 
     def optest07_test(self):
         """Locking overlapping range from a second process where end2 == start1
              process1:                     |------------------|
              process2:  |------------------|
         """
-        self.otest07(self.execobj)
+        self.otest07(remote=0)
 
     def optest08_test(self):
         """Locking overlapping range from a second process where start2 == end1
              process1:  |------------------|
              process2:                     |------------------|
         """
-        self.otest08(self.execobj)
+        self.otest08(remote=0)
 
     def octest01_test(self):
         """Locking same range from a second client
              client1:                      |------------------|
              client2:                      |------------------|
         """
-        self.otest01(self.rexecobj)
+        self.otest01(remote=1)
 
     def octest02_test(self):
         """Locking overlapping range from a second client where start2 < start1
              client1:                      |------------------|
              client2:            |------------------|
         """
-        self.otest02(self.rexecobj)
+        self.otest02(remote=1)
 
     def octest03_test(self):
         """Locking overlapping range from a second client where end2 > end1
              client1:                      |------------------|
              client2:                                |------------------|
         """
-        self.otest03(self.rexecobj)
+        self.otest03(remote=1)
 
     def octest04_test(self):
         """Locking overlapping range from a second client where range2 is entirely within range1
              client1:                      |------------------|
              client2:                           |--------|
         """
-        self.otest04(self.rexecobj)
+        self.otest04(remote=1)
 
     def octest05_test(self):
         """Locking overlapping range from a second client where range1 is entirely within range2
              client1:                      |------------------|
              client2:                 |----------------------------|
         """
-        self.otest05(self.rexecobj)
+        self.otest05(remote=1)
 
     def octest06_test(self):
         """Locking full file range from a second client"""
-        self.otest06(self.rexecobj)
+        self.otest06(remote=1)
 
     def octest07_test(self):
         """Locking overlapping range from a second client where end2 == start1
              client1:                      |------------------|
              client2:   |------------------|
         """
-        self.otest07(self.rexecobj)
+        self.otest07(remote=1)
 
     def octest08_test(self):
         """Locking overlapping range from a second client where start2 == end1
              client1:   |------------------|
              client2:                      |------------------|
         """
-        self.otest08(self.rexecobj)
+        self.otest08(remote=1)
 
 ################################################################################
 # Entry point
