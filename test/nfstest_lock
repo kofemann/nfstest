@@ -693,26 +693,27 @@ class LockTest(TestUtil):
             else:
                 self.test(pinfo.result, "Blocked lock is granted after conflicting lock is released", subtest=submsg, failmsg=fmsg)
 
-    def basic_lock(self, execobj, oltype, ltype, octype, ctype, offset2, length2, stype):
+    def basic_lock(self, info_list, oltype, ltype, octype, ctype, stype):
         """This is the main locking method for overlapping and non-overlapping
            tests. This method does the following:
                1. Open file locally
                2. Lock file locally -- this is the conflicting lock
-               3. Open file on second process or remote client
-               4. Lock file on second process or remote client
+               3. Open file on a different process or remote client
+               4. Lock file on a different process or remote client
                5. If locks do not overlap, verify both locks are granted
                6. If using a blocking lock on an overlapping range, then wait
                   for the number of seconds given by option unlock-delay and
                   verify the blocking lock is not granted until the conflicting
-                  has been unlocked at the end of the wait period. Once the
+                  lock has been unlocked at the end of the wait period. Once the
                   conflicting lock has been unlocked verify the blocked lock
                   is granted
                7. If using a non-blocking lock on an overlapping range, verify
                   the correct error is returned
                8. Unlock both the local and remote locks
 
-           execobj:
-               Object on a different process/client used for the second lock
+           info_list:
+               List of ProcInfo objects with info for each extra lock to take
+               on a different process or client
            oltype:
                Open type to use on local file
            ltype:
@@ -721,21 +722,12 @@ class LockTest(TestUtil):
                Open type to use on second file (other process or remote)
            ctype:
                Lock type to use on second file (other process or remote)
-           offset2:
-               Lock starting offset for second lock
-           length2:
-               Lock length for second lock
            stype:
                Either a blocking or non-blocking lock
         """
         try:
             err = 0
             fdl = None
-            fdx = None
-
-            # Get the ProcInfo list for the second lock
-            info_list = self.get_info_list([(offset2, length2)], execobj.remote)
-            pinfo = info_list[0]
 
             if self.subtraces:
                 self.trace_start()
@@ -748,13 +740,14 @@ class LockTest(TestUtil):
                 os.path.exists(info_file)
 
             # Find if ranges overlap
-            (start1, end1) = get_range(self.offset, self.length)
-            (start2, end2) = get_range(offset2, length2)
-            isoverlap = (start1 <= end2 and start2 <= end1)
+            isoverlap = info_list[0].isoverlap
 
-            pstr = "client" if execobj.remote else "process"
+            pstr = "client" if info_list[0].remote else "process"
             smsg1 = ", lock1(%s, %s, %s)" % (OPENMAP[oltype], LOCKMAP[ltype], SLOCKMAP[stype])
-            smsg2 = ", lock2(%s, %s, %s)" % (OPENMAP[octype], LOCKMAP[ctype], SLOCKMAP[stype])
+            smsg_list = []
+            for i in range(len(info_list)):
+                smsgx = ", lock%d(%s, %s, %s)" % (i+2, OPENMAP[octype], LOCKMAP[ctype], SLOCKMAP[stype])
+                smsg_list.append(smsgx)
 
             # Set up main test message
             error = 0
@@ -794,14 +787,18 @@ class LockTest(TestUtil):
             self.do_lock_test(fdl, ltype, self.offset, self.length, msg, submsg, stype=stype, error=err)
 
             if not err:
-                fdx = self.open_file(octype, execobj)
-                submsg = " should %s%s" % (imsg, smsg2)
-                msg = "locking with %soverlapping range on second %s" % (ostr, pstr)
-                locked = self.do_lock_test(fdx, ctype, msg=msg, submsg=submsg, stype=stype, error=error, pinfo=pinfo, block=blocking)
+                idx = 0
+                for pinfo in info_list:
+                    pinfo.fd = self.open_file(octype, pinfo)
+                    submsg = " should %s%s" % (imsg, smsg_list[idx])
+                    msg = "Locking with %soverlapping range on %s %s" % (ostr, pinfo.proc_ordnum, pstr)
+                    locked = self.do_lock_test(pinfo.fd, ctype, msg=msg, submsg=submsg, stype=stype, error=error, pinfo=pinfo, block=blocking)
+                    idx += 1
+
                 if blocking:
                     # Wait for blocked lock to be granted by unlocking the
                     # conflicting lock
-                    self.wait_for_lock(fdl, info_list, smsg1, [smsg2])
+                    self.wait_for_lock(fdl, info_list, smsg1, smsg_list)
                 else:
                     # No locking conflict so unlock local file
                     msg = "Unlocking full file should be granted"
@@ -813,20 +810,26 @@ class LockTest(TestUtil):
                            ctype == F_WRLCK and octype == os.O_RDONLY:
                             err  = errno.EBADF
                             xmsg = "return %s" % errno.errorcode[err]
-                        submsg = " should %s%s" % (xmsg, smsg2)
-                        msg = "Locking byte range on second %s" % pstr
-                        self.do_lock_test(fdx, ctype, msg=msg, submsg=submsg, stype=stype, error=err, pinfo=pinfo)
+                        idx = 0
+                        for pinfo in info_list:
+                            submsg = " should %s%s" % (xmsg, smsg_list[idx])
+                            msg = "Locking byte range on %s %s" % (pinfo.proc_ordnum, pstr)
+                            self.do_lock_test(pinfo.fd, ctype, msg=msg, submsg=submsg, stype=stype, error=err, pinfo=pinfo)
+                            idx += 1
                 if error != errno.EBADF:
-                    msg = "Unlocking full file on second %s should be granted" % pstr
-                    self.do_lock_test(fdx, F_UNLCK, 0, 0, msg, smsg2, pinfo=pinfo)
+                    idx = 0
+                    for pinfo in info_list:
+                        msg = "Unlocking full file on %s %s should be granted" % (pinfo.proc_ordnum, pstr)
+                        self.do_lock_test(pinfo.fd, F_UNLCK, 0, 0, msg, smsg_list[idx], pinfo=pinfo)
+                        idx += 1
         except:
             self.test(False, traceback.format_exc())
         finally:
             # Close open files
             if fdl is not None:
                 os.close(fdl)
-            if fdx is not None:
-                execobj.run(os.close, fdx)
+            for pinfo in info_list:
+                pinfo.close_fd()
             if self.subtraces:
                 self.trace_stop()
                 self.trace_open()
@@ -878,8 +881,12 @@ class LockTest(TestUtil):
                     nlm4list=[nlm4_const.NLM4_BLOCKED, nlm4_const.NLM4_DENIED],
                 )
 
+            # Get the ProcInfo list for the second lock
+            info_list = self.get_info_list([(offset2, length2)], execobj.remote)
+            info_list[0].isoverlap = isoverlap
+
             # Do actual test
-            self.basic_lock(execobj, oltype, ltype, octype, ctype, offset2, length2, stype)
+            self.basic_lock(info_list, oltype, ltype, octype, ctype, stype)
             self.testidx += 1
 
     def btest01_test(self):
