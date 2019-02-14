@@ -107,6 +107,7 @@ OPTESTS = [
     'optest06',
     'optest07',
     'optest08',
+    'optest09',
 ]
 # Overlapping lock tests using a second client
 OCTESTS = [
@@ -118,13 +119,16 @@ OCTESTS = [
     'octest06',
     'octest07',
     'octest08',
+    'octest09',
 ]
 
 # Dictionary having the number of processes required by each test
 TEST_PROCESS_DICT = {x:1 for x in NPTESTS + OPTESTS}
+TEST_PROCESS_DICT.update({x:2 for x in ["optest09"]})
 
 # Dictionary having the number of clients required by each test
 TEST_CLIENT_DICT = {x:1 for x in NCTESTS + OCTESTS}
+TEST_CLIENT_DICT.update({x:2 for x in ["octest09"]})
 
 # All tests, include the test groups in the list of test names
 # so they are displayed in the help
@@ -1115,6 +1119,25 @@ class LockTest(TestUtil):
         self.test_group("Locking overlapping range from a second %s where start2 == end1 and end2 == EOF" % pstr)
         self.do_basic_lock(self.get_info_list([(offset2, 0)], remote), overlap=True)
 
+    def otest09(self, remote=0):
+        """Locking overlapping range from multiple processes where range2 and
+           range3 are entirely within range1
+             process1:                     |-----------------------------|
+             process2:                          |--------|
+             process3:                                    |--------|
+        """
+        pstr = "clients" if remote else "processes"
+        offset2 = self.offset + int(self.length/4)
+        length2 = int(self.length/4)
+        lock_list = [
+            (offset2,         length2),
+            (offset2+length2, length2),
+        ]
+        self.test_group("Locking overlapping range from multiple %s where " \
+                        "range2 and range3 are entirely within range1" % pstr)
+        info_list = self.get_info_list(lock_list, remote)
+        self.do_basic_lock(info_list, overlap=True)
+
     def nptest01_test(self):
         """Locking non-overlapping range from a second process where end2 < start1
              process1:                     |------------------|
@@ -1224,6 +1247,15 @@ class LockTest(TestUtil):
         """
         self.otest08(remote=0)
 
+    def optest09_test(self):
+        """Locking overlapping range from multiple processes where range2 and
+           range3 are entirely within range1
+             process1:                     |-----------------------------|
+             process2:                          |--------|
+             process3:                                    |--------|
+        """
+        self.otest09(remote=0)
+
     def octest01_test(self):
         """Locking same range from a second client
              client1:                      |------------------|
@@ -1276,6 +1308,15 @@ class LockTest(TestUtil):
              client2:                      |------------------|
         """
         self.otest08(remote=1)
+
+    def octest09_test(self):
+        """Locking overlapping range from multiple clients where range2 and
+           range3 are entirely within range1
+             client1:                     |-----------------------------|
+             client2:                          |--------|
+             client3:                                    |--------|
+        """
+        self.otest09(remote=1)
 
 ################################################################################
 # Entry point
