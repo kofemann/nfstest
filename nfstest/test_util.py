@@ -218,6 +218,7 @@ class TestUtil(NFSUtil):
         self._runtest = True
         self.runtest_list = []
         self.runtest_neg  = False
+        self.client_list_opt = {}
         self.createtraces = False
         self._opts_done = False
         # List of sparse files
@@ -731,7 +732,39 @@ class TestUtil(NFSUtil):
             # Remove the first client definition from the process list since
             # it was just added to compare the mount definitions
             client_list.pop(0)
+        # Save client list for given option
+        self.client_list_opt[option] = client_list
         return client_list
+
+    def verify_client_option(self, tclient_dict, option="client"):
+        """Verify the client option is required from the list of tests to run.
+           Also, check if enough clients were specified to run the tests.
+
+           tclient_dict:
+               Dictionary having the number of clients required by each test
+           option:
+               Option name [default: "client"]
+        """
+        tests_removed = 0
+        client_list = self.client_list_opt.get(option, [])
+        # Use a copy of the list since some elements might be removed
+        for tname in list(self.testlist):
+            ncount = tclient_dict.get(tname, 0)
+            # Verify there are enough clients specified to run the tests
+            if ncount > len(client_list):
+                if self.need_run_test(tname):
+                    # Test requires more clients then specified is explicitly
+                    # given but there is not enough clients to run it
+                    self.config("Not enough clients specified in --%s for '%s' to run" % (option, tname))
+                else:
+                    # Test was not explicitly given so do not run it
+                    self.remove_test(tname)
+                    tests_removed += 1
+
+        if tests_removed > 0 and len(self.testlist) == 0:
+            # Only tests which require a client were specified but
+            # no client specification was given
+            self.config("Specify option --%s for --runtest='%s'" % (option, self.runtest))
 
     def scan_options(self):
         """Process command line options.
