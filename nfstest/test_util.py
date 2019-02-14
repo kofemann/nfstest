@@ -216,6 +216,8 @@ class TestUtil(NFSUtil):
         self._msg_count = {}
         self._reset_files()
         self._runtest = True
+        self.runtest_list = []
+        self.runtest_neg  = False
         self.createtraces = False
         self._opts_done = False
         # List of sparse files
@@ -305,6 +307,7 @@ class TestUtil(NFSUtil):
         else:
             if self.runtest[0] == '^':
                 # List is negated tests -- do not run the tests listed
+                self.runtest_neg = True
                 runtest = self.runtest.replace('^', '', 1)
                 negtestlist = self.str_list(runtest)
                 self.testlist = list(self.testnames)
@@ -320,7 +323,9 @@ class TestUtil(NFSUtil):
                         self.opts.error("invalid value given --runtest=%s" % self.runtest)
             else:
                 idx = 0
+                self.runtest_neg = False
                 self.testlist = self.str_list(self.runtest)
+                self.runtest_list = list(self.testlist)
                 # Process the test groups by including all the tests
                 # in the test group to the list of tests to run
                 for testname in self.testlist:
@@ -532,6 +537,13 @@ class TestUtil(NFSUtil):
             return [nmap[x] for x in TestUtil.str_list(value, sep=sep)]
         except:
             return
+
+    def need_run_test(self, testname):
+        """Return True only if user explicitly requested to run this test"""
+        if self.runtest_neg:
+            # User specified negative testing
+            return False
+        return testname in self.runtest_list
 
     def process_option(self, value, arglist=[], typemap={}):
         """Process option with a list of items separated by "," and each
