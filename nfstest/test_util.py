@@ -545,6 +545,11 @@ class TestUtil(NFSUtil):
             return False
         return testname in self.runtest_list
 
+    def remove_test(self, testname):
+        """Remove all instances of test from the list of tests to run"""
+        while testname in self.testlist:
+            self.testlist.remove(testname)
+
     def process_option(self, value, arglist=[], typemap={}):
         """Process option with a list of items separated by "," and each
            item in the list could have different arguments separated by ":".
