@@ -120,6 +120,12 @@ OCTESTS = [
     'octest08',
 ]
 
+# Dictionary having the number of processes required by each test
+TEST_PROCESS_DICT = {x:1 for x in NPTESTS + OPTESTS}
+
+# Dictionary having the number of clients required by each test
+TEST_CLIENT_DICT = {x:1 for x in NCTESTS + OCTESTS}
+
 # All tests, include the test groups in the list of test names
 # so they are displayed in the help
 TESTNAMES = BTESTS + ["noverlap", "nptest"] + NPTESTS + ["nctest"] + \
@@ -340,10 +346,12 @@ class LockTest(TestUtil):
 
     def lock_setup(self, **kwargs):
         """Setup for locking tests:
-             - starts the second process if needed
-             - starts the remote procedure server on other clients if needed
-             - mount the export on remote clients
-             - mount the export locally
+             - start different processes if needed
+             - start the remote procedure server on other clients if needed
+             - mount the exported file system on remote clients
+             - mount the exported file system locally for each extra
+               process if different NFS options are specified
+             - mount the exported file system locally for the main process
              - call setup()
 
            Arguments are passed to the main setup() method
@@ -351,39 +359,27 @@ class LockTest(TestUtil):
         # List of local(index=0) and remote(index=1) ProcInfo items
         self.proc_info_list = ([], [])
 
-        # Find if second process should be started
-        second_process = False
-        nfsopts_list = []
-        for tname in NPTESTS + OPTESTS:
-            if tname in self.testlist:
-                second_process = True
-                nfsopts_list = self.process_client_option("nfsopts", remote=False)
-                break
+        # Find how many extra processes and clients should be started
+        nclients = 0
+        nprocesses = 0
+        for tname in self.testlist:
+            ncount = TEST_CLIENT_DICT.get(tname, 0)
+            nclients = max(nclients, ncount)
+            ncount = TEST_PROCESS_DICT.get(tname, 0)
+            nprocesses = max(nprocesses, ncount)
 
-        # Find if remote process should be started
-        remote_process = False
-        client_list = []
-        for tname in NCTESTS + OCTESTS:
-            if tname in self.testlist:
-                remote_process = True
-                client_list = self.process_client_option()
-                break
+        client_list = self.process_client_option(count=nclients)
+        self.verify_client_option(TEST_CLIENT_DICT)
 
-        # Start remote procedure server locally
-        if second_process:
-            for nfsopt_item in nfsopts_list:
-                self.create_proc_info(nfsopt_item)
+        nfsopts_list = self.process_client_option("nfsopts", remote=False, count=nprocesses)
 
-        # Start remote procedure server on host
-        if not remote_process or len(client_list) < 1:
-            for tname in NCTESTS + OCTESTS:
-                if tname in self.testlist:
-                    self.testlist.remove(tname)
-            if len(self.testlist) == 0:
-                self.opts.error("no test to run, specify option --client for --runtest='%s'" % self.runtest)
-        else:
-            for client_item in client_list:
-                self.create_proc_info(client_item)
+        # Start remote procedure server(s) locally
+        for nfsopt_item in nfsopts_list:
+            self.create_proc_info(nfsopt_item)
+
+        # Start remote procedure server(s) remotely
+        for client_item in client_list:
+            self.create_proc_info(client_item)
 
         # Unmount server on local host
         self.umount()
