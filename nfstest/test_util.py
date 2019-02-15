@@ -240,6 +240,14 @@ class TestUtil(NFSUtil):
         self.trace_marker_index = 0
         self.trace_marker_id = 0
 
+        if len(self.testnames) > 0:
+            # Add default testgroup: all
+            self.testgroups["all"] = {
+                "tests": [x for x in self.testnames if x not in self.testgroups],
+                "desc": "Run all tests: ",
+            }
+            self.testnames.append("all")
+
         for tid in _test_map:
             self._msg_count[tid] = 0
         self.dindent(4)
