@@ -477,8 +477,8 @@ class TestUtil(NFSUtil):
             self.test_opgroup = OptionGroup(self.opts, "Test options")
             hmsg = "Comma separated list of tests to run, if list starts " + \
                    "with a '^' then all tests are run except the ones " + \
-                   "listed [default: '%default']"
-            self.test_opgroup.add_option("--runtest", default='all', help=hmsg)
+                   "listed [default: 'all']"
+            self.test_opgroup.add_option("--runtest", default=None, help=hmsg)
             self.opts.add_option_group(self.test_opgroup)
             if len(usage) == 0:
                 usage = "%prog [options]"
@@ -943,6 +943,20 @@ class TestUtil(NFSUtil):
             self.__dict__.update(opts.__dict__)
             if not self.server:
                 self.opts.error("server option is required")
+
+            # Have all extra arguments in the command line appended
+            # to runtest
+            rtests = ",".join([x.strip(",") for x in args])
+            if self.runtest is None and len(args) == 0:
+                # Default is to run all tests
+                self.runtest = "all"
+            elif self.runtest is None:
+                # Set runtest to the list of extra arguments
+                self.runtest = rtests
+            elif len(args) > 0:
+                # Append all extra arguments to runtest
+                self.runtest = ",".join([x.strip(",") for x in [self.runtest, rtests]])
+
             self._verify_testnames()
             ipv6 = self.proto[-1] == '6'
             # Get IP address of server
