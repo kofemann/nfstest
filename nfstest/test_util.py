@@ -1232,7 +1232,7 @@ class TestUtil(NFSUtil):
                             exp_err_list = self.nfserr_list.get(name)
                             if exp_err_list is not None and status not in exp_err_list:
                                 # Report error not on list of expected errors
-                                self.test(False, str(nfsobj))
+                                self.warning(str(nfsobj))
             self.nfserr_list = None
             self.pktt.rewind()
         return self.pktt
