@@ -732,8 +732,7 @@ class LockTest(TestUtil):
                 # Have a marker on the packet trace for the running test,
                 # this will make the client send a LOOKUP with the test
                 # info as the file name
-                info_file = self.abspath("%s_%02d" % (self.testname, self.testidx))
-                os.path.exists(info_file)
+                self.insert_trace_marker(self.sub_testname)
 
             # Find if ranges overlap
             isoverlap = info_list[0].isoverlap
@@ -861,7 +860,7 @@ class LockTest(TestUtil):
                 return
             ridx += 1
 
-        self.testidx = 1
+        testidx = 1
         for item in self.get_opts_list():
             stype  = item['stype']
             oltype = item['oltype']
@@ -869,8 +868,10 @@ class LockTest(TestUtil):
             octype = item['octype']
             ctype  = item['ctype']
 
+            self.sub_testname = "%s_%03d" % (self.testname, testidx)
+
             if self.tverbose == 2:
-                self.dprint("INFO", "Running %s test %02d" % (self.testname, self.testidx))
+                self.dprint("INFO", "Running %s" % self.sub_testname)
 
             # Reset ProcInfo objects for next test
             expr = self.nfs_version < 4
@@ -888,7 +889,7 @@ class LockTest(TestUtil):
 
             # Do actual test
             self.basic_lock(info_list, oltype, ltype, octype, ctype, stype)
-            self.testidx += 1
+            testidx += 1
 
     def btest01_test(self):
         """Basic locking tests
@@ -904,7 +905,7 @@ class LockTest(TestUtil):
                   (self.offset, 1), (0, nmax), (1, nmax), (nmax, 1),
                   (nmax, 0), (0, -1), (-1, 0) ]
 
-        self.testidx = 1
+        testidx = 1
         for offset, length in tlist:
             offstr = "NMAX" if offset == nmax else str(offset)
             lenstr = "NMAX" if length == nmax else str(length)
@@ -912,8 +913,10 @@ class LockTest(TestUtil):
             for item in self.get_opts_list(coflag=False, clflag=False):
                 try:
                     fd = None
+                    self.sub_testname = "%s_%03d" % (self.testname, testidx)
+
                     if self.tverbose > 1:
-                        self.dprint("INFO", "Running %s test %02d" % (self.testname, self.testidx))
+                        self.dprint("INFO", "Running %s" % self.sub_testname)
 
                     if self.subtraces:
                         self.trace_start()
@@ -922,9 +925,8 @@ class LockTest(TestUtil):
                         # Have a marker on the packet trace for the running
                         # test, this will make the client send a LOOKUP with
                         # the test info as the file name
-                        info_file = self.abspath("%s_%02d" % (self.testname, self.testidx))
-                        os.path.exists(info_file)
-                    self.testidx += 1
+                        self.insert_trace_marker(self.sub_testname)
+                    testidx += 1
 
                     stype  = item['stype']
                     oltype = item['oltype']
