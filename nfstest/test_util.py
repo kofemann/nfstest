@@ -197,7 +197,6 @@ class TestUtil(NFSUtil):
         self._name = None
         self.tverbose = 1
         self._bugmsgs = {}
-        self.ignore = False
         self.bugmsgs = None
         self.nocleanup = True
         self.isatty = _isatty
@@ -454,8 +453,6 @@ class TestUtil(NFSUtil):
         self.dbg_opgroup.add_option("--nocleanup", action="store_true", default=False, help=hmsg)
         hmsg = "File containing test messages to mark as bugs if they failed"
         self.dbg_opgroup.add_option("--bugmsgs", default=self.bugmsgs, help=hmsg)
-        hmsg = "Ignore all bugs given by bugmsgs"
-        self.dbg_opgroup.add_option("--ignore", action="store_true", default=self.ignore, help=hmsg)
         hmsg = "Do not mount server and run the tests on local disk space"
         self.dbg_opgroup.add_option("--nomount", action="store_true", default=self.nomount, help=hmsg)
         hmsg = "Base name for all files and logs [default: automatically generated]"
@@ -1561,20 +1558,12 @@ class TestUtil(NFSUtil):
                All tests messages are displayed
         """
         tid = PASS if expr else FAIL
-        if len(self._bugmsgs):
+        if tid == FAIL and len(self._bugmsgs):
             for tmsg, binfo in self._bugmsgs.items():
                 if re.search(tmsg, msg):
-                    if self.ignore:
-                        # Do not count as a failure if bugmsgs and ignore are set
-                        # and it is a failure
-                        tid = IGNR if tid == FAIL else tid
-                    else:
-                        # Do not count as a failure if bugmsgs is set and it is a failure
-                        tid = BUG  if tid == FAIL else tid
-                        # Count as a failure if bugmsgs is set and the test actually passed
-                        tid = FAIL if tid == PASS else tid
-                        if tid == FAIL:
-                            failmsg = " -- test actually PASSed but failing because --bugmsgs is used"
+                    # Do not count as a failure if assertion is found
+                    # in bugmsgs file
+                    tid = BUG
                     if binfo is not None and len(binfo):
                         # Display bug message with the assertion
                         msg = "[%s]: %s" % (binfo, msg)
