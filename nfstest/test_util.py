@@ -196,7 +196,7 @@ class TestUtil(NFSUtil):
             self.progname = self.progname[:-3]
         self._name = None
         self.tverbose = 1
-        self._bugmsgs = []
+        self._bugmsgs = {}
         self.ignore = False
         self.bugmsgs = None
         self.nocleanup = True
@@ -1012,7 +1012,14 @@ class TestUtil(NFSUtil):
                     for line in open(self.bugmsgs, 'r'):
                         line = line.strip()
                         if len(line):
-                            self._bugmsgs.append(line)
+                            binfo = ""
+                            # Format:
+                            # [bug message]: assertion message
+                            regex = re.search(r"^(\[([^\]]*)\]:\s*)?(.*)", line)
+                            if regex:
+                                ftmp, binfo, line = regex.groups()
+                                binfo = "" if binfo is None else binfo.strip()
+                            self._bugmsgs[line] = binfo
                 except Exception as e:
                     self.config("Unable to load bug messages from file '%s': %r" % (self.bugmsgs, e))
 
@@ -1555,7 +1562,7 @@ class TestUtil(NFSUtil):
         """
         tid = PASS if expr else FAIL
         if len(self._bugmsgs):
-            for tmsg in self._bugmsgs:
+            for tmsg, binfo in self._bugmsgs.items():
                 if re.search(tmsg, msg):
                     if self.ignore:
                         # Do not count as a failure if bugmsgs and ignore are set
@@ -1568,6 +1575,9 @@ class TestUtil(NFSUtil):
                         tid = FAIL if tid == PASS else tid
                         if tid == FAIL:
                             failmsg = " -- test actually PASSed but failing because --bugmsgs is used"
+                    if binfo is not None and len(binfo):
+                        # Display bug message with the assertion
+                        msg = "[%s]: %s" % (binfo, msg)
                     break
         self._test_msg(tid, msg, subtest=subtest, failmsg=failmsg)
         if tid == FAIL and terminate:
