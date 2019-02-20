@@ -257,8 +257,8 @@ class RPCload(BaseObj):
             out += "%-5s " % name
         if RPC_ver:
             mvstr = ""
-            minorversion = getattr(self, 'minorversion', 0)
-            if minorversion > 0:
+            minorversion = getattr(self, 'minorversion', None)
+            if minorversion >= 0:
                 mvstr = ".%d" % minorversion
             vers = "v%d%s" % (rpc.version, mvstr)
             out += "%-4s " % vers
