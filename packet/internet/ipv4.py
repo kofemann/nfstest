@@ -162,11 +162,13 @@ class IPv4(BaseObj):
         if rdebug == 1:
             out = "%-13s -> %-13s " % (self.src, self.dst)
             if self._pkt.get_layers()[-1] == "ip":
+                mf = ", (MF=1)" if (self.version == 4 and self.flags.MF) else ""
                 proto = _IP_map.get(self.protocol, self.protocol)
-                out += " IPv%d  protocol: %s, len: %d" % (self.version, proto, self.total_size)
+                out += "IPv%d  protocol: %s, len: %d%s" % (self.version, proto, self.total_size, mf)
         elif rdebug == 2:
+            mf = ", (MF=1)" if (self.version == 4 and self.flags.MF) else ""
             proto = _IP_map.get(self.protocol, self.protocol)
-            out = "%s -> %s, protocol: %s, len: %d" % (self.src, self.dst, proto, self.total_size)
+            out = "%s -> %s, protocol: %s, len: %d%s" % (self.src, self.dst, proto, self.total_size, mf)
         else:
             out = BaseObj.__str__(self)
         return out
