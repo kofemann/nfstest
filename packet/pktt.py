@@ -170,6 +170,9 @@ class Pktt(BaseObj):
         # TCP packets or to handle a TCP packet having multiple RPC packets
         self._tcp_stream_map = {}
 
+        # IPv4 fragments used in reassembly
+        self._ipv4_fragments = {}
+
         # RDMA reassembly object
         self._rdma_info = RDMAinfo()
 

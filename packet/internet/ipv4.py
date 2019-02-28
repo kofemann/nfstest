@@ -27,7 +27,7 @@ from packet.transport.udp import UDP
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.2"
+__version__   = "1.3"
 
 # Name of different protocols
 _IP_map = {1:'ICMP(1)', 2:'IGMP(2)', 6:'TCP(6)', 17:'UDP(17)'}
@@ -113,6 +113,29 @@ class IPv4(BaseObj):
             # Save IP options
             osize = self.header_size - 20
             self.options = unpack.read(osize)
+
+        if self.flags.MF:
+            # This is an IP fragment
+            record = pktt.pkt.record
+            self.data = unpack.getbytes()
+            fragment = pktt._ipv4_fragments.setdefault(self.id, {})
+            fragment[self.fragment_offset] = self.data
+            return
+        else:
+            # Reassemble the fragments
+            fragment = pktt._ipv4_fragments.pop(self.id, None)
+            if fragment is not None:
+                data = ""
+                for off in sorted(fragment.keys()):
+                    offset = 8*off # Offset is given in multiples of 8
+                    count = len(data)
+                    if offset > count:
+                        # Fill missing fragments with zeros
+                        data += "\x00" * (offset - count)
+                    data += fragment[off]
+                # Insert all previous fragments right before the current
+                # (and last) fragment
+                unpack.insert(data)
 
         if self.protocol == 6:
             # Decode TCP
