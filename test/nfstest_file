@@ -22,7 +22,7 @@ import packet.record as record
 import packet.nfs.nfs3_const as nfs3
 import packet.nfs.nfs4_const as nfs4
 from packet.pktt import Pktt,crc32,crc16
-from optparse import OptionParser,OptionGroup,IndentedHelpFormatter
+from optparse import OptionParser,OptionGroup,IndentedHelpFormatter,SUPPRESS_HELP
 
 # Module constants
 __author__    = "Jorge Mora (mora@netapp.com)"
@@ -127,6 +127,9 @@ opts.add_option("-z", "--tz", default=None, help=hhelp)
 hhelp = "Display progress bar [default: %default]"
 opts.add_option("--progress", type="int", default=1, help=hhelp)
 
+# Hidden options
+opts.add_option("--list--options", action="store_true", default=False, help=SUPPRESS_HELP)
+
 pktdisp = OptionGroup(opts, "Packet display")
 hhelp = "Display record frame number [default: %default]"
 pktdisp.add_option("--frame", default=str(record.FRAME), help=hhelp)
@@ -149,6 +152,12 @@ opts.add_option_group(debug)
 
 # Run parse_args to get options
 vopts, args = opts.parse_args()
+
+if vopts.list__options:
+    hidden_opts = ("--list--options",)
+    long_opts = [x for x in opts._long_opt.keys() if x not in hidden_opts]
+    print "\n".join(opts._short_opt.keys() + long_opts)
+    sys.exit(0)
 
 if vopts.tz is not None:
     os.environ["TZ"] = vopts.tz
