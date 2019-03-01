@@ -12,10 +12,11 @@
 # ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 # FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 #===============================================================================
+import sys
 import packet.utils as utils
 from packet.pktt import Pktt
 import packet.unpack as unpack
-from optparse import OptionParser,IndentedHelpFormatter,OptionGroup
+from optparse import OptionParser,OptionGroup,IndentedHelpFormatter,SUPPRESS_HELP
 
 # Module constants
 __author__    = "Jorge Mora (mora@netapp.com)"
@@ -43,6 +44,9 @@ utils.LOAD_body = False
 # Command line options
 opts = OptionParser(USAGE, formatter = IndentedHelpFormatter(2, 16), version = "%prog " + __version__)
 
+# Hidden options
+opts.add_option("--list--options", action="store_true", default=False, help=SUPPRESS_HELP)
+
 pktdisp = OptionGroup(opts, "Packet display")
 hhelp = "Display RPC payload body [default: %default]"
 pktdisp.add_option("--load-body", default=str(utils.LOAD_body), help=hhelp)
@@ -61,6 +65,12 @@ opts.add_option_group(debug)
 
 # Run parse_args to get options
 vopts, args = opts.parse_args()
+
+if vopts.list__options:
+    hidden_opts = ("--list--options",)
+    long_opts = [x for x in opts._long_opt.keys() if x not in hidden_opts]
+    print "\n".join(opts._short_opt.keys() + long_opts)
+    sys.exit(0)
 
 if len(args) < 1:
     opts.error("No packet trace file!")
