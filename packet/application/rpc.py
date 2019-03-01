@@ -316,7 +316,7 @@ class RPC(GSS):
             for item in ['program', 'version', 'procedure']:
                 value = getattr(self, item, None)
                 if value != None:
-                    prog += " %s: %d," % (item, value)
+                    prog += ", %s: %d" % (item, value)
         if rdebug in (1,2):
             if self.reply_status == MSG_DENIED:
                 if self.rejected_status == RPC_MISMATCH:
@@ -330,7 +330,7 @@ class RPC(GSS):
                     errstr = ", %s" % self.accepted_status
         if rdebug == 1:
             rtype = "%-5s" % msg_type.get(self.type, 'Unknown').lower()
-            out = "RPC %s %s xid: %s%s" % (rtype, prog, self.xid, errstr)
+            out = "RPC   %s xid: %s%s%s" % (rtype, self.xid, prog, errstr)
         elif rdebug == 2:
             rtype = "%-5s(%d)" % (msg_type.get(self.type, 'Unknown'), self.type)
             if self.type == CALL:
@@ -340,7 +340,7 @@ class RPC(GSS):
                     creds = errstr
                 else:
                     creds = ", %s" % self.verifier
-            out = "%s,%s xid: %s%s" % (rtype, prog, self.xid, creds)
+            out = "%s, xid: %s%s%s" % (rtype, self.xid, prog, creds)
         else:
             out = BaseObj.__str__(self)
         return out
