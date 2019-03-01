@@ -157,7 +157,7 @@ vhelp += " bitmap 0x04: real verbose. "
 opts.add_option("-v", "--verbose", type="int", default=1, help=vhelp)
 lhelp  = "Layers to display [default: '%default']. "
 lhelp += "Valid layers: ethernet, ip, tcp, udp, rpc, nfs, nlm, mount, portmap"
-opts.add_option("-l", "--layers", default="nfs,nlm,mount,portmap", help=lhelp)
+opts.add_option("-l", "--layers", default="rpc", help=lhelp)
 shelp = "Start index [default: %default]"
 opts.add_option("-s", "--start", type="int", default=0, help=shelp)
 ehelp = "End index [default: %default]"
