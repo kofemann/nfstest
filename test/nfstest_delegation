@@ -65,9 +65,18 @@ recalled. Finally, a delegation should not be granted on the second client who
 cause the delegation recall on the first client.
 
 Examples:
-    The only required option is --server but only the basic delegation tests
-    will be run. Use the --client option to run the recall tests as well
-    $ %prog --server 192.168.0.11 --client 192.168.0.20
+    Run the basic delegation tests (no client option):
+        %prog --server 192.168.0.2 --export /exports
+
+    Use short options instead:
+        %prog -s 192.168.0.2 -e /exports
+
+    Run both the basic and recall tests using positional arguments with
+    nfsversion=3 for the second client:
+        %prog -s 192.168.0.2 -e /exports --client 192.168.0.10:::3
+
+    Use named arguments instead:
+        %prog -s 192.168.0.2 -e /exports --client 192.168.0.10:nfsversion=3
 
 Notes:
     The user id in the local host and the host specified by --client must
@@ -204,6 +213,9 @@ TESTGROUPS = {
     },
 }
 
+# Dictionary having the number of clients required by each test
+TEST_CLIENT_DICT = {x:1 for x in TESTNAMES_REMOTE}
+
 PATTERN = 'FF00'
 
 OPEN_STID  = 0
@@ -271,7 +283,11 @@ class DelegTest(TestUtil):
         """
         TestUtil.__init__(self, **kwargs)
         self.test_opgroup.version = "%prog " + __version__
-        hhelp = "Remote NFS client used for recall tests"
+        hhelp = "Remote NFS client and options used for recall delegation tests. " \
+                "Clients are separated by a ',' and each client definition is " \
+                "a list of arguments separated by a ':' given in the following " \
+                "order if positional arguments is used (see examples): " \
+                "clientname:server:export:nfsversion:port:proto:sec:mtpoint"
         self.test_opgroup.add_option("--client", default=None, help=hhelp)
         hhelp = "Starting offset for lock [default: %default]"
         self.test_opgroup.add_option("--lock-offset", type="int", default=0, help=hhelp)
@@ -286,30 +302,24 @@ class DelegTest(TestUtil):
         # Disable createtraces option
         self.createtraces = False
 
-        # Check if remote server needs to run
-        isremote = False
-        for tname in TESTNAMES_REMOTE:
-            if tname in self.testlist:
-                isremote = True
-                break
-
         # Local rexec object
         self.lexecobj = None
 
-        if self.client is not None and isremote:
-            self.create_host(self.client)
-            self.create_rexec(self.client)
-        else:
-            self.clientobj = None
+        # Find how many remote Rexec objects should be started
+        nclients = 0
+        for tname in self.testlist:
+            nclients = max(nclients, TEST_CLIENT_DICT.get(tname, 0))
 
-        if self.clientobj is None:
-            # No --client was specified, so remove all tests that require
-            # a second client from the list of tests to run
-            for tname in TESTNAMES_REMOTE:
-                if tname in self.testlist:
-                    self.testlist.remove(tname)
-            if len(self.testlist) == 0:
-                self.opts.error("no test to run, specify option --client for --runtest='%s'" % self.runtest)
+        # Process the --client option
+        client_list = self.process_client_option(count=nclients)
+        self.verify_client_option(TEST_CLIENT_DICT)
+
+        # Start remote procedure server(s) remotely
+        self.clientobj = None
+        for client_args in client_list:
+            client_name = client_args.pop("client", "")
+            self.create_host(client_name, **client_args)
+            self.create_rexec(client_name)
 
         # Verify the lock ranges do not overlap
         end1 = self.lock_offset  + self.lock_len - 1
