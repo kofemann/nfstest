@@ -146,6 +146,8 @@ opts.add_option_group(pktdisp)
 debug = OptionGroup(opts, "Debug")
 hhelp = "If set to True, enums are strictly enforced [default: %default]"
 debug.add_option("--enum-check", default=str(utils.ENUM_CHECK), help=hhelp)
+hhelp = "If set to True, enums are displayed as numbers [default: %default]"
+debug.add_option("--enum-repr", default=str(utils.ENUM_REPR), help=hhelp)
 hhelp = "Set debug level messages"
 debug.add_option("--debug-level", default="", help=hhelp)
 opts.add_option_group(debug)
