@@ -180,6 +180,7 @@ hhelp = "Display progress bar [default: %default]"
 opts.add_option("--progress", type="int", default=1, help=hhelp)
 
 # Hidden options
+opts.add_option("--list--options", action="store_true", default=False, help=SUPPRESS_HELP)
 opts.add_option("--list--pktlayers", action="store_true", default=False, help=SUPPRESS_HELP)
 
 rpcdisp = OptionGroup(opts, "RPC display")
@@ -222,6 +223,11 @@ opts.add_option_group(debug)
 # Run parse_args to get options
 vopts, args = opts.parse_args()
 
+if vopts.list__options:
+    hidden_opts = ("--list--options", "--list--pktlayers")
+    long_opts = [x for x in opts._long_opt.keys() if x not in hidden_opts]
+    print "\n".join(opts._short_opt.keys() + long_opts)
+    sys.exit(0)
 if vopts.list__pktlayers:
     print "\n".join(["all"] + packet.pkt.PKT_layers)
     sys.exit(0)
