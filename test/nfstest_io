@@ -15,7 +15,7 @@
 
 import nfstest_config as c
 from nfstest.file_io import *
-from optparse import OptionParser, OptionGroup, IndentedHelpFormatter
+from optparse import OptionParser,OptionGroup,IndentedHelpFormatter,SUPPRESS_HELP
 
 # Module constants
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
@@ -44,6 +44,9 @@ opts.add_option("-n", "--nprocs",  type="int", default=1, help="Number of proces
 opts.add_option("-r", "--runtime", type="int", default=0, help="Run time [default: '%default']")
 opts.add_option("-v", "--verbose", default="none", help="Verbose level: none|info|debug|dbg1-7|all [default: '%default']")
 opts.add_option("-e", "--exiterr", action="store_true", default=False, help="Exit on first error")
+
+# Hidden options
+opts.add_option("--list--options", action="store_true", default=False, help=SUPPRESS_HELP)
 
 writegroup = OptionGroup(opts, "Read and write")
 writegroup.add_option("--read",     type="float", default=P_READ,   help="Read file percentage [default: %default]")
@@ -114,6 +117,13 @@ opts.set_defaults(rdwr=None)
 
 # Re-run parse_args with new default values
 vopts, args = opts.parse_args()
+
+if vopts.list__options:
+    hidden_opts = ("--list--options",)
+    long_opts = [x for x in opts._long_opt.keys() if x not in hidden_opts]
+    print "\n".join(opts._short_opt.keys() + long_opts)
+    sys.exit(0)
+
 if vopts.datadir is None:
     opts.error("datadir option is required")
 
