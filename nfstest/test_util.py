@@ -368,6 +368,7 @@ class TestUtil(NFSUtil):
 
         # Hidden options
         self.opts.add_option("--list--tests", action="store_true", default=False, help=SUPPRESS_HELP)
+        self.opts.add_option("--list--options", action="store_true", default=False, help=SUPPRESS_HELP)
 
         self.nfs_opgroup = OptionGroup(self.opts, "NFS specific options")
         hmsg = "Server name or IP address"
@@ -904,8 +905,14 @@ class TestUtil(NFSUtil):
             if opts.list__tests:
                 print "\n".join(self.testnames + self.testgroups.keys())
                 sys.exit(0)
+            if opts.list__options:
+                hidden_opts = ("--list--tests", "--list--options")
+                long_opts = [x for x in self.opts._long_opt.keys() if x not in hidden_opts]
+                print "\n".join(self.opts._short_opt.keys() + long_opts)
+                sys.exit(0)
 
             del opts.list__tests
+            del opts.list__options
 
             if opts.notty:
                 # Do not use terminal colors
