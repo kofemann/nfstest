@@ -317,7 +317,7 @@ class RPC(GSS):
                 value = getattr(self, item, None)
                 if value != None:
                     prog += ", %s: %d" % (item, value)
-        if rdebug in (1,2):
+        if self.type == REPLY and rdebug in (1,2):
             if self.reply_status == MSG_DENIED:
                 if self.rejected_status == RPC_MISMATCH:
                     errstr = ", %s(%s)" % (self.rejected_status, self.rpc_mismatch)
