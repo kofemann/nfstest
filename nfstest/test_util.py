@@ -59,7 +59,7 @@ from baseobj import BaseObj
 from nfs_util import NFSUtil
 import packet.nfs.nfs3_const as nfs3_const
 import packet.nfs.nfs4_const as nfs4_const
-from optparse import OptionParser, OptionGroup, IndentedHelpFormatter
+from optparse import OptionParser,OptionGroup,IndentedHelpFormatter,SUPPRESS_HELP
 
 # Module constants
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
@@ -365,6 +365,9 @@ class TestUtil(NFSUtil):
                "file /etc/nfstest, user wide file $HOME/.nfstest or in " + \
                "the current directory .nfstest file"
         self.opts.add_option("-f", "--file", default="", help=hmsg)
+
+        # Hidden options
+        self.opts.add_option("--list--tests", action="store_true", default=False, help=SUPPRESS_HELP)
 
         self.nfs_opgroup = OptionGroup(self.opts, "NFS specific options")
         hmsg = "Server name or IP address"
@@ -898,6 +901,12 @@ class TestUtil(NFSUtil):
             # --file option
             self.scan_options()
         else:
+            if opts.list__tests:
+                print "\n".join(self.testnames + self.testgroups.keys())
+                sys.exit(0)
+
+            del opts.list__tests
+
             if opts.notty:
                 # Do not use terminal colors
                 self.isatty = False
