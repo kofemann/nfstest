@@ -764,7 +764,10 @@ class TestUtil(NFSUtil):
                 if self.need_run_test(tname):
                     # Test requires more clients then specified is explicitly
                     # given but there is not enough clients to run it
-                    self.config("Not enough clients specified in --%s for '%s' to run" % (option, tname))
+                    if len(client_list):
+                        self.config("Not enough clients specified in --%s for '%s' to run" % (option, tname))
+                    else:
+                        self.config("Specify option --%s for --runtest='%s'" % (option, self.runtest))
                 else:
                     # Test was not explicitly given so do not run it
                     self.remove_test(tname)
