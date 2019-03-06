@@ -388,6 +388,8 @@ class NFSUtil(Host):
                The match fails if packet index hits this limit [default: no limit]
            anyclaim:
                Find open for either regular open or using delegate_cur_info [default: False]
+           nfs_version:
+               NFS version to use in search [default: mounted NFS version]
 
            Must specify either filename, claimfh or both.
            Return a tuple: (filehandle, open_stateid, deleg_stateid).
@@ -402,12 +404,13 @@ class NFSUtil(Host):
         src_ipaddr    = kwargs.pop('src_ipaddr', None)
         maxindex      = kwargs.pop('maxindex', None)
         anyclaim      = kwargs.pop('anyclaim', False)
+        nfs_version   = kwargs.pop('nfs_version', self.nfs_version)
         self.pktcall  = None
         self.pktreply = None
         self.opencall  = None
         self.openreply = None
 
-        if self.nfs_version < 4:
+        if nfs_version < 4:
             # Search for LOOKUP or CREATE if NFSv3
             if claimfh is None:
                 margs = {
