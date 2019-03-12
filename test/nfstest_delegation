@@ -417,14 +417,24 @@ class DelegTest(TestUtil):
 
     def get_deleg_remote(self):
         """Get a read delegation on the remote client."""
-        fdko = self.rexecobj.run(os.open, self.abspath(self.files[0]), os.O_RDONLY)
-        self.dprint("DBG2", "Get a read delegation on the remote client [%s]" % self.absfile)
+        fdko = None
+        if self.clientobj and self.clientobj.nfs_version < 4:
+            # There are no delegations in NFSv3 so there is no need
+            # to open a file so the open owner sticks around
+            self.dprint("DBG2", "Open file on the remote client [%s]" % self.absfile)
+        else:
+            # Open file so open owner sticks around so a delegation
+            # is granted when opening the file under test
+            fdko = self.rexecobj.run(os.open, self.abspath(self.files[0]), os.O_RDONLY)
+            self.dprint("DBG2", "Get a read delegation on the remote client [%s]" % self.absfile)
+        # Open the file under test
         fdrd = self.rexecobj.run(os.open, self.absfile, os.O_RDONLY)
         self.dprint("DBG3", "Read %s on the remote client" % self.absfile)
         data = self.rexecobj.run(os.read, fdrd, 1024)
         self.dprint("DBG4", "Close %s on the remote client" % self.absfile)
         self.rexecobj.run(os.close, fdrd)
-        self.rexecobj.run(os.close, fdko)
+        if fdko is not None:
+            self.rexecobj.run(os.close, fdko)
 
     def setup_test(self, open_type, io_type, mount=False, nfiles=0, lexec=False):
         """Setup test by mounting server and hold open a file so that the open
