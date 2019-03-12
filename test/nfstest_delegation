@@ -18,6 +18,7 @@ import fcntl
 import struct
 import traceback
 import nfstest_config as c
+from packet.nfs.nfs3_const import *
 from packet.nfs.nfs4_const import *
 from nfstest.test_util import TestUtil
 
@@ -25,7 +26,7 @@ from nfstest.test_util import TestUtil
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.7"
+__version__   = "1.8"
 
 USAGE = """%prog --server <server> [--client <client>] [options]
 
@@ -799,20 +800,34 @@ class DelegTest(TestUtil):
             extra_str = ""
             deleg_type = deleg_map[open_type]
             mode_str = deleg_str[deleg_type]
+            nfs_version = self.clientobj.nfs_version
+            sipaddr = self.clientobj.ipaddr
+            sproto = self.clientobj.proto
+            sport = self.clientobj.port
             if io_type is None:
                 io_type = OPEN_READ if open_type == OPEN_READ else OPEN_WRITE
             io_str = open_str[io_type]
             op_type = OP_READ if io_type == OPEN_READ else OP_WRITE
             if conflict_type == OP_SETATTR:
                 conflict_str = "SETATTR (chmod)"
-                conflict_op = OP_SETATTR
+                conflict_op = OP_SETATTR if nfs_version > 3 else NFSPROC3_SETATTR
             elif conflict_type == OP_REMOVE:
                 conflict_str = "REMOVE"
-                conflict_op = OP_REMOVE
+                conflict_op = OP_REMOVE if nfs_version > 3 else NFSPROC3_REMOVE
             elif conflict_type == OP_RENAME:
                 conflict_str = "RENAME"
-                conflict_op = OP_RENAME
+                conflict_op = OP_RENAME if nfs_version > 3 else NFSPROC3_RENAME
                 conflict_str += " (DST)" if target else " (SRC)"
+            elif nfs_version < 4:
+                if conflict_type == OP_READ:
+                    conflict_str = "READ"
+                    conflict_op = NFSPROC3_READ
+                    # Use an existing file because reading and empty file
+                    # in NFSv3 will not send the READ procedure
+                    nfiles = 1
+                else:
+                    conflict_str = "WRITE"
+                    conflict_op = NFSPROC3_WRITE
             else:
                 ctype = "READ" if conflict_type == OP_READ else "WRITE"
                 conflict_str = "OPEN (%s)" % ctype
@@ -1005,8 +1020,11 @@ class DelegTest(TestUtil):
             self.trace_stop()
 
         try:
-            if conflict_op == OP_REMOVE or (conflict_op == OP_RENAME and target):
-                self.set_nfserr_list(nfs4list=[NFS4ERR_NOENT, NFS4ERR_STALE, NFS4ERR_BAD_STATEID])
+            if conflict_type == OP_REMOVE or (conflict_type == OP_RENAME and target):
+                self.set_nfserr_list(
+                    nfs3list=[NFS3ERR_NOENT],
+                    nfs4list=[NFS4ERR_NOENT, NFS4ERR_STALE, NFS4ERR_BAD_STATEID],
+                )
             self.trace_open()
             self.set_pktlist()
 
@@ -1030,9 +1048,10 @@ class DelegTest(TestUtil):
             if self.layout:
                 filehandles = self.layout['filehandles']
 
+            fh1 = None
             if other_read_deleg:
                 # Find OPEN (READ) call from the second client
-                (fh1, op_stid1, deleg_stid1) = self.find_open(filename=self.filename, src_ipaddr=self.clientobj.ipaddr)
+                (fh1, op_stid1, deleg_stid1) = self.find_open(filename=self.filename, src_ipaddr=sipaddr, proto=sproto, nfs_version=nfs_version)
                 save_index = self.pktt.get_index()
 
             # Find DELEGRETURN request and reply
@@ -1042,15 +1061,24 @@ class DelegTest(TestUtil):
             self.pktt.rewind(save_index)
 
             # Find OPEN call from the second client
-            src_other_client_str = self.pktt.ip_tcp_dst_expr(self.server_ipaddr, self.port) + " and IP.src == '%s' and " % self.clientobj.ipaddr
+            src_other_client_str = "IP.dst == '%s' and %s.dst_port == %d" % (self.server_ipaddr, sproto.upper(), sport)
+            src_other_client_str += " and IP.src == '%s' and " % sipaddr
             conflict_match_str = src_other_client_str + "NFS.argop == %d" % conflict_op
             if conflict_op == OP_OPEN:
                 conflict_match_str += " and (NFS.claim.name == '%s' or" % self.filename
                 conflict_match_str += " (NFS.fh == '%s' and NFS.claim.claim == %d))" % (self.pktt.escape(open_fh), CLAIM_FH)
-            elif target and conflict_op == OP_RENAME:
+            elif target and conflict_type == OP_RENAME:
                 conflict_match_str += " and NFS.newname == '%s'" % self.filename
-            elif conflict_op in [OP_REMOVE, OP_RENAME]:
+            elif conflict_type in [OP_REMOVE, OP_RENAME]:
                 conflict_match_str += " and NFS.name == '%s'" % self.filename
+            elif conflict_op in [NFSPROC3_READ, NFSPROC3_WRITE]:
+                if fh1 is None:
+                    # Find the NFSv3 LOOKUP to get the file handle
+                    (fh1, op_stid1, deleg_stid1) = self.find_open(filename=self.filename, src_ipaddr=sipaddr, proto=sproto, nfs_version=nfs_version)
+                expr = fh1 is not None
+                self.test(expr, "LOOKUP should be sent from second client")
+                if expr:
+                   conflict_match_str += " and NFS.fh == '%s'" % self.pktt.escape(fh1)
 
             openreply = None
             while True:
@@ -1203,13 +1231,13 @@ class DelegTest(TestUtil):
             self.test(openreply != None, "%s reply should be sent to the second client after the %s delegation has been returned" % (conflict_str, mode_str))
             if openreply is None:
                 return
-            mds_stat = [NFS4_OK]
+            mds_stat = [NFS4_OK, NFS3_OK]
             ds_stat  = [NFS4_OK]
             stid_type = LOCK_STID if lock and lock_stid else OPEN_STID
             stateid = lock_stid if stid_type == LOCK_STID else open_stid
             if conflict_op == OP_OPEN:
                 self.test(openreply.NFSop.delegation.deleg_type == OPEN_DELEGATE_NONE, "Delegation should not be granted for the second client")
-            elif conflict_op == OP_REMOVE or (conflict_op == OP_RENAME and target):
+            elif conflict_type == OP_REMOVE or (conflict_type == OP_RENAME and target):
                 if deleg_type == OPEN_DELEGATE_WRITE:
                     ds_stat = [NFS4ERR_STALE, NFS4ERR_BAD_STATEID]
                 else:
