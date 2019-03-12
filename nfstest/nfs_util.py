@@ -306,6 +306,8 @@ class NFSUtil(Host):
            port:
                Destination port [default: self.port]
                A value of None matches any destination port
+           proto:
+               Protocol [default: self.proto]
            match:
                Match string to include [default: '']
            status:
@@ -324,6 +326,7 @@ class NFSUtil(Host):
         """
         ipaddr       = kwargs.get("ipaddr",       self.server_ipaddr)
         port         = kwargs.get("port",         self.port)
+        proto        = kwargs.get("proto",        self.proto)
         match        = kwargs.get("match",        "")
         status       = kwargs.get("status",       0)
         src_ipaddr   = kwargs.get("src_ipaddr",   None)
@@ -336,7 +339,7 @@ class NFSUtil(Host):
         if len(match):
             match += " and "
         if port != None:
-            dst += "TCP.dst_port == %d and " % port
+            dst += "%s.dst_port == %d and " % (proto.upper(), port)
         pktcall  = None
         pktreply = None
         while True:
@@ -374,6 +377,8 @@ class NFSUtil(Host):
                Destination IP address [default: self.server_ipaddr]
            port:
                Destination port [default: self.port]
+           proto:
+               Protocol [default: self.proto]
            deleg_type:
                Expected delegation type on reply [default: None]
            deleg_stateid:
@@ -399,6 +404,7 @@ class NFSUtil(Host):
         fh            = kwargs.pop('fh', None)
         ipaddr        = kwargs.pop('ipaddr', self.server_ipaddr)
         port          = kwargs.pop('port', self.port)
+        proto         = kwargs.pop('proto', self.proto)
         deleg_type    = kwargs.pop('deleg_type', None)
         deleg_stateid = kwargs.pop('deleg_stateid', None)
         src_ipaddr    = kwargs.pop('src_ipaddr', None)
@@ -416,6 +422,7 @@ class NFSUtil(Host):
                 margs = {
                     "ipaddr"     : ipaddr,
                     "port"       : port,
+                    "proto"      : proto,
                     "src_ipaddr" : src_ipaddr,
                     "maxindex"   : maxindex,
                     "match"      : "NFS.name == '%s'" % filename,
@@ -429,7 +436,7 @@ class NFSUtil(Host):
             return (claimfh, None, None)
 
         src = "IP.src == '%s' and " % src_ipaddr if src_ipaddr is not None else ''
-        dst = self.pktt.ip_tcp_dst_expr(ipaddr, port)
+        dst = "IP.dst == '%s' and %s.dst_port == %d" % (ipaddr, proto.upper(), port)
 
         file_str = ""
         deleg_str = ""
@@ -1116,7 +1123,7 @@ class NFSUtil(Host):
 
         return bool(self.layout)
 
-    def verify_io(self, iomode, stateid, ipaddr=None, port=None, src_ipaddr=None, filehandle=None, ds_index=None, init=False, maxindex=None, pattern=None):
+    def verify_io(self, iomode, stateid, ipaddr=None, port=None, proto=None, src_ipaddr=None, filehandle=None, ds_index=None, init=False, maxindex=None, pattern=None):
         """Verify I/O is sent to the server specified by the ipaddr and port.
 
            iomode:
@@ -1129,6 +1136,8 @@ class NFSUtil(Host):
            port:
                Destination port number of MDS or DS
                [default: do not match destination port]
+           proto:
+               Protocol [default: self.proto]
            src_ipaddr:
                Source IP address of request
                [default: do not match source]
@@ -1156,7 +1165,9 @@ class NFSUtil(Host):
         if ipaddr != None:
             dst = "IP.dst == '%s' and " % ipaddr
             if port != None:
-                dst += "TCP.dst_port == %d and " % port
+                if proto is None:
+                    proto = self.proto
+                dst += "%s.dst_port == %d and " % (proto.upper(), port)
         fh = "NFS.fh == '%s'" % self.pktt.escape(filehandle)
         save_index = self.pktt.get_index()
         xids = []
@@ -1652,6 +1663,8 @@ class NFSUtil(Host):
                Destination IP address [default: self.server_ipaddr]
            port:
                Destination port [default: self.port]
+           proto:
+               Protocol [default: self.proto]
         """
         dst = ""
         self.pktcall  = None
@@ -1659,8 +1672,9 @@ class NFSUtil(Host):
         dirfh  = kwargs.pop('dirfh', None)
         ipaddr = kwargs.pop('ipaddr', self.server_ipaddr)
         port   = kwargs.pop('port', self.port)
+        proto  = kwargs.pop('proto', self.proto)
         if ipaddr is not None:
-            dst = self.pktt.ip_tcp_dst_expr(ipaddr, port) + " and "
+            dst = "IP.dst == '%s' and %s.dst_port == %d and " % (ipaddr, proto.upper(), port)
 
         # Break path into its directory components
         path_list = split_path(path)
