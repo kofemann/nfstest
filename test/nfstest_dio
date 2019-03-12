@@ -930,15 +930,16 @@ class DioTest(TestUtil):
                     match_str = "NFS.argop == %d and NFS.stateid.other == '%s'" % (bio_op, self.pktt.escape(stateid))
 
                 while self.pktt.match(match_str):
-                    roffset = self.pktt.pkt.NFSop.offset
-                    xid     = self.pktt.pkt.rpc.xid
+                    pkt = self.pktt.pkt
+                    roffset = pkt.NFSop.offset
+                    xid     = pkt.rpc.xid
                     if xids.get(xid, None) is None:
                         # Save xid to keep track of re-transmitted packets
                         xids[xid] = 1
                     else:
                         # Skip re-transmitted packets
                         continue
-                    rsize = self.pktt.pkt.NFSop.count
+                    rsize = pkt.NFSop.count
                     if rsize != bsize:
                         rmatch = False
                     total_size += rsize
@@ -1199,21 +1200,22 @@ class DioTest(TestUtil):
             received = []
             pkt_hash = {}
             while self.pktt.match(match_str):
-                ipaddr = self.pktt.pkt.ip.dst
-                port   = self.pktt.pkt.tcp.dst_port
-                xid    = self.pktt.pkt.rpc.xid
+                pkt = self.pktt.pkt
+                ipaddr = pkt.ip.dst
+                port   = pkt.tcp.dst_port
+                xid    = pkt.rpc.xid
                 if xids.get(xid, None) is None:
                     # Save xid to keep track of re-transmitted packets
                     xids[xid] = 1
                 else:
                     # Skip re-transmitted packets
                     continue
-                rsize = self.pktt.pkt.NFSop.count
+                rsize = pkt.NFSop.count
                 if self.ispnfs:
                     rserver = MDS if (ipaddr == self.server_ipaddr and port == self.port) else DS
                 else:
                     rserver = SERVER
-                off = self.pktt.pkt.NFSop.offset
+                off = pkt.NFSop.offset
                 pkt_hash[off] = {'server':rserver, 'size':rsize}
                 received.append("%s(%d)" % (mds_map[rserver], rsize))
                 ret.append(rsize)
