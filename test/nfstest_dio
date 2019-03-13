@@ -837,7 +837,8 @@ class DioTest(TestUtil):
                 pkt     = self.pktt.pkt
                 roffset = pkt.NFSop.offset
                 ipaddr  = pkt.ip.dst
-                port    = pkt.tcp.dst_port
+                pobj    = pkt.udp if pkt.tcp is None else pkt.tcp
+                port    = pobj.dst_port
                 xid     = pkt.rpc.xid
                 pktr    = self.pktt.match("RPC.type == 1 and RPC.xid == %d" % xid)
                 self.pktt.rewind(save_index)
@@ -1202,7 +1203,8 @@ class DioTest(TestUtil):
             while self.pktt.match(match_str):
                 pkt = self.pktt.pkt
                 ipaddr = pkt.ip.dst
-                port   = pkt.tcp.dst_port
+                pobj   = pkt.udp if pkt.tcp is None else pkt.tcp
+                port   = pobj.dst_port
                 xid    = pkt.rpc.xid
                 if xids.get(xid, None) is None:
                     # Save xid to keep track of re-transmitted packets
