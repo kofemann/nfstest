@@ -32,7 +32,7 @@ from packet.utils import OptionFlags, ShortHex
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.5"
+__version__   = "1.6"
 
 UINT32_MAX = 0xffffffff
 
@@ -287,18 +287,18 @@ class TCP(BaseObj):
            The representation depends on the verbose level set by debug_repr().
            If set to 0 the generic object representation is returned.
            If set to 1 the representation of the object is condensed:
-               'TCP 708 -> 2049, seq: 3294175829, ack: 3395739041, ACK,FIN'
+               'TCP 708 -> 2049, seq: 0xc4592255, ack: 0xca66dda1, ACK,FIN'
 
            If set to 2 the representation of the object also includes the
            length of payload and a little bit more verbose:
-               'src port 708 -> dst port 2049, seq: 3294175829, ack: 3395739041, len: 0, flags: FIN,ACK'
+               'src port 708 -> dst port 2049, seq: 0xc4592255, ack: 0xca66dda1, len: 0, flags: FIN,ACK'
         """
         rdebug = self.debug_repr()
         if rdebug == 1:
-            out = "TCP %d -> %d, seq: %d, ack: %d, %s" % \
+            out = "TCP %d -> %d, seq: 0x%08x, ack: 0x%08x, %s" % \
                   (self.src_port, self.dst_port, self.seq_number, self.ack_number, self.flags)
         elif rdebug == 2:
-            out = "src port %d -> dst port %d, seq: %d, ack: %d, len: %d, flags: %s" % \
+            out = "src port %d -> dst port %d, seq: 0x%08x, ack: 0x%08x, len: %d, flags: %s" % \
                   (self.src_port, self.dst_port, self.seq_number, self.ack_number, self.length, self.flags)
         else:
             out = BaseObj.__str__(self)
