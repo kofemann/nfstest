@@ -34,6 +34,8 @@ __copyright__ = "Copyright (C) 2012 NetApp, Inc."
 __license__   = "GPL v2"
 __version__   = "1.5"
 
+UINT32_MAX = 0xffffffff
+
 TCPflags = {
     0: "FIN",
     1: "SYN",
@@ -244,10 +246,10 @@ class TCP(BaseObj):
 
         # Convert sequence numbers to relative numbers
         seq = self.seq_number - stream.seq_base + stream.seq_wrap
-        if seq < stream.seq_wrap:
-            # Sequence number has reached the maximum and wrapped around
-            stream.seq_wrap += 4294967296
-            seq += 4294967296
+        if stream.seq_wrap > 0 and (seq - stream.last_seq > UINT32_MAX):
+            # This is most likely a re-transmission right after
+            # sequence number has wrapped around
+            seq -= UINT32_MAX + 1
         self.seq = seq
 
         if self.header_size > 20:
@@ -275,6 +277,9 @@ class TCP(BaseObj):
         if self.length > 0:
             stream.last_seq = seq
             stream.next_seq = seq + self.length
+            if self.seq_number + self.length > UINT32_MAX:
+                # Next sequence number will wrap around
+                stream.seq_wrap += UINT32_MAX + 1
 
     def __str__(self):
         """String representation of object
