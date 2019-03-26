@@ -875,7 +875,7 @@ class DioTest(TestUtil):
                     taligned = test_hash[idx].get('aligned')
                     tgrpidx  = test_hash[idx].get('grpidx')
                     expr = (toffset == roffset and tsize == rsize)
-                    if not expr and mtbsize and bsize > mtbsize:
+                    if not expr and ((mtbsize and bsize > mtbsize) or nio > 1):
                         # The I/O size is greater than the mount block size
                         # check if this write belongs to the same I/O group
                         for item in test_hash:
