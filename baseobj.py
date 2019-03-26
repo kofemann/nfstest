@@ -231,6 +231,10 @@ class BaseObj(object):
             # of sub-objects pointed to by _fattrs are treated like
             # attributes of this object
             for item in self._fattrs:
+                if item == attr:
+                    # Avoid infinite recursion -- attribute is a flat
+                    # attribute for the object so search no more
+                    break
                 obj = getattr(self, item, None)
                 if obj is not None and hasattr(obj, attr):
                     # Flat object: sub-object attributes as object attribute
