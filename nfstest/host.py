@@ -786,7 +786,7 @@ class Host(BaseObj):
            Returns a tuple: (gateway, device name, src IP address)
         """
         try:
-            cmd = "ip route get %s" % ipaddr
+            cmd = "%s route get %s" % (c.NFSTEST_CMD_IP, ipaddr)
             out = self.run_cmd(cmd, dlevel='DBG1', msg="Get routing info: ")
             regex = re.search(r"(\svia\s+(\S+))?\sdev\s+(\S+).*\ssrc\s+(\S+)", out)
             if regex:

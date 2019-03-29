@@ -198,5 +198,6 @@ NFSTEST_INTERFACE    = 'eth0'
 NFSTEST_SUDO         = _find_exec('sudo')
 NFSTEST_IPTABLES     = _find_exec('iptables')
 NFSTEST_TCPDUMP      = _find_exec('tcpdump')
+NFSTEST_CMD_IP       = _find_exec('ip')
 NFSTEST_MESSAGESLOG  = '/var/log/messages'
 NFSTEST_TMPDIR       = '/tmp'
