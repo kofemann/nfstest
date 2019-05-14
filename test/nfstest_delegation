@@ -505,7 +505,7 @@ class DelegTest(TestUtil):
         if self.opencall is None:
             return
         self.test(fh, "OPEN should be sent")
-        if stat:
+        if stat and self.nfs_version > 4.0:
             expr = self.opencall.NFSop.claim.claim == CLAIM_FH
             self.test(expr, "OPEN should be sent with CLAIM_FH")
             expr = self.opencall.NFSop.fh == fh
