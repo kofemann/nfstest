@@ -1043,8 +1043,6 @@ class TestUtil(NFSUtil):
             self.tracename = self.get_name()
             self.dbgname = self.get_name()
 
-            # Make sure the network is reset
-            self.network_reset()
             self._opts_done = True
 
     def test_options(self, name=None):
