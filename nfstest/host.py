@@ -176,6 +176,7 @@ class Host(BaseObj):
         self.dbgidx = 1
         self.dbgfile = ''
         self.traceidx = 1
+        self.clients = []
         self.tracefile = ''
         self.tracefiles = []
         self.traceproc = None
