@@ -1082,9 +1082,10 @@ class TestUtil(NFSUtil):
                 opts = dict(self.testopts[key].items() + opts.items())
         return opts
 
-    def get_logname(self):
+    def get_logname(self, remote=False):
         """Get next log file name."""
-        logfile = "%s/%s_%d.log" % (self.tmpdir, self.get_name(), self.logidx)
+        tmpdir = c.NFSTEST_TMPDIR if remote else self.tmpdir
+        logfile = "%s/%s_%d.log" % (tmpdir, self.get_name(), self.logidx)
         self.logidx += 1
         return logfile
 
@@ -1282,16 +1283,20 @@ class TestUtil(NFSUtil):
 
     def create_rexec(self, servername=None, **kwds):
         """Create remote server object."""
+        if servername in [None, "", "localhost", "127.0.0.1"]:
+            remote = False
+            svrname = "locally"
+        else:
+            remote = True
+            svrname = "at %s" % servername
+
         if self.rexeclog:
-            kwds["logfile"] = kwds.get("logfile", self.get_logname())
+            kwds["logfile"] = kwds.get("logfile", self.get_logname(remote))
         else:
             kwds["logfile"] = None
 
         # Start remote procedure server on given client
-        if servername in [None, "", "localhost", "127.0.0.1"]:
-            svrname = "locally"
-        else:
-            svrname = "at %s" % servername
+        if remote:
             if kwds.get("logfile") is not None:
                 self.remote_files.append([servername, kwds["logfile"]])
 
