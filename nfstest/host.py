@@ -652,7 +652,11 @@ class Host(BaseObj):
             self.traceproc = self.process
 
             # Make sure tcpdump has started
-            out = self.traceproc.stderr.readline()
+            if self._localhost:
+                out = self.traceproc.stderr.readline()
+            else:
+                out = self.traceproc.stdout.readline()
+
             if not re.search('listening on', out):
                 time.sleep(1)
                 if self.process.poll() is not None:
