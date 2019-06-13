@@ -603,13 +603,17 @@ class NFSUtil(Host):
         port = (int(addr_list[-2])<<8) + int(addr_list[-1])
         return ipaddr, port
 
-    def find_getdeviceinfo(self, deviceid=None):
+    def find_getdeviceinfo(self, deviceid=None, usecache=True):
         """Find the call and its corresponding reply for the NFSv4 GETDEVICEINFO
            going to the server specified by the ipaddr for self.server and port
            given by self.port.
 
            deviceid:
                Look for an specific deviceid [default: any deviceid]
+           usecache:
+               If GETDEVICEINFO is not found look for it in the cache and if
+               deviceid is None use the one found in self.layout.
+               [default: True]
 
            Return a tuple: (pktcall, pktreply, dslist).
         """
@@ -618,10 +622,21 @@ class NFSUtil(Host):
         if self.nfs_version < 4:
             return (None, None, dslist)
 
+        if usecache and deviceid is None and self.layout is not None:
+            # Use the deviceid given in self.layout
+            deviceid = self.layout.get('deviceid')
+
         # Find GETDEVICEINFO request and reply
         match = "NFS.deviceid == '%s'" % self.pktt.escape(deviceid) if deviceid is not None else ''
         (pktcall, pktreply) = self.find_nfs_op(OP_GETDEVICEINFO, match=match, status=None)
-        if pktreply and pktreply.nfs.status == 0:
+        if pktreply is None and usecache:
+            devinfo = self.device_info.get(deviceid)
+            if devinfo:
+                self.dprint('DBG3', "Using cached values for GETDEVICEINFO")
+                pktcall  = devinfo.get('call')
+                pktreply = devinfo.get('reply')
+                dslist   = devinfo.get('dslist', [])
+        elif pktreply and pktreply.nfs.status == 0:
             self.gdir_device = pktreply.NFSop.device_addr
             if self.gdir_device.type == LAYOUT4_NFSV4_1_FILES:
                 da_addr_body = self.gdir_device.body
@@ -636,8 +651,9 @@ class NFSUtil(Host):
                         dslist[-1].append({'ipaddr': ipaddr, 'port': port})
             # Save device info for future reference
             self.device_info[pktcall.NFSop.deviceid] = {
-                'call':  pktcall,
-                'reply': pktreply,
+                'call':   pktcall,
+                'reply':  pktreply,
+                'dslist': dslist,
             }
         if len(dslist) > 0:
             self.dslist = dslist
