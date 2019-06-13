@@ -197,7 +197,7 @@ class NFSUtil(Host):
             nfsdebug     = kwargs.pop("nfsdebug",     self.nfsdebug),
             dbgname      = kwargs.pop("dbgname",      self.dbgname),
             messages     = kwargs.pop("messages",     self.messages),
-            tmpdir       = kwargs.pop("tmpdir",       self.tmpdir),
+            tmpdir       = kwargs.pop("tmpdir",       c.NFSTEST_TMPDIR if len(host) else self.tmpdir),
             iptables     = kwargs.pop("iptables",     self.iptables),
             sudo         = kwargs.pop("sudo",         self.sudo),
         )
