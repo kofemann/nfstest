@@ -511,7 +511,7 @@ class NFSUtil(Host):
             self.openreply = pktreply
             return (filehandle, open_stateid, deleg_stateid)
 
-    def find_layoutget(self, filehandle):
+    def find_layoutget(self, filehandle, status=NFS4_OK):
         """Find the call and its corresponding reply for the NFSv4 LAYOUTGET
            of the given file handle going to the server specified by the
            ipaddr for self.server and port given by self.port.
@@ -547,6 +547,10 @@ class NFSUtil(Host):
                 pkt = self.pktt.match("RPC.xid == %d and NFS.resop == %d" % (xid, OP_LAYOUTGET))
                 if pkt is not None:
                     layoutget_res = pkt.NFSop
+
+        if layoutget_res is not None and status != layoutget_res.status:
+            # Look for LAYOUTGET again until the expected status is returned
+            return self.find_layoutget(filehandle, status=status)
 
         if layoutget is None or layoutget_res is None or layoutget_res.status:
             return (layoutget, layoutget_res)
