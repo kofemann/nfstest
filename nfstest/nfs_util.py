@@ -762,6 +762,9 @@ class NFSUtil(Host):
         if self.layout is None or ds_index is None:
             return False
         stripe_size = self.layout['stripe_size']
+        if stripe_size == 0:
+            # Striping is not supported
+            return True
         first_stripe_index = self.layout['first_stripe_index']
         n = int(offset / stripe_size)
         m = int((offset + size - 1) / stripe_size)
