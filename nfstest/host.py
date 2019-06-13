@@ -153,7 +153,7 @@ class Host(BaseObj):
         self.mtpoint      = kwargs.pop("mtpoint",      c.NFSTEST_MTPOINT)
         self.datadir      = kwargs.pop("datadir",      '')
         self.mtopts       = kwargs.pop("mtopts",       c.NFSTEST_MTOPTS)
-        self.interface    = kwargs.pop("interface",    c.NFSTEST_INTERFACE)
+        self.interface    = kwargs.pop("interface",    None)
         self.nomount      = kwargs.pop("nomount",      False)
         self.tracename    = kwargs.pop("tracename",    'tracefile')
         self.trcdelay     = kwargs.pop("trcdelay",     0.0)
@@ -195,6 +195,20 @@ class Host(BaseObj):
 
         if len(self.datadir):
             self.mtdir = os.path.join(self.mtpoint, self.datadir)
+
+        if self.server == "":
+            self.server_ipaddr = ""
+        else:
+            self.server_ipaddr = self.get_ip_address(host=self.server, ipv6=ipv6)
+
+        if self.interface is None:
+            self.interface = c.NFSTEST_INTERFACE
+            if self.server_ipaddr != "":
+                out = self.get_route(self.server_ipaddr)
+                if out[1] is not None:
+                    self.interface = out[1]
+                if out[2] is not None:
+                    self.ipaddr = out[2]
 
         # Load share library - used for functions not exposed in python
         try:
