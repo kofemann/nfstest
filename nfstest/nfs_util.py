@@ -649,6 +649,10 @@ class NFSUtil(Host):
                         # Get ip address and port for DS
                         ipaddr, port = self.get_addr_port(item.addr)
                         dslist[-1].append({'ipaddr': ipaddr, 'port': port})
+            elif self.gdir_device.type == LAYOUT4_FLEX_FILES:
+                for item in pktreply.NFSop.device_addr.netaddrs:
+                    ipaddr, port = self.get_addr_port(item.addr)
+                    dslist.append([{'ipaddr': ipaddr, 'port': port}])
             # Save device info for future reference
             self.device_info[pktcall.NFSop.deviceid] = {
                 'call':   pktcall,
