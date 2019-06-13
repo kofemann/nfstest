@@ -581,6 +581,13 @@ class NFSUtil(Host):
                 'filehandles':        loc_body.fh_list,
                 'deviceid':           loc_body.deviceid,
             })
+        elif layout.content.type == LAYOUT4_FLEX_FILES:
+            # XXX Get the first mirror only
+            self.layout.update({
+                'stripe_size': loc_body.stripe_unit,
+                'deviceid':    loc_body.mirrors[0].data_servers[0].deviceid,
+                'filehandles': loc_body.mirrors[0].data_servers[0].fh_list,
+            })
 
         return (layoutget, layoutget_res)
 
