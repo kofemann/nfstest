@@ -146,6 +146,11 @@ class DioTest(TestUtil):
         self.test_opgroup.add_option("--withdeleg", default='false,true', help=hmsg)
         self.scan_options()
 
+        self.r_bsize = 4*self.rsize
+        self.r_mtbsize = self.rsize
+        self.w_bsize = 4*self.wsize
+        self.w_mtbsize = self.wsize
+
         # Disable createtraces option
         self.createtraces = False
 
@@ -990,10 +995,10 @@ class DioTest(TestUtil):
                             self.verify_basic_dio(write=write, buffered_write=bwrite, deleg=deleg)
                         elif testname == "rsize" and not write:
                             self.test_group("Verify multiple %s packets are sent for each %s having request size > %s%s%s" % (io_str, io_str.lower(), size_str, dstr, bstr))
-                            self.verify_basic_dio(write=write, buffered_write=bwrite, deleg=deleg, bsize=16384, mtbsize=4096)
+                            self.verify_basic_dio(write=write, buffered_write=bwrite, deleg=deleg, bsize=self.r_bsize, mtbsize=self.r_mtbsize)
                         elif testname == "wsize" and write:
                             self.test_group("Verify multiple %s packets are sent for each %s having request size > %s%s%s" % (io_str, io_str.lower(), size_str, dstr, bstr))
-                            self.verify_basic_dio(write=write, buffered_write=bwrite, deleg=deleg, bsize=16384, mtbsize=4096)
+                            self.verify_basic_dio(write=write, buffered_write=bwrite, deleg=deleg, bsize=self.w_bsize, mtbsize=self.w_mtbsize)
                         elif testname == "aligned":
                             self.test_group("Verify %s is sent to %s when PAGESIZE aligned%s%s" % (io_str, ds_str, dstr, bstr))
                             self.verify_basic_dio(write=write, buffered_write=bwrite, deleg=deleg, bsize=self.rsize, align_hash=[True, True, True, True])
