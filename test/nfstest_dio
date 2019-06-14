@@ -268,8 +268,10 @@ class DioTest(TestUtil):
                 self.ispnfs = True
 
             if self.ispnfs:
+                if self.layout is None:
+                    raise Exception("Could not find layout")
                 self.stripe_size = self.layout['stripe_size']
-                if self.stripe_size < 3*self.rsize:
+                if self.stripe_size > 0 and self.stripe_size < 3*self.rsize:
                     raise Exception("CONFIG error: option rsize must be less or equal to %d (stripe size / 3)" % self.stripe_size/3)
             self.pktt.close()
 
