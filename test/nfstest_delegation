@@ -1090,17 +1090,22 @@ class DelegTest(TestUtil):
                 if expr:
                    conflict_match_str += " and NFS.fh == '%s'" % self.pktt.escape(fh1)
 
+            opencall = None
+            open_call = None
             openreply = None
             while True:
-                opencall = self.pktt.match(conflict_match_str)
-                if opencall is None:
+                open_call = self.pktt.match(conflict_match_str)
+                if open_call is None:
                     break
+                elif opencall is None:
+                    # Get the first OPEN call for testing CB_RECALL
+                    opencall = open_call
 
                 # Make sure conflicting operation reply status from the
                 # second client is not NFS4ERR_DELAY
-                xid = opencall.rpc.xid
-                matchstr = "RPC.xid == %d and NFS.status in (%d, %d)" % (xid, NFS4_OK, NFS4ERR_DELAY)
-                openreply = self.pktt.match(matchstr, maxindex=delegreturn_index)
+                xid = open_call.rpc.xid
+                matchstr = "RPC.xid == %d and NFS.status in (%d, %d) and NFS.resop == %d" % (xid, NFS4_OK, NFS4ERR_DELAY, conflict_op)
+                openreply = self.pktt.match(matchstr)
                 if openreply is None or openreply.nfs.status == NFS4_OK:
                     break
 
@@ -1108,6 +1113,7 @@ class DelegTest(TestUtil):
                 self.test(False, "%s should be sent from second client" % conflict_str)
                 return
             conflict_index = opencall.record.index + 1
+            self.pktt.rewind(conflict_index)
 
             # Boolean for pending test which should not recall the delegation
             read_write = deleg_type == OPEN_DELEGATE_READ and claim_cur == os.O_WRONLY
@@ -1165,8 +1171,6 @@ class DelegTest(TestUtil):
             if read_write:
                 # The client has returned the delegation so no CB_RECALL
                 self.test(cbcall is None, "CB_RECALL should not be sent to the client after a conflicting %s is received from a second client" % conflict_str)
-                xid = opencall.rpc.xid
-                openreply = self.pktt.match("RPC.xid == %d and NFS.resop == %d" % (xid, conflict_op))
                 self.test(openreply, "%s reply should be sent to the second client" % conflict_str)
                 # Verify I/O packets
                 stid_type = LOCK_STID if lock and lock_stid else OPEN_STID
@@ -1236,8 +1240,6 @@ class DelegTest(TestUtil):
             self.pktt.rewind(delegreturn_index)
 
             # Find conflicting operation reply from the second client
-            xid = opencall.rpc.xid
-            openreply = self.pktt.match("RPC.xid == %d and NFS.resop == %d" % (xid, conflict_op))
             self.test(openreply != None, "%s reply should be sent to the second client after the %s delegation has been returned" % (conflict_str, mode_str))
             if openreply is None:
                 return
