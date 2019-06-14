@@ -595,8 +595,16 @@ class DioTest(TestUtil):
             self.set_pktlist()
             (filehandle, open_stateid, deleg_stateid) = self.find_open(filename=filename)
             stateid = deleg_stateid if deleg_stateid else open_stateid
+            self.find_layoutget(filehandle)
+            (pktcall, pktreply, dslist) = self.find_getdeviceinfo()
 
-            if self.nfs_version < 4:
+            nfs_version = self.nfs_version
+            if pktreply and pktreply.NFSop.device_addr.type == LAYOUT4_FLEX_FILES:
+                item = pktreply.NFSop.device_addr.versions[0]
+                nfs_version = float("%d.%d" % (item.version, item.minorversion))
+                filehandle = self.layout['filehandles'][0]
+
+            if nfs_version < 4:
                 match_str = "NFS.argop == %d and NFS.fh == '%s'" % (NFSPROC3_READ, self.pktt.escape(filehandle))
             else:
                 match_str = "NFS.argop == %d and NFS.stateid.other == '%s'" % (OP_READ, self.pktt.escape(stateid))
