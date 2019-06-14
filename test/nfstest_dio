@@ -268,9 +268,17 @@ class DioTest(TestUtil):
             self.set_pktlist()
             (filehandle, open_stateid, deleg_stateid) = self.find_open(filename=self.files[0])
             (layoutget, layoutget_res) = self.find_layoutget(filehandle)
-            self.find_getdeviceinfo()
+            (pktcall, pktreply, dslist) = self.find_getdeviceinfo()
             if layoutget and len(self.dslist):
                 self.ispnfs = True
+
+            if pktreply and pktreply.NFSop.device_addr.type == LAYOUT4_FLEX_FILES:
+                if len(pktreply.NFSop.device_addr.versions) > 1:
+                    raise Exception("Support for only one device info in NFS flex files layout type")
+                self.r_mtbsize = pktreply.NFSop.device_addr.versions[0].rsize
+                self.w_mtbsize = pktreply.NFSop.device_addr.versions[0].wsize
+                self.r_bsize = 4*self.r_mtbsize
+                self.w_bsize = 4*self.w_mtbsize
 
             if self.ispnfs:
                 if self.layout is None:
