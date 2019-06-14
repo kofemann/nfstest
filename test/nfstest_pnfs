@@ -547,7 +547,7 @@ class pNFSTest(TestUtil):
             # Added to the list of deviceids
             self.deviceids[self.layout['deviceid']] = True
             # Find GETDEVICEINFO request
-            (pktcall, pktreply, dslist) = self.find_getdeviceinfo(deviceid=self.layout['deviceid'])
+            (pktcall, pktreply, dslist) = self.find_getdeviceinfo(deviceid=self.layout['deviceid'], usecache=False)
 
         # Test GETDEVICEINFO for correct layout type
         if nolayoutget:
@@ -826,7 +826,7 @@ class pNFSTest(TestUtil):
             self.trace_open()
             self.set_pktlist()
 
-            self.find_getdeviceinfo()
+            self.find_getdeviceinfo(usecache=False)
             self.pktt.rewind()
             self.verify_file(self.filename, iomode=LAYOUTIOMODE4_RW, filesize=filesize, nocreate_list=nocreate_list, write_list=write_list)
             layout_list = [self.layout]
@@ -891,7 +891,7 @@ class pNFSTest(TestUtil):
             # Verify network traffic
             self.trace_open()
             self.set_pktlist()
-            self.find_getdeviceinfo()
+            self.find_getdeviceinfo(usecache=False)
             if swrite or write:
                 # Find trace marker and set the default maxindex to use
                 self.pktt.maxindex = self.get_marker_index()
@@ -978,7 +978,7 @@ class pNFSTest(TestUtil):
         if haslock:
             self.trace_open()
             self.set_pktlist()
-            self.find_getdeviceinfo()
+            self.find_getdeviceinfo(usecache=False)
             self.pktt.rewind()
             (multipath_ds_list, openfh) = self.verify_file(filename, iomode=iomode, lock=True)
             layout_list = [self.layout]
@@ -1016,7 +1016,7 @@ class pNFSTest(TestUtil):
 
         self.trace_open()
         self.set_pktlist()
-        self.find_getdeviceinfo()
+        self.find_getdeviceinfo(usecache=False)
         self.pktt.rewind()
         (multipath_ds_list, openfh) = self.verify_file(filename, iomode=LAYOUTIOMODE4_RW, nolayoutget=True, lock=haslock, verify_close=False)
 
@@ -1110,7 +1110,7 @@ class pNFSTest(TestUtil):
 
             self.trace_open()
             self.set_pktlist()
-            self.find_getdeviceinfo()
+            self.find_getdeviceinfo(usecache=False)
             # Find trace marker and set the default maxindex to use
             self.pktt.maxindex = self.get_marker_index()
             self.pktt.rewind()
@@ -1174,7 +1174,7 @@ class pNFSTest(TestUtil):
 
             self.trace_open()
             self.set_pktlist()
-            self.find_getdeviceinfo()
+            self.find_getdeviceinfo(usecache=False)
             # Find trace marker and set the default maxindex to use
             self.pktt.maxindex = self.get_marker_index()
             self.pktt.rewind()
@@ -1245,7 +1245,7 @@ class pNFSTest(TestUtil):
             (filehandle, open_stateid, deleg_stateid) = self.find_open(filename=filename)
             openfh = {"open_stateid": open_stateid, "deleg_stateid": deleg_stateid}
             self.verify_layoutget(filehandle, LAYOUTIOMODE4_RW, openfh=openfh)
-            (pktcall, pktreply, dslist) = self.find_getdeviceinfo()
+            (pktcall, pktreply, dslist) = self.find_getdeviceinfo(usecache=False)
             nds = len(dslist)
             if self.layout is None:
                 ids0 = 0
@@ -1332,7 +1332,7 @@ class pNFSTest(TestUtil):
             # Verify network traffic
             self.trace_open()
             self.set_pktlist()
-            self.find_getdeviceinfo()
+            self.find_getdeviceinfo(usecache=False)
             self.pktt.rewind()
             self.test_info("Verify READ traffic ========================================")
             (multipath_ds_list, openfh) = self.verify_file(filename1, iomode=LAYOUTIOMODE4_READ, max_iosize=r_max_iosize, nmax_iosize=w_max_iosize)
