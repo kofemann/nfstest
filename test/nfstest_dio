@@ -1159,11 +1159,6 @@ class DioTest(TestUtil):
             io_str  = "WRITE" if write else "READ"
             io_mode = posix.O_WRONLY|posix.O_CREAT if write else posix.O_RDONLY
 
-            if self.nfs_version < 4:
-                io_op  = NFSPROC3_WRITE if write else NFSPROC3_READ
-            else:
-                io_op  = OP_WRITE if write else OP_READ
-
             if not check:
                 self.test_group("Verify %s %s%scontiguous vector [%s]" % (io_str, off_str, con_str, ", ".join(head_vec)))
 
@@ -1224,13 +1219,20 @@ class DioTest(TestUtil):
             fd = None
             self.trace_open()
             self.set_pktlist()
+            nfs_version = self.nfs_version
             (filehandle, open_stateid, deleg_stateid) = self.find_open(filename=file, claimfh=self.file_handles[write], anyclaim=True)
             if filehandle:
                 self.file_handles[write] = filehandle
                 save_index = self.pktt.get_index()
                 self.stateid = deleg_stateid if deleg_stateid else open_stateid
                 self.find_layoutget(filehandle)
-                self.find_getdeviceinfo()
+                (pktcall, pktreply, dslist) = self.find_getdeviceinfo()
+
+                if pktreply and pktreply.NFSop.device_addr.type == LAYOUT4_FLEX_FILES:
+                    item = pktreply.NFSop.device_addr.versions[0]
+                    nfs_version = float("%d.%d" % (item.version, item.minorversion))
+                    filehandle = self.layout['filehandles'][0]
+
                 self.pktt.rewind(save_index)
             elif not check and self.file_handles[write] is None:
                 self.test(False, "Could not find OPEN for file")
@@ -1242,9 +1244,11 @@ class DioTest(TestUtil):
                         dsismds = True
                         break
 
-            if self.nfs_version < 4:
+            if nfs_version < 4:
+                io_op  = NFSPROC3_WRITE if write else NFSPROC3_READ
                 match_str = "NFS.argop == %d and NFS.fh == '%s'" % (io_op, self.pktt.escape(filehandle))
             else:
+                io_op  = OP_WRITE if write else OP_READ
                 match_str = "NFS.argop == %d and NFS.stateid.other == '%s'" % (io_op, self.pktt.escape(self.stateid))
 
             xids = {}
