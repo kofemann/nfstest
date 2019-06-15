@@ -735,12 +735,6 @@ class DioTest(TestUtil):
             io_mode = posix.O_WRONLY|posix.O_CREAT if write else posix.O_RDONLY
             bio_str  = "WRITE" if buffered_write else "READ"
             bio_mode = os.O_WRONLY|os.O_CREAT if buffered_write else os.O_RDONLY
-            if self.nfs_version < 4:
-                io_op  = NFSPROC3_WRITE if write else NFSPROC3_READ
-                bio_op = NFSPROC3_WRITE if buffered_write else NFSPROC3_READ
-            else:
-                io_op  = OP_WRITE if write else OP_READ
-                bio_op = OP_WRITE if buffered_write else OP_READ
 
             if not bsize:
                 bsize = self.rsize/2
@@ -843,13 +837,25 @@ class DioTest(TestUtil):
                 self.dprint('DBG3', "Delegation is granted")
             stateid = deleg_stateid if deleg_stateid else open_stateid
             self.find_layoutget(filehandle)
-            self.find_getdeviceinfo()
+            (pktcall, pktreply, dslist) = self.find_getdeviceinfo()
             self.pktt.rewind(save_index)
 
-            if self.nfs_version < 4:
-                match_str = "NFS.argop == %d and NFS.fh == '%s'" % (io_op, self.pktt.escape(filehandle))
+            nfs_version = self.nfs_version
+            if pktreply and pktreply.NFSop.device_addr.type == LAYOUT4_FLEX_FILES:
+                item = pktreply.NFSop.device_addr.versions[0]
+                nfs_version = float("%d.%d" % (item.version, item.minorversion))
+                filehandle = self.layout['filehandles'][0]
+
+            if nfs_version < 4:
+                io_op  = NFSPROC3_WRITE if write else NFSPROC3_READ
             else:
-                match_str = "NFS.argop == %d and NFS.stateid.other == '%s'" % (io_op, self.pktt.escape(stateid))
+                io_op  = OP_WRITE if write else OP_READ
+
+            match_str = "NFS.argop == %d" % io_op
+            if nfs_version < 4:
+                match_str += " and NFS.fh == '%s'" % self.pktt.escape(filehandle)
+            else:
+                match_str += " and NFS.stateid.other == '%s'" % self.pktt.escape(stateid)
 
             idx = 0
             xids = {}
@@ -945,10 +951,23 @@ class DioTest(TestUtil):
                 (filehandle, open_stateid, deleg_stateid) = self.find_open(filename=bfile)
                 stateid = deleg_stateid if deleg_stateid else open_stateid
                 self.find_layoutget(filehandle)
+                (pktcall, pktreply, dslist) = self.find_getdeviceinfo()
                 total_size = 0
                 rmatch = True
                 xids = {}
-                if self.nfs_version < 4:
+
+                nfs_version = self.nfs_version
+                if pktreply and pktreply.NFSop.device_addr.type == LAYOUT4_FLEX_FILES:
+                    item = pktreply.NFSop.device_addr.versions[0]
+                    nfs_version = float("%d.%d" % (item.version, item.minorversion))
+                    filehandle = self.layout['filehandles'][0]
+
+                if nfs_version < 4:
+                    bio_op = NFSPROC3_WRITE if buffered_write else NFSPROC3_READ
+                else:
+                    bio_op = OP_WRITE if buffered_write else OP_READ
+
+                if nfs_version < 4:
                     match_str = "NFS.argop == %d and NFS.fh == '%s'" % (bio_op, self.pktt.escape(filehandle))
                 else:
                     match_str = "NFS.argop == %d and NFS.stateid.other == '%s'" % (bio_op, self.pktt.escape(stateid))
