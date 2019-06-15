@@ -1005,6 +1005,8 @@ class DioTest(TestUtil):
     def basic_dio(self, testname):
         """Verify basic direct I/O functionality for given testname."""
         try:
+            no_striping = self.layout is not None and self.layout.get('stripe_size') == 0
+
             for write in self.io_list:
                 for deleg in self.deleg_list:
                     if deleg and (write and not self.write_deleg or not write and not self.read_deleg):
@@ -1044,11 +1046,13 @@ class DioTest(TestUtil):
                             self.verify_basic_dio(write=write, buffered_write=bwrite, deleg=deleg, bsize=self.rsize, align_hash=[True, True, True, True])
                         elif testname == "nonaligned":
                             self.test_group("Verify %s is sent to %s when not PAGESIZE aligned%s%s" % (io_str, mds_str, dstr, bstr))
-                            self.verify_basic_dio(write=write, buffered_write=bwrite, deleg=deleg, bsize=self.rsize, align_hash=[False, False, False, False])
+                            ahash = [True, True, True, True] if no_striping else [False, False, False, False]
+                            self.verify_basic_dio(write=write, buffered_write=bwrite, deleg=deleg, bsize=self.rsize, align_hash=ahash)
                         elif testname == "diffalign":
                             self.test_group("Verify %ss are sent to %s on same open using buffers with different alignments%s%s" % (io_str, both_str, dstr, bstr))
-                            self.verify_basic_dio(write=write, buffered_write=bwrite, deleg=deleg, bsize=self.rsize, align_hash=[True, False, True, False])
-                        elif testname == "stripesize" and self.ispnfs:
+                            ahash = [True, True, True, True] if no_striping else [True, False, True, False]
+                            self.verify_basic_dio(write=write, buffered_write=bwrite, deleg=deleg, bsize=self.rsize, align_hash=ahash)
+                        elif testname == "stripesize" and self.ispnfs and not no_striping:
                             self.test_group("Verify multiple %s packets are sent for each %s having request size > stripe size%s%s" % (io_str, io_str.lower(), dstr, bstr))
                             self.verify_basic_dio(write=write, buffered_write=bwrite, deleg=deleg, bsize=2*self.stripe_size, mtbsize=4*self.stripe_size, nio=2, align_hash=[True, True])
         except Exception:
