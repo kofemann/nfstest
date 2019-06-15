@@ -917,21 +917,26 @@ class DioTest(TestUtil):
                                     taligned = item.get('aligned')
                                     self.dprint('DBG5', "%s (%d@%d) is sent out of order but within the same I/O call" % (io_str, tsize, toffset))
                                     break
+                    if len(align_hash) and (self.newstyle or taligned) and self.ispnfs:
+                        dsidx = 0
+                        ds_index = None
+                        for ds in self.dslist:
+                            for item in ds:
+                                if ipaddr == item['ipaddr'] and port == item['port']:
+                                    ds_index = dsidx
+                                    break
+                            dsidx += 1
+                        if ds_index is None:
+                            # XXX this could be a mirror -- mirrors are not supported yet
+                            continue
+
                     msg  = "%s (%d@%d) should be sent with correct offset and count" % (io_str, tsize, toffset)
                     fmsg = ", got packet (%d@%d)" %(rsize, roffset)
                     self.test(expr, msg, failmsg=fmsg)
+
                     if len(align_hash):
                         if (self.newstyle or taligned) and self.ispnfs:
-                            dsidx = 0
-                            ds_index = None
-                            for ds in self.dslist:
-                                for item in ds:
-                                    if ipaddr == item['ipaddr'] and port == item['port']:
-                                        ds_index = dsidx
-                                        break
-                                dsidx += 1
                             out = self.verify_stripe(toffset, tsize, ds_index)
-                            # XXX FIXME check ds_index
                             self.test(out, "%s should be sent to the correct DS%s" % (io_str, "" if ds_index is None else "(%d)"%ds_index))
                         else:
                             rserver = MDS if self.ispnfs else SERVER
