@@ -51,6 +51,12 @@ LOAD_body  = True  # Display the body of layer/procedure/operation
 ENUM_CHECK = False  # If True, Enums are strictly enforced
 ENUM_REPR  = False  # If True, Enums are displayed as numbers
 
+class ByteHex(int):
+    """Byte integer object which is displayed in hex"""
+    def __str__(self):
+        return "0x%02x" % self
+    __repr__ = __str__
+
 class ShortHex(int):
     """Short integer object which is displayed in hex"""
     def __str__(self):
