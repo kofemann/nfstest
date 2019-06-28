@@ -51,6 +51,9 @@ LOAD_body  = True  # Display the body of layer/procedure/operation
 ENUM_CHECK = False  # If True, Enums are strictly enforced
 ENUM_REPR  = False  # If True, Enums are displayed as numbers
 
+# Module variables for Bitmaps
+BMAP_CHECK = False  # If True, bitmaps are strictly enforced
+
 class ByteHex(int):
     """Byte integer object which is displayed in hex"""
     def __str__(self):
@@ -166,7 +169,10 @@ def bitmap_info(unpack, bitmap, key_enum=None, func_map=None):
                 # Get decoding function for this bit number
                 func = func_map.get(bitnum)
                 if func is None:
-                    raise BitmapInval, "decoding function not found for bit number %d" % bitnum
+                    if BMAP_CHECK:
+                        raise BitmapInval, "decoding function not found for bit number %d" % bitnum
+                    else:
+                        break
                 else:
                     if key_enum:
                         # Use Enum as the key instead of a plain number
