@@ -162,6 +162,12 @@ def bitmap_info(unpack, bitmap, key_enum=None, func_map=None):
     blist = []
     bitnum = 0
 
+    if func_map:
+        # Get size of opaque
+        length = unpack.unpack_uint()
+        # Save offset to make sure to consume all bytes
+        offset = unpack.tell()
+
     while bitmap > 0:
         # Check if bit is set
         if bitmap & 0x01 == 1:
@@ -186,6 +192,11 @@ def bitmap_info(unpack, bitmap, key_enum=None, func_map=None):
         bitnum += 1
 
     if func_map:
+        count = length + offset - unpack.tell()
+        if count > 0:
+            # Read rest of data for bitmap
+            pad = (4 - (length % 4)) if (length % 4) else 0
+            unpack.read(count + pad)
         # Return bitmap info dictionary
         return ret
     else:
