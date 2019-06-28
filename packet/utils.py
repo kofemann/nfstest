@@ -30,7 +30,7 @@ from baseobj import BaseObj, fstrobj
 __author__    = "Jorge Mora (%s)" % c.NFSTEST_AUTHOR_EMAIL
 __copyright__ = "Copyright (C) 2014 NetApp, Inc."
 __license__   = "GPL v2"
-__version__   = "1.5"
+__version__   = "1.6"
 
 # RPC type constants
 RPC_CALL  = 0
@@ -136,42 +136,55 @@ class BitmapInval(Exception):
     """Exception for an invalid bit number"""
     pass
 
-def bitmap_dict(unpack, bitmap, func_map, key_enum=None):
-    """Returns a dictionary where the key is the bit number given by bitmap
-       and the value is the decoded value by evaluating the function used
-       for that specific bit number
+def bitmap_info(unpack, bitmap, key_enum=None, func_map=None):
+    """Returns a list of bits set on the bitmap or a dictionary where the
+       key is the bit number given by bitmap and the value is the decoded
+       value by evaluating the function used for that specific bit number
 
        unpack:
            Unpack object
        bitmap:
            Unsigned integer where a value must be decoded for every bit that
            is set, starting from the least significant bit
+       key_enum:
+           Use Enum for bit number so the key could be displayed as the bit
+           name instead of the bit number [default: None]
        func_map:
            Dictionary which maps a bit number to the function to be used for
            decoding the value for that bit number. The function must have
-           the "unpack" object as the only argument
-       key_enum:
-           Use Enum for bit number so the key could be displayed as the bit
-           name instead of the bit number
+           the "unpack" object as the only argument. If this is None a list
+           of bit attributes is returned instead [default: None]
     """
     ret = {}
+    blist = []
     bitnum = 0
+
     while bitmap > 0:
         # Check if bit is set
         if bitmap & 0x01 == 1:
-            # Get decoding function for this bit number
-            func = func_map.get(bitnum)
-            if func is None:
-                raise BitmapInval, "decoding function not found for bit number %d" % bitnum
-            else:
-                if key_enum:
-                    # Use Enum as the key instead of a plain number
-                    ret[key_enum(bitnum)] = func(unpack)
+            if func_map:
+                # Get decoding function for this bit number
+                func = func_map.get(bitnum)
+                if func is None:
+                    raise BitmapInval, "decoding function not found for bit number %d" % bitnum
                 else:
-                    ret[bitnum] = func(unpack)
+                    if key_enum:
+                        # Use Enum as the key instead of a plain number
+                        ret[key_enum(bitnum)] = func(unpack)
+                    else:
+                        ret[bitnum] = func(unpack)
+            else:
+                # Add attribute to list
+                blist.append(key_enum(bitnum))
         bitmap = bitmap >> 1
         bitnum += 1
-    return ret
+
+    if func_map:
+        # Return bitmap info dictionary
+        return ret
+    else:
+        # Return the list of bit attributes
+        return blist
 
 class OptionFlags(BaseObj):
     """OptionFlags base object
