@@ -972,9 +972,14 @@ class XDRobject:
                 dname,opts = self.gettype(dname)
                 if (dname in uint32_list and adef == "<>") or expr:
                     vname,dname,pdef,adef,clist,tag,comms,pcomms = self.item_dlist[1]
-                    dname,opts = self.gettype(dname)
-                    if dname == "opaque" and opts[0][1] == "<>":
+                    if dname == "opaque" and adef == "<>":
+                        # Defined directly as a variable length opaque
                         isbitdict = True
+                    else:
+                        dname,opts = self.gettype(dname)
+                        if dname == "opaque" and opts[0][1] == "<>":
+                            # Defined indirectly as a variable length opaque
+                            isbitdict = True
             if not isbitdict:
                 raise Exception, "BITDICT tag is used incorrectly in definition for '%s'" % defname
         return isbitdict
