@@ -180,6 +180,14 @@ using the following syntax:
         typedef uint32_t bitmap4<>;
         Creates the following:
         bitmap4 = Unpack.unpack_bitmap
+    BITLIST: attr=enum_def
+        Create a list of bit attributes given by the bitmap
+        struct fattr4 {
+            uint32  flags;
+            uint32  mask<>; /* BITLIST: attributes=nfs_fattr4 */
+        };
+        Where the mask gives which bits are set, the bit names are given
+        by enum_def and attr is the name of the new attribute to create
     BITDICT: enum_def
         Convert an object to a dictionary where the key is the bit number
         and the value is given by executing the function provided by the
@@ -241,6 +249,7 @@ valid_tags = {
     "FMAP"      : 1,
     "FWRAP"     : 1,
     "BITMAP"    : 1,
+    "BITLIST"   : 1,
     "BITDICT"   : 1,
     "OBJATTR"   : 1,
     "GLOBAL"    : 1,
@@ -521,6 +530,8 @@ class XDRobject:
         elif not compound and dname[:7].lower() == "unpack.":
             dname = dname[:7].lower() + dname[7:]
             ret = (dname, "()", "")
+        elif dname[-1] == ")":
+            ret = (dname, "", "")
         else:
             ret = (dname, "(unpack)", "")
 
@@ -955,6 +966,18 @@ class XDRobject:
                 break
             index += 1
 
+    def process_bitlist(self):
+        """Process BITLIST tag"""
+        index = 0
+        for item in self.item_dlist:
+            vname,dname,pdef,adef,clist,tag,comms,pcomms = item
+            tagval = tag.get("BITLIST")
+            if tagval is not None:
+                itemlist = tagval.split("=")
+                fnvalue = "bitmap_info(unpack, self.%s, %s)" % (item[0], itemlist[1])
+                self.item_dlist.insert(index+1, [itemlist[0], fnvalue, "","",[],{},[],[]])
+            index += 1
+
     def process_bitdict(self, defname, deftags):
         """Process the BITDICT tag
 
@@ -1171,6 +1194,7 @@ class XDRobject:
 
         self.set_original_definition(fd, deftype, defname)
         self.process_fopaque()
+        self.process_bitlist()
         self.process_linkedlist(defname)
         dnames = [x[0] for x in self.item_dlist]
 
