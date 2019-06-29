@@ -1328,6 +1328,7 @@ struct CREATE4args {
 
 struct CREATE4resok {
     change_info4    cinfo;
+    /* BITLIST: attributes=nfs_fattr4 */
     bitmap4         attrset;        /* attributes set */
 };
 
@@ -1378,7 +1379,7 @@ struct DELEGRETURN4res {
 /* STRFMT1: FH:{fh:crc32} request:{0} */
 struct GETATTR4args {
     /* CURRENT_FH: object */
-    bitmap4         request;
+    bitmap4         request; /* BITLIST: attributes=nfs_fattr4 */
 };
 
 struct GETATTR4resok {
@@ -1898,6 +1899,7 @@ struct OPEN4resok {
     stateid4       stateid;      /* Stateid for open */
     change_info4   cinfo;        /* Directory Change Info */
     uint32_t       rflags;       /* Result flags */
+    /* BITLIST: attributes=nfs_fattr4 */
     bitmap4        attrset;      /* attribute set for create*/
     open_delegation4 delegation; /* Info on any open delegation */
 };
@@ -2070,7 +2072,7 @@ struct READDIR4args {
     verifier4       verifier;
     count4          dircount;
     count4          maxcount;
-    bitmap4         request;
+    bitmap4         request; /* BITLIST: attributes=nfs_fattr4 */
 };
 
 struct entry4 {
@@ -2279,7 +2281,7 @@ struct SETATTR4args {
 /* STRFMT1: attrset:{1} */
 struct SETATTR4res {
     nfsstat4        status;
-    bitmap4         attrset;
+    bitmap4         attrset; /* BITLIST: attributes=nfs_fattr4 */
 };
 
 /*
@@ -2517,8 +2519,8 @@ struct client_owner4 {
 };
 
 struct state_protect_ops4 {
-    bitmap4 enforce;
-    bitmap4 allow;
+    bitmap4 enforce_mask; /* BITLIST: enforce=nfs_opnum4 */
+    bitmap4 allow_mask;   /* BITLIST: allow=nfs_opnum4 */
 };
 
 struct ssv_sp_parms4 {
@@ -2739,13 +2741,13 @@ struct GETDEVICEINFO4args {
     deviceid4       deviceid;
     layouttype4     type;
     count4          maxcount;
-    bitmap4         notification;
+    bitmap4         notify_mask; /* BITLIST: notification=notify_deviceid_type4 */
 };
 
 /* STRFMT1: {0} */
 struct GETDEVICEINFO4resok {
     device_addr4    device_addr;
-    bitmap4         notification;
+    bitmap4         notify_mask; /* BITLIST: notification=notify_deviceid_type4 */
 };
 
 /* STRFMT1: {1} */
@@ -3266,12 +3268,12 @@ struct IO_ADVISE4args {
     stateid4        stateid;
     offset4         offset;
     length4         count;
-    bitmap4         hints;
+    bitmap4         mask; /* BITLIST: hints=IO_ADVISE_type4 */
 };
 
 /* STRFMT1: hints:{0} */
 struct IO_ADVISE4resok {
-    bitmap4         hints;
+    bitmap4         mask; /* BITLIST: hints=IO_ADVISE_type4 */
 };
 
 /* STRFMT1: {1} */
@@ -3895,7 +3897,7 @@ enum nfs_cb_opnum4 {
 /* STRFMT1: FH:{0:crc32} request:{1} */
 struct CB_GETATTR4args {
     nfs_fh4 fh;
-    bitmap4 request;
+    bitmap4 request; /* BITLIST: attributes=nfs_fattr4 */
 };
 
 struct CB_GETATTR4resok {
@@ -4099,7 +4101,7 @@ const RCA4_TYPE_MASK_OTHER_LAYOUT_MAX   = 15;
 /* STRFMT1: keep:{0} mask:{1} */
 struct CB_RECALL_ANY4args      {
     uint32_t        objects_to_keep;
-    bitmap4         mask;
+    bitmap4         mask; /* BITLIST: types=nfs_rca4_type */
 };
 
 /* STRFMT1: "" */
