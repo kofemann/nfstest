@@ -36,7 +36,7 @@
  *   IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  *   ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * This code was derived from [draft-ietf-nfsv4-flex-files-08].
+ * This code was derived from RFC 8435.
  */
 
 /* STRFMT1: vers:{0}.{1} */
@@ -58,6 +58,7 @@ struct ff_device_addr4 {
 const FF_FLAGS_NO_LAYOUTCOMMIT   = 0x00000001;
 const FF_FLAGS_NO_IO_THRU_MDS    = 0x00000002;
 const FF_FLAGS_NO_READ_IO        = 0x00000004;
+const FF_FLAGS_WRITE_ONE_MIRROR  = 0x00000008;
 typedef uint32_t  ff_flags4;
 
 /* STRFMT1: {3:crc32} */
@@ -126,7 +127,7 @@ struct ff_layoutreturn4 {
     ff_iostats4  iostats_report<>;
 };
 
-union ff_mirrors_hint switch (bool ffmc_valid) {
+union ff_mirrors_hint switch (bool valid) {
     case TRUE:
         uint32_t  mirrors;
     case FALSE:
@@ -138,6 +139,6 @@ struct ff_layouthint4 {
 };
 
 enum ff_cb_recall_any_mask {
-    FF_RCA4_TYPE_MASK_READ = -2,
-    FF_RCA4_TYPE_MASK_RW   = -1
+    FF_RCA4_TYPE_MASK_READ = 16,
+    FF_RCA4_TYPE_MASK_RW   = 17
 };
