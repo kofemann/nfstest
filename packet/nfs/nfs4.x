@@ -525,6 +525,25 @@ struct mode_masked4 {
     mode4  mask;     /* Mask of bits to set or reset in mode. */
 };
 
+typedef length4  th4_read_size;
+typedef length4  th4_write_size;
+typedef length4  th4_read_iosize;
+typedef length4  th4_write_iosize;
+
+/* FMAP:1 */
+enum nfsv4_1_file_th_items4 {
+    TH4_READ_SIZE     = 0,
+    TH4_WRITE_SIZE    = 1,
+    TH4_READ_IOSIZE   = 2,
+    TH4_WRITE_IOSIZE  = 3,
+};
+
+/* BITDICT: nfsv4_1_file_th_items4 */
+struct nfsv4_1_file_th_item4 {
+    bitmap4    mask;
+    opaque     values<>;
+};
+
 enum layouttype4 {
     LAYOUT4_NFSV4_1_FILES   = 0x1,
     LAYOUT4_OSD2_OBJECTS    = 0x2,
@@ -710,15 +729,24 @@ struct fs4_status {
     nfstime4         version;
 };
 
-const TH4_READ_SIZE     = 0;
-const TH4_WRITE_SIZE    = 1;
-const TH4_READ_IOSIZE   = 2;
-const TH4_WRITE_IOSIZE  = 3;
+struct th_item4 {
+    bitmap4    mask;
+    opaque     values<>;
+};
 
-struct threshold_item4 {
-    layouttype4  type;
-    bitmap4      mask;
-    opaque       values<>;
+/*
+ * Original definition
+ * struct threshold_item4 {
+ *     layouttype4  type;
+ *     bitmap4      mask;
+ *     opaque       values<>;
+ * };
+ */
+union threshold_item4 switch(layouttype4  type) {
+    case LAYOUT4_NFSV4_1_FILES:
+        nfsv4_1_file_th_item4 items;
+    default:
+        th_item4 items;
 };
 
 struct mdsthreshold4 {
