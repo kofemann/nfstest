@@ -1069,7 +1069,7 @@ enum nfs_fattr4 {
     FATTR4_SPACE_FREED        = 78,
     FATTR4_CHANGE_ATTR_TYPE   = 79,
     FATTR4_SEC_LABEL          = 80,
-    FATTR4_MODE_UMASK         = 81, /* draft-bfields-nfsv4-umask-01 */
+    FATTR4_MODE_UMASK         = 81, /* RFC 8275 */
 };
 
 /*
@@ -4099,6 +4099,7 @@ const RCA4_TYPE_MASK_OTHER_LAYOUT_MIN   = 12;
 const RCA4_TYPE_MASK_OTHER_LAYOUT_MAX   = 15;
 const RCA4_TYPE_MASK_FF_LAYOUT_MIN      = 16;
 const RCA4_TYPE_MASK_FF_LAYOUT_MAX      = 17;
+
 
 /* STRFMT1: keep:{0} mask:{1} */
 struct CB_RECALL_ANY4args      {
