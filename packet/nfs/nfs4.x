@@ -221,7 +221,11 @@ enum nfsstat4 {
     NFS4ERR_OFFLOAD_DENIED             = 10091,/* dest not allowing copy  */
     NFS4ERR_WRONG_LFS                  = 10092,/* LFS not supported       */
     NFS4ERR_BADLABEL                   = 10093,/* incorrect label         */
-    NFS4ERR_OFFLOAD_NO_REQS            = 10094 /* dest not meeting reqs   */
+    NFS4ERR_OFFLOAD_NO_REQS            = 10094,/* dest not meeting reqs   */
+
+    /* RFC 8276 */
+    NFS4ERR_NOXATTR                    = 10095,/* xattr does not exist    */
+    NFS4ERR_XATTR2BIG                  = 10096,/* xattr value is too big  */
 };
 
 /*
@@ -1005,6 +1009,7 @@ typedef uint64_t                fattr4_space_freed;
 typedef change_attr_type4       fattr4_change_attr_type;
 typedef sec_label4              fattr4_sec_label;
 typedef mode_umask4             fattr4_mode_umask;
+typedef bool                    fattr4_xattr_support;
 
 /* FMAP:1 */
 enum nfs_fattr4 {
@@ -1105,6 +1110,7 @@ enum nfs_fattr4 {
     FATTR4_CHANGE_ATTR_TYPE   = 79,
     FATTR4_SEC_LABEL          = 80,
     FATTR4_MODE_UMASK         = 81, /* RFC 8275 */
+    FATTR4_XATTR_SUPPORT      = 82, /* RFC 8276 */
 };
 
 /*
@@ -1250,6 +1256,11 @@ enum nfs_opnum4 {
     OP_SEEK                = 69,
     OP_WRITE_SAME          = 70,
     OP_CLONE               = 71,
+    /* RFC 8276 */
+    OP_GETXATTR            = 72,
+    OP_SETXATTR            = 73,
+    OP_LISTXATTRS          = 74,
+    OP_REMOVEXATTR         = 75,
     /* Illegal operation */
     OP_ILLEGAL             = 10044
 };
@@ -1260,6 +1271,9 @@ const ACCESS4_MODIFY    = 0x00000004;
 const ACCESS4_EXTEND    = 0x00000008;
 const ACCESS4_DELETE    = 0x00000010;
 const ACCESS4_EXECUTE   = 0x00000020;
+const ACCESS4_XAREAD    = 0x00000040;
+const ACCESS4_XAWRITE   = 0x00000080;
+const ACCESS4_XALIST    = 0x00000100;
 
 /*
  * ACCESS: Check Access Rights
@@ -3551,6 +3565,102 @@ struct CLONE4res {
     nfsstat4        status;
 };
 
+/*
+ * ======================================================================
+ * Operations new to RFC 8276
+ * ======================================================================
+ */
+typedef component4     xattrkey4;
+typedef opaque         xattrvalue4<>;
+
+/*
+ * GETXATTR - Get an Extended Attribute of a File
+ * ======================================================================
+ */
+/* STRFMT1: name:{0} */
+struct GETXATTR4args {
+    /* CURRENT_FH: file */
+    xattrkey4   name;
+};
+
+/* STRFMT1: "" */
+union GETXATTR4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        xattrvalue4   value;
+    default:
+        void;
+};
+
+/*
+ * SETXATTR - Set an Extended Attribute of a File
+ * ======================================================================
+ */
+enum setxattr_option4 {
+    SETXATTR4_EITHER      = 0,
+    SETXATTR4_CREATE      = 1,
+    SETXATTR4_REPLACE     = 2
+};
+
+/* STRFMT1: {0} name:{1} */
+struct SETXATTR4args {
+    /* CURRENT_FH: file */
+    setxattr_option4  option;
+    xattrkey4         name;
+    xattrvalue4       value;
+};
+
+/* STRFMT1: "" */
+union SETXATTR4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        change_info4   info;
+    default:
+        void;
+};
+
+/*
+ * LISTXATTRS - List Extended Attributes of a File
+ * ======================================================================
+ */
+/* STRFMT1: cookie:{0} maxcount:{1} */
+struct LISTXATTRS4args {
+    /* CURRENT_FH: file */
+    nfs_cookie4    cookie;
+    count4         maxcount;
+};
+
+/* STRFMT1: cookie:{0} eof:{2} names:{1} */
+struct LISTXATTRS4resok {
+    nfs_cookie4    cookie;
+    xattrkey4      names<>;
+    bool           eof;
+};
+
+/* STRFMT1: {1} */
+union LISTXATTRS4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        LISTXATTRS4resok  value;
+    default:
+        void;
+};
+
+/*
+ * REMOVEXATTR - Remove an Extended Attribute of a File
+ * ======================================================================
+ */
+/* STRFMT1: name:{0} */
+struct REMOVEXATTR4args {
+    /* CURRENT_FH: file */
+    xattrkey4      name;
+};
+
+/* STRFMT1: "" */
+union REMOVEXATTR4res switch (nfsstat4 status) {
+    case NFS4_OK:
+        change_info4   info;
+    default:
+        void;
+};
+
 /* OBJATTR: op=argop */
 /* STRFMT1: {1} */
 /* STRFMT2: {1} */
@@ -3715,6 +3825,16 @@ union nfs_argop4 switch (nfs_opnum4 argop) {
     case OP_CLONE:
         CLONE4args opclone;
 
+    /* RFC 8276 */
+    case OP_GETXATTR:
+        GETXATTR4args opgetxattr;
+    case OP_SETXATTR:
+        SETXATTR4args opsetxattr;
+    case OP_LISTXATTRS:
+        LISTXATTRS4args oplistxattrs;
+    case OP_REMOVEXATTR:
+        REMOVEXATTR4args opremovexattr;
+
     case OP_ILLEGAL:
         /* Illegal operation */
         /* STRFMT2: ILLEGAL4args() */
@@ -3873,6 +3993,16 @@ union nfs_resop4 switch (nfs_opnum4 resop){
         WRITE_SAME4res opwrite_same;
     case OP_CLONE:
         CLONE4res opclone;
+
+    /* RFC 8276 */
+    case OP_GETXATTR:
+        GETXATTR4res opgetxattr;
+    case OP_SETXATTR:
+        SETXATTR4res opsetxattr;
+    case OP_LISTXATTRS:
+        LISTXATTRS4res oplistxattrs;
+    case OP_REMOVEXATTR:
+        REMOVEXATTR4res opremovexattr;
 
     case OP_ILLEGAL:
         /* Illegal operation */
