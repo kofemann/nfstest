@@ -808,7 +808,7 @@ class NFSUtil(Host):
         self.test(pktcall, "GETATTR should be sent to %s asking for FATTR4_SUPPORTED_ATTRS%s" % (server_type, pmsg))
         if pktreply:
             supported_attrs = pktreply.NFSop.attributes[FATTR4_SUPPORTED_ATTRS]
-            fslt_supported = supported_attrs & (1<<FATTR4_FS_LAYOUT_TYPES) != 0
+            fslt_supported = FATTR4_FS_LAYOUT_TYPES in supported_attrs.attributes
             self.test(fslt_supported, "NFS server should support pNFS layout types (FATTR4_FS_LAYOUT_TYPES)%s" % pmsg)
         elif pktcall:
             self.test(False, "GETATTR reply was not found")

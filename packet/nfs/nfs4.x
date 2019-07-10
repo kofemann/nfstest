@@ -283,6 +283,16 @@ typedef string                  secret4<>;
 typedef uint32_t                policy4;
 
 /*
+ * Bitmap attribute list
+ */
+/* STRFMT1: {1} */
+/* STRFMT2: {1} */
+struct bitmap4_list {
+    /* BITLIST: attributes=nfs_fattr4 */
+    bitmap4   attrs;
+};
+
+/*
  * Timeval
  */
 /* STRFMT1: {0}.{1:09} */
@@ -907,10 +917,7 @@ struct copy_confirm_auth_priv {
     utf8str_mixed       username;
 };
 
-/*
- * Attributes
- */
-typedef bitmap4                 fattr4_supported_attrs;
+typedef bitmap4_list            fattr4_supported_attrs;
 typedef nfs_ftype4              fattr4_type;
 typedef uint32_t                fattr4_fh_expire_type;
 typedef changeid4               fattr4_change;
@@ -970,7 +977,7 @@ typedef settime4                fattr4_time_modify_set;
  * Attributes new to NFSv4.1
  */
 typedef mode_masked4            fattr4_mode_set_masked;
-typedef bitmap4                 fattr4_suppattr_exclcreat;
+typedef bitmap4_list            fattr4_suppattr_exclcreat;
 typedef nfstime4                fattr4_dir_notif_delay;
 typedef nfstime4                fattr4_dirent_notif_delay;
 typedef layouttype4             fattr4_fs_layout_types<>;
