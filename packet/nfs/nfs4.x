@@ -1942,7 +1942,7 @@ const OPEN4_RESULT_PRESERVE_UNLINKED = 0x00000008;
 /* Server may use CB_NOTIFY_LOCK on locks derived from this open */
 const OPEN4_RESULT_MAY_NOTIFY_LOCK   = 0x00000020;
 
-/* STRFMT1: stid:{0} {4} */
+/* STRFMT1: stid:{0} {5} */
 /* CLASSATTR: _opdisp=const.OP_GETFH */
 struct OPEN4resok {
     stateid4       stateid;      /* Stateid for open */
