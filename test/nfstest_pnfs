@@ -1027,7 +1027,7 @@ class pNFSTest(TestUtil):
             sent_stateid = pktcall.NFSop.stateid.other
             (stateid, stid_str, stid_failmsg) = self.verify_stateid(openfh, sent_stateid)
             self.test(sent_stateid == stateid, "SETATTR stateid should be the %s stateid" % stid_str, failmsg=stid_failmsg)
-            set_size = pktcall.NFSop.attributes[4]
+            set_size = pktcall.NFSop.attributes[FATTR4_SIZE]
             self.test(set_size == size, "SETATTR should be sent with correct size", failmsg=", expecting %d and got %d" % (size, set_size))
         self.test(pktreply.NFSop.status == 0, "SETATTR should succeed", failmsg=", expecting status = %d and got %d" % (0, pktreply.NFSop.status))
         if fstat:
